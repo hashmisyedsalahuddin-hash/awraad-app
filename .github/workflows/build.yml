@@ -39,5 +39,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Amraad-Nooriya-Alaviyya
+          name: Awraad-e-Nooriya-Alaviyya
           path: android/app/build/outputs/apk/debug/app-debug.apk
