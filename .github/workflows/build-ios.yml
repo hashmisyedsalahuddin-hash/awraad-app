@@ -1,0 +1,56 @@
+name: Build iOS App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Unzip Project Files
+        run: |
+          unzip -o awraad-project.zip
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: |
+          npm install
+
+      - name: Build Web Assets and Sync iOS
+        run: |
+          npx cap sync ios
+
+      - name: Build Xcode Project (Unsigned)
+        run: |
+          cd ios/App
+          xcodebuild clean build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Create Unsigned IPA Package
+        run: |
+          cd ios/App/build/Release-iphoneos
+          mkdir -p Payload
+          cp -r App.app Payload/
+          zip -r Awraad-e-Alaviya-Nooriya.ipa Payload
+
+      - name: Upload iOS IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Awraad-e-Alaviya-Nooriya-iOS
+          path: ios/App/build/Release-iphoneos/Awraad-e-Alaviya-Nooriya.ipa
