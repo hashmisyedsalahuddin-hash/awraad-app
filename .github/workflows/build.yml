@@ -1,10 +1,13 @@
-name: Build Android APK
+name: Build Android APK & iPhone App
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -24,6 +27,36 @@ jobs:
           convert "$ICON_FILE" -resize 1024x1024! assets/icon.png
           convert "$ICON_FILE" -resize 2732x2732 -background "#0f3d2e" -gravity center -extent 2732x2732 assets/splash.png
           cp assets/splash.png assets/splash-dark.png
+
+      - name: Configure iPhone Full-Screen & Icon (PWA Setup)
+        run: |
+          # Icon ko www folder mein copy karein iPhone ke liye
+          cp assets/icon.png www/icon.png
+          
+          # manifest.json banayein taaki app full-screen chale
+          cat << 'EOF' > www/manifest.json
+          {
+            "name": "Awraad-e-Alaviya Nooriya",
+            "short_name": "Awraad",
+            "start_url": "./index.html",
+            "display": "standalone",
+            "background_color": "#0f3d2e",
+            "theme_color": "#0f3d2e",
+            "icons": [
+              {
+                "src": "icon.png",
+                "sizes": "1024x1024",
+                "type": "image/png",
+                "purpose": "any maskable"
+              }
+            ]
+          }
+          EOF
+
+          # Saari HTML files mein iPhone icon aur full-screen tags inject karein
+          for f in www/*.html; do
+            sed -i 's|<head>|<head>\n<link rel="apple-touch-icon" href="icon.png">\n<link rel="manifest" href="manifest.json">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Awraad">|i' "$f"
+          done
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -59,3 +92,9 @@ jobs:
         with:
           name: Awraad-e-Alaviya-Nooriya-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Deploy iPhone Web App to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./www
