@@ -1,0 +1,68 @@
+name: Build iOS App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Unzip Clean Project
+        run: |
+          unzip -o awraad-project.zip
+
+      - name: Prepare High-Res PNG Icon & Splash
+        run: |
+          ICON_FILE=$(find assets -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | head -n 1)
+          sips -s format png -z 1024 1024 "$ICON_FILE" --out assets/icon.png
+          sips -s format png -z 2732 2732 "$ICON_FILE" --out assets/splash.png
+          cp assets/splash.png assets/splash-dark.png
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Initialize Capacitor & Install Packages Fresh
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/assets
+          npx cap init "Awraad-e-Alaviya" "com.awraad.alaviya" --web-dir www
+
+      - name: Add iOS & Generate Custom Icons
+        run: |
+          npx cap add ios
+          npx @capacitor/assets generate --ios
+          npx cap sync ios
+
+      - name: Build Xcode Project (Unsigned)
+        run: |
+          cd ios/App
+          xcodebuild clean build \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -destination 'generic/platform=iOS' \
+            -configuration Release \
+            SYMROOT="$(pwd)/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Create Unsigned IPA Package
+        run: |
+          cd ios/App/build/Release-iphoneos
+          mkdir -p Payload
+          cp -r App.app Payload/
+          zip -r Awraad-e-Alaviya-Nooriya.ipa Payload
+
+      - name: Upload iOS IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Awraad-e-Alaviya-Nooriya-iOS
+          path: ios/App/build/Release-iphoneos/Awraad-e-Alaviya-Nooriya.ipa
