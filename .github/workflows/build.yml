@@ -1,4 +1,4 @@
-name: Build Android APK & iOS IPA
+name: Build Android APK
 
 on:
   push:
@@ -6,11 +6,8 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -27,53 +24,6 @@ jobs:
           convert "$ICON_FILE" -resize 1024x1024! assets/icon.png
           convert "$ICON_FILE" -resize 2732x2732 -background "#0f3d2e" -gravity center -extent 2732x2732 assets/splash.png
           cp assets/splash.png assets/splash-dark.png
-
-      - name: Configure iPhone Full-Screen, Icon & Offline Mode (PWA Setup)
-        run: |
-          cp assets/icon.png www/icon.png
-          
-          # Manifest File
-          cat << 'EOF' > www/manifest.json
-          {
-            "name": "Awraad-e-Alaviya Nooriya",
-            "short_name": "Awraad",
-            "start_url": "./index.html",
-            "display": "standalone",
-            "background_color": "#0f3d2e",
-            "theme_color": "#0f3d2e",
-            "icons": [
-              {
-                "src": "icon.png",
-                "sizes": "1024x1024",
-                "type": "image/png",
-                "purpose": "any maskable"
-              }
-            ]
-          }
-          EOF
-
-          # Service Worker for 100% Offline Support
-          cat << 'EOF' > www/sw.js
-          self.addEventListener('install', (e) => {
-            e.waitUntil(
-              caches.open('awraad-cache-v1').then((cache) => {
-                return cache.addAll(['./', './index.html']);
-              })
-            );
-          });
-          self.addEventListener('fetch', (e) => {
-            e.respondWith(
-              caches.match(e.request).then((response) => {
-                return response || fetch(e.request);
-              })
-            );
-          });
-          EOF
-
-          # Inject Meta tags and SW Registration into all HTML files
-          for f in www/*.html; do
-            sed -i 's|<head>|<head>\n<link rel="apple-touch-icon" href="icon.png">\n<link rel="manifest" href="manifest.json">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">\n<meta name="apple-mobile-web-app-title" content="Awraad">\n<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("./sw.js");}</script>|i' "$f"
-          done
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -109,69 +59,3 @@ jobs:
         with:
           name: Awraad-e-Alaviya-Nooriya-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Deploy iPhone Web App to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./www
-
-  build-ios:
-    runs-on: macos-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Unzip Clean Project
-        run: |
-          unzip -o awraad-project.zip
-
-      - name: Prepare High-Res PNG Icon & Splash
-        run: |
-          ICON_FILE=$(find assets -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | head -n 1)
-          sips -s format png -z 1024 1024 "$ICON_FILE" --out assets/icon.png
-          sips -s format png -z 2732 2732 "$ICON_FILE" --out assets/splash.png
-          cp assets/splash.png assets/splash-dark.png
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Initialize Capacitor & Install Packages Fresh
-        run: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/assets
-          npx cap init "Awraad-e-Alaviya" "com.awraad.alaviya" --web-dir www
-
-      - name: Add iOS & Generate Custom Icons
-        run: |
-          npx cap add ios
-          npx @capacitor/assets generate --ios
-          npx cap sync ios
-
-      - name: Build Xcode Project (Unsigned)
-        run: |
-          cd ios/App
-          xcodebuild clean build \
-            -project App.xcodeproj \
-            -scheme App \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            SYMROOT="$(pwd)/build" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
-
-      - name: Create Unsigned IPA Package
-        run: |
-          cd ios/App/build/Release-iphoneos
-          mkdir -p Payload
-          cp -r App.app Payload/
-          zip -r Awraad-e-Alaviya-Nooriya.ipa Payload
-
-      - name: Upload iOS IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: Awraad-e-Alaviya-Nooriya-IPA
-          path: ios/App/build/Release-iphoneos/Awraad-e-Alaviya-Nooriya.ipa
