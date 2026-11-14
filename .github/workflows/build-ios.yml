@@ -16,6 +16,7 @@ jobs:
       - name: Unzip Project Files
         run: |
           unzip -o awraad-project.zip
+          rm -rf node_modules package-lock.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -26,11 +27,14 @@ jobs:
         run: |
           npm install
 
-      - name: Generate Custom App Icons
+      - name: Add iOS Platform & Generate Icons
         run: |
-          npx -y @capacitor/assets generate --iconPath assets/icon.png
+          npx cap add ios
+          cp assets/icon.png assets/splash.png
+          cp assets/icon.png assets/splash-dark.png
+          npx @capacitor/assets generate --ios
 
-      - name: Build Web Assets and Sync iOS
+      - name: Sync Web Assets
         run: |
           npx cap sync ios
 
