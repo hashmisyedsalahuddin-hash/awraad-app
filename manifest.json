@@ -1,0 +1,16 @@
+{
+  "name": "Awraad-e-Alaviya Nooriya",
+  "short_name": "Awraad",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f3d2e",
+  "theme_color": "#0f3d2e",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
