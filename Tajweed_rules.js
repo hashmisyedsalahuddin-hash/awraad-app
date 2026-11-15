@@ -1182,7 +1182,7 @@
         "Dua_Bada_Dalail-ul-Khairaat.html",     // 2. Dua Bad e Dalail-ul-Khairat
         "Tareeqa_Faatiha.html",                // 3. Tareeqa Faatiha
         "Asma_ul_Husna.html",                  // 4. Asma-e-Husna
-        "Asma_un_Nabi.html",                   // 5. Asma-Un-Nabi
+        "Asma_Un_Nabi.html",                   // 5. Asma-Un-Nabi
         "Monday_Hizb1.html",                   // 6. Al Hizb ul Awwal Fii Youm ul Isnain
         // "Hizb_Saani.html",                     // 7. Hizb Saani (file banate hi uncomment karein)
         // "Hizb_Salis.html",                     // 8. Hizb Salis (file banate hi uncomment karein)
@@ -1252,8 +1252,8 @@
         document.querySelectorAll('.app-navbar').forEach(el => el.remove());
 
         const isIndex = window.location.pathname.toLowerCase().endsWith('index.html') || window.location.pathname.endsWith('/');
-        const indexPath = isIndex ? '#main-menu' : './Index.html#main-menu';
-        const subMenuPath = isIndex ? '#menu-shijara' : './Index.html#menu-shijara';
+        const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
+        const subMenuPath = isIndex ? '#menu-shijara' : './index.html#menu-shijara';
 
         const navbarHTML = `
         <div id="injected-app-navbar" class="app-navbar print-none" dir="ltr">
