@@ -1,14 +1,28 @@
 {
-  "name": "Awraad-e-Alaviya Nooriya",
-  "short_name": "Awraad",
+  "name": "Awraad e Alaviya Nooriya",
+  "short_name": "Awraad e Alaviya Nooriya",
+  "description": "Awraad e Alaviya Nooriya Complete Digital Application",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0f3d2e",
   "theme_color": "#0f3d2e",
   "icons": [
     {
-      "src": "icon.png",
-      "sizes": "1024x1024",
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
