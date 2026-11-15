@@ -20,6 +20,46 @@ jobs:
         run: |
           unzip -o awraad-project.zip
 
+      - name: Create Full-Page Responsive Green Splash & Clean Icon
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+          
+          # 1. Original icon ke bahar ka white/cream border crop karke sirf green-gold box nikalein
+          convert assets/icon.png -gravity center -crop 62%x62%+0+0 +repage assets/green_core.png
+          
+          # 2. App Icon ko bhi full green-gold banayein (bina white border ke)
+          convert assets/green_core.png -resize 1024x1024! assets/icon.png
+          cp assets/icon.png www/icon.png
+          convert assets/icon.png -resize 180x180! www/apple-touch-icon.png
+          convert assets/icon.png -resize 192x192! www/icon-192.png
+          convert assets/icon.png -resize 512x512! www/icon-512.png
+
+          # 3. Har mobile ki full screen ke liye 1000px wide calligraphy aur 2732x2732 Deep Green (#0b3b2c) full page banayein
+          convert assets/green_core.png -resize 1000x1000 -background "#0b3b2c" -gravity center -extent 2732x2732 assets/splash.png
+          cp assets/splash.png assets/splash-dark.png
+
+      - name: Configure Capacitor for Full-Screen Adaptive Splash
+        run: |
+          cat << 'EOF' > capacitor.config.json
+          {
+            "appId": "com.awraad.nooriya",
+            "appName": "Awraad e Alaviya Nooriya",
+            "webDir": "www",
+            "bundledWebRuntime": false,
+            "plugins": {
+              "SplashScreen": {
+                "launchShowDuration": 2500,
+                "launchAutoHide": true,
+                "backgroundColor": "#0b3b2c",
+                "androidSplashResourceName": "splash",
+                "androidScaleType": "FIT_CENTER",
+                "splashFullScreen": true,
+                "splashImmersive": true
+              }
+            }
+          }
+          EOF
+
       - name: Auto-Fix All Case-Sensitive Links (Index.html vs index.html)
         run: |
           node -e '
@@ -28,7 +68,6 @@ jobs:
           const files = fs.readdirSync("www");
           const htmlFiles = files.filter(f => f.toLowerCase().endsWith(".html") || f.toLowerCase().endsWith(".js"));
 
-          // Har HTML/JS file ke andar agar kisi file ka naam galat case (jaise Index.html) mein likha hai, toh use exact filename (index.html) se match karein
           htmlFiles.forEach(hFile => {
             const p = path.join("www", hFile);
             let content = fs.readFileSync(p, "utf8");
@@ -40,7 +79,6 @@ jobs:
             fs.writeFileSync(p, content, "utf8");
           });
           '
-          # Double safety: Agar kahin se phir bhi Index.html call ho, toh index.html ki copy bhi bana dein
           cp www/index.html www/Index.html
 
       - name: Setup Node.js 22
@@ -50,13 +88,17 @@ jobs:
 
       - name: Install Capacitor Dependencies
         run: |
+          npm install @capacitor/splash-screen
           npm install
 
       - name: Generate Native Android Project & Custom Icons
         run: |
           npx cap add android
-          npx @capacitor/assets generate --android
+          npx @capacitor/assets generate --android --splashBackgroundColor "#0b3b2c" --splashBackgroundColorDark "#0b3b2c"
           npx cap sync android
+          
+          # Android ke तमाम screen folders mein full-screen green background fix karein
+          find android/app/src/main/res -name "styles.xml" -exec sed -i 's|#FFFFFF|#0b3b2c|g; s|#000000|#0b3b2c|g' {} +
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -83,3 +125,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./www
           keep_files: false
+
