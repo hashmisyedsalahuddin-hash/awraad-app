@@ -1,0 +1,62 @@
+name: Build APK & Deploy iPhone Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Project Bundle
+        run: |
+          unzip -o awraad-project.zip
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor Dependencies
+        run: |
+          npm install
+
+      - name: Generate Native Android Project & Custom Icons
+        run: |
+          npx cap add android
+          npx @capacitor/assets generate --android
+          npx cap sync android
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Compile Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk "../Awraad e Alaviya Nooriya.apk"
+
+      - name: Upload "Awraad e Alaviya Nooriya.apk" Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Awraad e Alaviya Nooriya
+          path: "Awraad e Alaviya Nooriya.apk"
+
+      - name: Deploy iPhone Safari Web App to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./www
+          keep_files: false
