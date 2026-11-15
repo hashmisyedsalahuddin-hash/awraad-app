@@ -34,31 +34,9 @@ jobs:
           convert assets/icon.png -resize 192x192! www/icon-192.png
           convert assets/icon.png -resize 512x512! www/icon-512.png
 
-          # 3. Har mobile ki full screen ke liye 1000px wide calligraphy aur 2732x2732 Deep Green (#0b3b2c) full page banayein
-          convert assets/green_core.png -resize 1000x1000 -background "#0b3b2c" -gravity center -extent 2732x2732 assets/splash.png
+          # 3. Har mobile ki full screen safe-zone (1150x1150) mein calligraphy set karein aur poora 2732x2732 page Deep Green (#0b3b2c) rakhein
+          convert assets/green_core.png -resize 1150x1150 -background "#0b3b2c" -gravity center -extent 2732x2732 assets/splash.png
           cp assets/splash.png assets/splash-dark.png
-
-      - name: Configure Capacitor for Full-Screen Adaptive Splash
-        run: |
-          cat << 'EOF' > capacitor.config.json
-          {
-            "appId": "com.awraad.nooriya",
-            "appName": "Awraad e Alaviya Nooriya",
-            "webDir": "www",
-            "bundledWebRuntime": false,
-            "plugins": {
-              "SplashScreen": {
-                "launchShowDuration": 2500,
-                "launchAutoHide": true,
-                "backgroundColor": "#0b3b2c",
-                "androidSplashResourceName": "splash",
-                "androidScaleType": "FIT_CENTER",
-                "splashFullScreen": true,
-                "splashImmersive": true
-              }
-            }
-          }
-          EOF
 
       - name: Auto-Fix All Case-Sensitive Links (Index.html vs index.html)
         run: |
@@ -88,7 +66,6 @@ jobs:
 
       - name: Install Capacitor Dependencies
         run: |
-          npm install @capacitor/splash-screen
           npm install
 
       - name: Generate Native Android Project & Custom Icons
@@ -125,4 +102,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./www
           keep_files: false
-
