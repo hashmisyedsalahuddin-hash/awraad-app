@@ -20,6 +20,29 @@ jobs:
         run: |
           unzip -o awraad-project.zip
 
+      - name: Auto-Fix All Case-Sensitive Links (Index.html vs index.html)
+        run: |
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+          const files = fs.readdirSync("www");
+          const htmlFiles = files.filter(f => f.toLowerCase().endsWith(".html") || f.toLowerCase().endsWith(".js"));
+
+          // Har HTML/JS file ke andar agar kisi file ka naam galat case (jaise Index.html) mein likha hai, toh use exact filename (index.html) se match karein
+          htmlFiles.forEach(hFile => {
+            const p = path.join("www", hFile);
+            let content = fs.readFileSync(p, "utf8");
+            files.forEach(actualFile => {
+              const escaped = actualFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const regex = new RegExp(escaped, "gi");
+              content = content.replace(regex, actualFile);
+            });
+            fs.writeFileSync(p, content, "utf8");
+          });
+          '
+          # Double safety: Agar kahin se phir bhi Index.html call ho, toh index.html ki copy bhi bana dein
+          cp www/index.html www/Index.html
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
