@@ -20,24 +20,23 @@ jobs:
         run: |
           unzip -o awraad-project.zip
 
-      - name: Prepare Uncropped Safe Icons & Full-Screen Portrait Splash
+      - name: Preserve Full Original Image for Icon & Splash (Zero Cropping)
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
           
-          # 1. Original icon mein se sirf bahar ka white margin hatayein (58% green plaque hai)
-          convert assets/icon.png -gravity center -crop 59%x59%+0+0 +repage assets/green_box.png
+          # Asli source icon dhoondhein (chahe .jpg ho ya .png)
+          SRC_ICON=$(find assets -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | head -n 1)
           
-          # 2. Android Adaptive App Icon ke circle se huroof na katein, isliye green_box ko 700x700 rakh kar 1024x1024 green canvas par rakhein
-          convert assets/green_box.png -resize 700x700 -background "#0c3b2e" -gravity center -extent 1024x1024 assets/icon.png
+          # 1. App Icon: Poori image ko safe padding ke sath 1024x1024 canvas par rakhein taaki adaptive icon mask mein corners na katein
+          convert "$SRC_ICON" -resize 760x760 -background "#0c3b2e" -gravity center -extent 1024x1024 assets/icon.png
           
-          # 3. iPhone aur PWA ke liye full square green_box icon rakhein
-          convert assets/green_box.png -resize 180x180! www/apple-touch-icon.png
-          convert assets/green_box.png -resize 192x192! www/icon-192.png
-          convert assets/green_box.png -resize 512x512! www/icon-512.png
+          # 2. iPhone aur PWA ke liye exact uncropped square icon
+          convert "$SRC_ICON" -resize 512x512! www/icon-512.png
+          convert "$SRC_ICON" -resize 180x180! www/apple-touch-icon.png
           cp www/icon-512.png www/icon.png
 
-          # 4. Har mobile screen (1080x1920 Portrait) ke liye Full-Width (1040px) Splash Screen banayein
-          convert assets/green_box.png -resize 1040x1040 -background "#0c3b2e" -gravity center -extent 1080x1920 assets/full_splash.png
+          # 3. Splash Screen: Poori original image ko 1080x1920 portrait screen par bina kate center mein fit karein
+          convert "$SRC_ICON" -resize 1000x1000 -background "#0c3b2e" -gravity center -extent 1080x1920 assets/full_splash.png
           cp assets/full_splash.png assets/splash.png
           cp assets/full_splash.png assets/splash-dark.png
 
@@ -71,24 +70,24 @@ jobs:
         run: |
           npm install
 
-      - name: Generate Native Android Project & Force Full-Screen Splash
+      - name: Generate Native Android Project & Apply Full Splash
         run: |
           npx cap add android
           npx @capacitor/assets generate --android --iconBackgroundColor "#0c3b2e" --splashBackgroundColor "#0c3b2e"
           npx cap sync android
           
-          # 1. Android 12+ ka chota gol circle wala splash (values-v31) HATA DEIN taaki full-screen splash dikhe
+          # Android 12+ ka chota gol circle wala splash hata dein
           rm -rf android/app/src/main/res/values-v31
           rm -rf android/app/src/main/res/values-night-v31
           
-          # 2. Apni 1080x1920 full-screen splash image ko Android ke har drawable folder mein direct copy karein
+          # Asli uncropped splash image ko har drawable folder mein daalein
           for dir in android/app/src/main/res/drawable*; do
             if [ -d "$dir" ]; then
               cp assets/full_splash.png "$dir/splash.png"
             fi
           done
           
-          # 3. Custom launch_splash.xml banayein jo har mobile screen par image ko full-screen fit rakhe (bina kate)
+          # Launch splash configuration
           mkdir -p android/app/src/main/res/drawable
           cat << 'EOF' > android/app/src/main/res/drawable/launch_splash.xml
           <?xml version="1.0" encoding="utf-8"?>
@@ -102,7 +101,7 @@ jobs:
           </layer-list>
           EOF
 
-          # 4. colorPrimaryDark ko Deep Green (#0c3b2e) set karein aur styles.xml mein apna full-screen splash lagayein
+          # Styles configuration
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
