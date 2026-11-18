@@ -1,0 +1,140 @@
+name: Build APK & Deploy iPhone Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract & Verify Project Bundle Integrity
+        run: |
+          unzip -o awraad-project.zip
+          test -f package-lock.json
+          test -f www/manifest.json
+          test -f www/sw.js
+          test -f www/splash-full.png
+          cat path-audit-report.json
+          node -e '
+            const r = require("./path-audit-report.json");
+            if (r.verificationSummary.Overall_Build_Validation !== "PASS") {
+              console.error("CI Gatekeeper: path-audit-report.json reported FAIL");
+              process.exit(1);
+            }
+          '
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Reproducible Clean Install via Lockfile (npm ci)
+        run: |
+          npm ci
+
+      - name: Setup Java 17 (Compatible with Capacitor 6 / Gradle 8.2.1)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Generate Native Android Project & Verify Splash/Icon Resources
+        run: |
+          npx cap add android
+          npx @capacitor/assets generate --android --iconBackgroundColor "#0c3b2e" --splashBackgroundColor "#0c3b2e" --splashBackgroundColorDark "#0c3b2e"
+          npx cap sync android
+
+          # 1. Place uncropped 1080x1920 splash in drawable folders for Android <=11 & Capacitor SplashScreen
+          for dir in android/app/src/main/res/drawable*; do
+            if [ -d "$dir" ]; then
+              cp assets/full_splash.png "$dir/splash.png"
+            fi
+          done
+
+          # 2. Strictly verify generated launcher icon resource (primary: ic_launcher_foreground, fallback: ic_launcher)
+          echo "Scanning android/app/src/main/res for launcher icon resources:"
+          find android/app/src/main/res \( -iname '*ic_launcher_foreground*' -o -iname 'ic_launcher.*' \) -print
+
+          if find android/app/src/main/res/mipmap* -iname 'ic_launcher_foreground*' 2>/dev/null | grep -q .; then
+            SPLASH_ICON_REF="@mipmap/ic_launcher_foreground"
+          elif find android/app/src/main/res/drawable* -iname 'ic_launcher_foreground*' 2>/dev/null | grep -q .; then
+            SPLASH_ICON_REF="@drawable/ic_launcher_foreground"
+          elif find android/app/src/main/res/mipmap* -iname 'ic_launcher.*' 2>/dev/null | grep -q .; then
+            SPLASH_ICON_REF="@mipmap/ic_launcher"
+          elif find android/app/src/main/res/drawable* -iname 'ic_launcher.*' 2>/dev/null | grep -q .; then
+            SPLASH_ICON_REF="@drawable/ic_launcher"
+          else
+            echo "❌ FATAL ERROR: Neither ic_launcher_foreground nor ic_launcher found in mipmap or drawable directories!"
+            exit 1
+          fi
+          echo "Verified Android 12+ windowSplashScreenAnimatedIcon reference: $SPLASH_ICON_REF"
+
+          # 3. Android <=11 Launch Theme
+          cat << 'EOF' > android/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#0c3b2e</item>
+                  <item name="colorPrimaryDark">#0c3b2e</item>
+                  <item name="colorAccent">#d4af37</item>
+              </style>
+              <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+                  <item name="windowActionBar">false</item>
+                  <item name="windowNoTitle">true</item>
+                  <item name="android:background">@null</item>
+              </style>
+              <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+                  <item name="android:background">@drawable/splash</item>
+                  <item name="android:windowBackground">#0c3b2e</item>
+                  <item name="android:statusBarColor">#0c3b2e</item>
+                  <item name="android:navigationBarColor">#0c3b2e</item>
+              </style>
+          </resources>
+          EOF
+
+          # 4. Android 12–16 (API 31+) System Splash Theme using verified resource reference
+          mkdir -p android/app/src/main/res/values-v31
+          cat << EOF > android/app/src/main/res/values-v31/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+                  <item name="windowSplashScreenBackground">#0c3b2e</item>
+                  <item name="windowSplashScreenAnimatedIcon">${SPLASH_ICON_REF}</item>
+                  <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+                  <item name="android:statusBarColor">#0c3b2e</item>
+                  <item name="android:navigationBarColor">#0c3b2e</item>
+              </style>
+          </resources>
+          EOF
+          rm -rf android/app/src/main/res/values-night-v31
+          cp -r android/app/src/main/res/values-v31 android/app/src/main/res/values-night-v31
+
+      - name: Compile Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk "../Awraad e Alaviya Nooriya.apk"
+
+      - name: Upload "Awraad e Alaviya Nooriya.apk" Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Awraad e Alaviya Nooriya
+          path: "Awraad e Alaviya Nooriya.apk"
+
+      - name: Deploy iPhone Safari Web App to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./www
+          keep_files: false
