@@ -118,5 +118,3 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./www
           keep_files: false
-
- kaam karega!
