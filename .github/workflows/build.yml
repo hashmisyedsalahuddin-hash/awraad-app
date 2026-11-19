@@ -42,10 +42,10 @@ jobs:
 
       - name: Prepare 2-in-1 Web App (iPhone PWA + Android Live Sync)
         run: |
-          # GitHub Pages par sabhi files serve hone ke liye
+          # GitHub Pages par sabhi files properly load hone ke liye
           touch www/.nojekyll
 
-          # 1. iPhone & Web App Icons (Solid #0c3b2e background)
+          # 1. iPhone & Web App Icons (Solid #0c3b2e background, no black edges)
           SOURCE_ICON=""
           if [ -f "assets/original_icon.png" ]; then
             SOURCE_ICON="assets/original_icon.png"
@@ -90,7 +90,7 @@ jobs:
           EOF
           fi
 
-          # 3. Auto-Updating Service Worker (Har push par naya version cache refresh karega)
+          # 3. Auto-Updating Service Worker (Har build par fresh cache)
           cat << 'EOF' > www/sw.js
           const CACHE_NAME = 'awraad-live-v__BUILD_NUM__';
           const CORE_ASSETS = ['./', './index.html', './manifest.json'];
@@ -111,7 +111,7 @@ jobs:
             self.clients.claim();
           });
 
-          // Network-First: Online hone par hamesha fresh GitHub update, Offline par cache
+          // Network-First: Online hone par fresh GitHub update, Offline par saved cache
           self.addEventListener('fetch', (event) => {
             if (event.request.method !== 'GET') return;
             event.respondWith(
@@ -129,9 +129,17 @@ jobs:
           EOF
           sed -i "s/__BUILD_NUM__/${{ github.run_number }}/g" www/sw.js
 
-          # 4. External PWA Registration Script (iPhone Safari + Android Live APK dono par kaam karega)
+          # 4. External PWA Registration + Auto-Refresh Script (iPhone & Android Live APK dono ke liye)
           cat << 'EOF' > www/pwa-init.js
           if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+            const hadController = Boolean(navigator.serviceWorker.controller);
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+              if (hadController && !refreshing) {
+                refreshing = true;
+                window.location.reload();
+              }
+            });
             window.addEventListener('load', () => {
               navigator.serviceWorker.register('./sw.js').then((reg) => {
                 reg.update();
@@ -200,7 +208,17 @@ jobs:
                 allowNavigation: [host]
               };
               fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
-              console.log("Updated capacitor.config.json with live GitHub Pages URL.");
+              console.log("Updated capacitor.config.json with live URL:", url);
+            } else if (fs.existsSync("capacitor.config.ts")) {
+              let ts = fs.readFileSync("capacitor.config.ts", "utf8");
+              const serverBlock = "  server: {\n    url: \"" + url + "\",\n    cleartext: false,\n    errorPath: \"index.html\",\n    allowNavigation: [\"" + host + "\"]\n  },\n";
+              if (ts.includes("server:")) {
+                ts = ts.replace(/server\s*:\s*\{[\s\S]*?\},?/, serverBlock.trim() + ",");
+              } else {
+                ts = ts.replace(/,?\s*\n\s*\};/, ",\n" + serverBlock + "};");
+              }
+              fs.writeFileSync("capacitor.config.ts", ts, "utf8");
+              console.log("Updated capacitor.config.ts with live URL:", url);
             }
           '
 
@@ -209,6 +227,9 @@ jobs:
           [ -d "android" ] || npx cap add android
           npx @capacitor/assets generate --android --iconBackgroundColor "#0c3b2e" --splashBackgroundColor "#0c3b2e"
           npx cap sync android
+
+          # Har build par Android versionCode automatically badhega
+          sed -i "s/versionCode [0-9]\+/versionCode ${{ github.run_number }}/g" android/app/build.gradle
 
           # 1. Android 12+ ka chota gol circle wala splash (values-v31) remove karein
           rm -rf android/app/src/main/res/values-v31
@@ -278,6 +299,14 @@ jobs:
           publish_dir: ./www
           keep_files: false
 
+      - name: Clear Old Latest Release & Tag (Force Fresh APK)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/latest" 2>/dev/null || true
+          sleep 2
+
       - name: Publish Permanent Android APK to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
@@ -285,7 +314,7 @@ jobs:
           name: Awraad e Alaviya Nooriya (Latest APK)
           body: |
             **Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
-            Is APK ko sirf ek baar install karna hai. Aage ke sabhi web features aur updates GitHub se automatically aate rahenge.
+            Is APK ko sirf ek baar install karna hai. Aage ke sabhi web updates GitHub se automatically aate rahenge.
           make_latest: true
           files: |
             Awraad-e-Alaviya-Nooriya.apk
