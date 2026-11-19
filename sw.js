@@ -1,4 +1,4 @@
-const CACHE_NAME = 'awraad-live-v98';
+const CACHE_NAME = 'awraad-live-v100';
 const CORE_ASSETS = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
