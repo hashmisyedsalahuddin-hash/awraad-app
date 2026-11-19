@@ -1,0 +1,291 @@
+name: Build Auto-Updating APK & Deploy iPhone Web App
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Extract Project Bundle
+        run: |
+          unzip -o awraad-project.zip
+
+      - name: Ensure Uncropped Icons & Full-Screen Portrait Splash
+        run: |
+          sudo apt-get update && sudo apt-get install -y imagemagick
+
+          if [ -f "assets/original_icon.png" ]; then
+            convert assets/original_icon.png -resize 760x760 -background "#0c3b2e" -gravity center -extent 1024x1024 assets/icon.png
+            convert assets/original_icon.png -resize 1000x1000 -background "#0c3b2e" -gravity center -extent 1080x1920 assets/full_splash.png
+            cp assets/full_splash.png assets/splash.png
+            cp assets/full_splash.png assets/splash-dark.png
+          fi
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Capacitor Dependencies
+        run: |
+          npm install
+
+      - name: Prepare 2-in-1 Web App (iPhone PWA + Android Live Sync)
+        run: |
+          # GitHub Pages par sabhi files serve hone ke liye
+          touch www/.nojekyll
+
+          # 1. iPhone & Web App Icons (Solid #0c3b2e background)
+          SOURCE_ICON=""
+          if [ -f "assets/original_icon.png" ]; then
+            SOURCE_ICON="assets/original_icon.png"
+          elif [ -f "assets/icon.png" ]; then
+            SOURCE_ICON="assets/icon.png"
+          fi
+
+          if [ -n "$SOURCE_ICON" ]; then
+            convert "$SOURCE_ICON" -resize 150x150 -background "#0c3b2e" -gravity center -extent 180x180 -alpha remove -alpha off www/apple-touch-icon.png
+            convert "$SOURCE_ICON" -resize 160x160 -background "#0c3b2e" -gravity center -extent 192x192 -alpha remove -alpha off www/icon-192.png
+            convert "$SOURCE_ICON" -resize 420x420 -background "#0c3b2e" -gravity center -extent 512x512 -alpha remove -alpha off www/icon-512.png
+          fi
+
+          # 2. Web App Manifest
+          if [ ! -f "www/manifest.json" ]; then
+            cat << 'EOF' > www/manifest.json
+          {
+            "name": "Awraad e Alaviya Nooriya",
+            "short_name": "Awraad",
+            "description": "Awraad e Alaviya Nooriya Web & Mobile App",
+            "start_url": "./index.html",
+            "scope": "./",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#0c3b2e",
+            "theme_color": "#0c3b2e",
+            "icons": [
+              {
+                "src": "./icon-192.png",
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any maskable"
+              },
+              {
+                "src": "./icon-512.png",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+              }
+            ]
+          }
+          EOF
+          fi
+
+          # 3. Auto-Updating Service Worker (Har push par naya version cache refresh karega)
+          cat << 'EOF' > www/sw.js
+          const CACHE_NAME = 'awraad-live-v__BUILD_NUM__';
+          const CORE_ASSETS = ['./', './index.html', './manifest.json'];
+
+          self.addEventListener('install', (event) => {
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
+            );
+            self.skipWaiting();
+          });
+
+          self.addEventListener('activate', (event) => {
+            event.waitUntil(
+              caches.keys().then((keys) =>
+                Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+              )
+            );
+            self.clients.claim();
+          });
+
+          // Network-First: Online hone par hamesha fresh GitHub update, Offline par cache
+          self.addEventListener('fetch', (event) => {
+            if (event.request.method !== 'GET') return;
+            event.respondWith(
+              fetch(event.request)
+                .then((response) => {
+                  if (response && response.status === 200) {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                  }
+                  return response;
+                })
+                .catch(() => caches.match(event.request))
+            );
+          });
+          EOF
+          sed -i "s/__BUILD_NUM__/${{ github.run_number }}/g" www/sw.js
+
+          # 4. External PWA Registration Script (iPhone Safari + Android Live APK dono par kaam karega)
+          cat << 'EOF' > www/pwa-init.js
+          if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.register('./sw.js').then((reg) => {
+                reg.update();
+              }).catch(() => {});
+            });
+          }
+          EOF
+
+          # 5. Sabhi HTML files mein iPhone Full-Screen & PWA tags inject karein
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const wwwDir = "www";
+            const files = fs.readdirSync(wwwDir).filter(f => f.endsWith(".html"));
+
+            const iosMeta = [
+              "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
+              "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
+              "  <meta name=\"apple-mobile-web-app-title\" content=\"Awraad\">",
+              "  <meta name=\"theme-color\" content=\"#0c3b2e\">",
+              "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"./apple-touch-icon.png\">",
+              "  <link rel=\"manifest\" href=\"./manifest.json\">",
+              "  <script src=\"./pwa-init.js\" defer></script>",
+              "</head>"
+            ].join("\n");
+
+            for (const file of files) {
+              const fullPath = path.join(wwwDir, file);
+              let html = fs.readFileSync(fullPath, "utf8");
+              if (!html.includes("viewport-fit=cover")) {
+                html = html.replace(/content="([^"]*width=device-width[^"]*)"/i, "content=\"$1, viewport-fit=cover\"");
+              }
+              if (!html.includes("apple-mobile-web-app-capable")) {
+                html = html.replace(/<\/head>/i, iosMeta);
+                fs.writeFileSync(fullPath, html, "utf8");
+              }
+            }
+          '
+
+      - name: Connect Android APK to Live GitHub Pages URL (Zero-Reinstall Updates)
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          REPO="${{ github.event.repository.name }}"
+          REPO_LOWER=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
+
+          if [ "$REPO_LOWER" = "${OWNER}.github.io" ]; then
+            PAGES_URL="https://${OWNER}.github.io/"
+          else
+            PAGES_URL="https://${OWNER}.github.io/${REPO}/"
+          fi
+
+          echo "Live Auto-Update URL: $PAGES_URL"
+
+          PAGES_URL="$PAGES_URL" node -e '
+            const fs = require("fs");
+            const url = process.env.PAGES_URL;
+            const host = new URL(url).hostname;
+
+            if (fs.existsSync("capacitor.config.json")) {
+              const cfg = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
+              cfg.server = {
+                ...(cfg.server || {}),
+                url: url,
+                cleartext: false,
+                errorPath: "index.html",
+                allowNavigation: [host]
+              };
+              fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
+              console.log("Updated capacitor.config.json with live GitHub Pages URL.");
+            }
+          '
+
+      - name: Generate Native Android Project & Apply Full-Screen Splash
+        run: |
+          [ -d "android" ] || npx cap add android
+          npx @capacitor/assets generate --android --iconBackgroundColor "#0c3b2e" --splashBackgroundColor "#0c3b2e"
+          npx cap sync android
+
+          # 1. Android 12+ ka chota gol circle wala splash (values-v31) remove karein
+          rm -rf android/app/src/main/res/values-v31
+          rm -rf android/app/src/main/res/values-night-v31
+
+          # 2. Uncropped 1080x1920 splash image har drawable folder mein rakhein
+          for dir in android/app/src/main/res/drawable*; do
+            if [ -d "$dir" ]; then
+              cp assets/full_splash.png "$dir/splash.png"
+            fi
+          done
+
+          # 3. Custom launch_splash.xml (Zero cropping, centered full frame)
+          mkdir -p android/app/src/main/res/drawable
+          cat << 'EOF' > android/app/src/main/res/drawable/launch_splash.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+              <item android:drawable="@color/colorPrimaryDark" />
+              <item>
+                  <bitmap
+                      android:gravity="center"
+                      android:src="@drawable/splash" />
+              </item>
+          </layer-list>
+          EOF
+
+          # 4. Deep Green (#0c3b2e) Fullscreen Launch Theme
+          cat << 'EOF' > android/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#0c3b2e</item>
+                  <item name="colorPrimaryDark">#0c3b2e</item>
+                  <item name="colorAccent">#d4af37</item>
+              </style>
+              <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+                  <item name="windowActionBar">false</item>
+                  <item name="windowNoTitle">true</item>
+                  <item name="android:background">@null</item>
+              </style>
+              <style name="AppTheme.NoActionBarLaunch" parent="Theme.AppCompat.NoActionBar">
+                  <item name="android:windowBackground">@drawable/launch_splash</item>
+                  <item name="android:windowFullscreen">true</item>
+                  <item name="android:statusBarColor">#0c3b2e</item>
+                  <item name="android:navigationBarColor">#0c3b2e</item>
+              </style>
+          </resources>
+          EOF
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Compile Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk "../Awraad-e-Alaviya-Nooriya.apk"
+
+      - name: Deploy 2-in-1 Live Web App to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./www
+          keep_files: false
+
+      - name: Publish Permanent Android APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Awraad e Alaviya Nooriya (Latest APK)
+          body: |
+            **Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
+            Is APK ko sirf ek baar install karna hai. Aage ke sabhi web features aur updates GitHub se automatically aate rahenge.
+          make_latest: true
+          files: |
+            Awraad-e-Alaviya-Nooriya.apk
