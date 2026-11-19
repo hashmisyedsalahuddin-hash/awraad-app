@@ -1,4 +1,4 @@
-const CACHE_NAME = 'awraad-live-v97';
+const CACHE_NAME = 'awraad-live-v98';
 const CORE_ASSETS = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -17,7 +17,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-First: Online hone par hamesha fresh GitHub update, Offline par cache
+// Network-First: Online hone par fresh GitHub update, Offline par saved cache
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
