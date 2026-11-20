@@ -474,6 +474,28 @@ jobs:
           </resources>
           EOF
 
+      - name: Add Android Notification Permissions (Urs & Fatiha Alerts)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "android/app/src/main/AndroidManifest.xml";
+            let xml = fs.readFileSync(p, "utf8");
+            const perms = [
+              "android.permission.POST_NOTIFICATIONS",
+              "android.permission.SCHEDULE_EXACT_ALARM"
+            ];
+            for (const perm of perms) {
+              if (!xml.includes(perm)) {
+                xml = xml.replace(
+                  "<application",
+                  "    <uses-permission android:name=\"" + perm + "\" />\n    <application"
+                );
+              }
+            }
+            fs.writeFileSync(p, xml, "utf8");
+            console.log("Notification permissions added to AndroidManifest.xml!");
+          '
+
       - name: Setup Java 21
         uses: actions/setup-java@v5
         with:
