@@ -275,46 +275,47 @@ jobs:
               return out;
             }
             const allAssets = Array.from(new Set(["./", ...walk("www")]));
-            const swCode = `const CACHE_NAME = "awraad-live-v${process.env.BUILD_NUM}";
-const CORE_ASSETS = ${JSON.stringify(allAssets, null, 2)};
-
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(CORE_ASSETS.map((url) => cache.add(url).catch(() => {})))
-    )
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const networkUpdate = fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || networkUpdate;
-    })
-  );
-});
-`;
-            fs.writeFileSync("www/sw.js", swCode, "utf8");
+            const swLines = [
+              "const CACHE_NAME = \"awraad-live-v" + process.env.BUILD_NUM + "\";",
+              "const CORE_ASSETS = " + JSON.stringify(allAssets, null, 2) + ";",
+              "",
+              "self.addEventListener(\"install\", (event) => {",
+              "  event.waitUntil(",
+              "    caches.open(CACHE_NAME).then((cache) =>",
+              "      Promise.all(CORE_ASSETS.map((url) => cache.add(url).catch(() => {})))",
+              "    )",
+              "  );",
+              "  self.skipWaiting();",
+              "});",
+              "",
+              "self.addEventListener(\"activate\", (event) => {",
+              "  event.waitUntil(",
+              "    caches.keys().then((keys) =>",
+              "      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))",
+              "    )",
+              "  );",
+              "  self.clients.claim();",
+              "});",
+              "",
+              "self.addEventListener(\"fetch\", (event) => {",
+              "  if (event.request.method !== \"GET\") return;",
+              "  event.respondWith(",
+              "    caches.match(event.request).then((cached) => {",
+              "      const networkUpdate = fetch(event.request)",
+              "        .then((response) => {",
+              "          if (response && response.status === 200) {",
+              "            const copy = response.clone();",
+              "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
+              "          }",
+              "          return response;",
+              "        })",
+              "        .catch(() => cached);",
+              "      return cached || networkUpdate;",
+              "    })",
+              "  );",
+              "});"
+            ];
+            fs.writeFileSync("www/sw.js", swLines.join("\n") + "\n", "utf8");
           '
 
           # 5. Sabhi HTML files (subfolders samet) mein <head> ke SABSE TOP par theme-preload.js + PWA tags inject karein
