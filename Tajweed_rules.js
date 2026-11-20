@@ -4586,3 +4586,228 @@
         wrapResponsiveTables();
     }
 })();
+
+/* === URS_NOTIFIER_START === */
+(function initUrsNotifier() {
+    const HIJRI_DAY_OFFSET = -1; // India / Hyderabad moon-sighting offset
+    const NOTIFICATION_HOUR = 7; // Subah 7:00 AM
+    const NOTIFICATION_MINUTE = 0;
+    const SCHEDULE_DAYS_AHEAD = 60;
+    const URS_ID_BASE = 78600;
+    const CHANNEL_ID = "urs_fatiha_channel";
+
+    const HIJRI_MONTHS_UR = [
+        "", "محرم الحرام", "صفر المظفر", "ربیع الاول", "ربیع الثانی",
+        "جمادی الاول", "جمادی الثانی", "رجب المرجب", "شعبان المعظم",
+        "رمضان المبارک", "شوال المکرم", "ذیقعدہ", "ذی الحجہ"
+    ];
+
+    const URS_DATABASE = [
+        { day: 5,  month: 1,  name: "حضرت خواجہ فرید الدین مسعود گنج شکر رحمۃ اللہ علیہ", year: "٦٦٢ھ", place: "پاکپتن شریف" },
+        { day: 12, month: 1,  name: "حضرت شیخ معروف کرخی رحمۃ اللہ علیہ", year: "٢٠٠ھ", place: "بغداد شریف" },
+        { day: 12, month: 1,  name: "حضرت خواجہ ممشاد علو دینوری رحمۃ اللہ علیہ", year: "٢٩٨ھ", place: "دینور" },
+        { day: 14, month: 1,  name: "حضرت خواجہ حسن بصری رحمۃ اللہ علیہ", year: "١١٠ھ", place: "بصرہ" },
+        { day: 15, month: 1,  name: "حضرت شیخ ابو الفرح یوسف طرطوسی رحمۃ اللہ علیہ", year: "٤٤٧ھ", place: "طرطوس" },
+        { day: 27, month: 2,  name: "حضرت خواجہ عبد الواحد بن زید رحمۃ اللہ علیہ", year: "١٧٧ھ", place: "بصرہ" },
+        { day: 3,  month: 3,  name: "حضرت شیخ فضیل بن عیاض رحمۃ اللہ علیہ", year: "١٨٧ھ", place: "مکہ معظمہ" },
+        { day: 12, month: 3,  name: "سید الكونين حضرت سیدنا محمد رسول اللہ ﷺ", year: "١١ھ", place: "مدینہ منورہ", isProphet: true },
+        { day: 14, month: 3,  name: "حضرت خواجہ قطب الدین بختیار کاکی رحمۃ اللہ علیہ", year: "٦٣٣ھ", place: "دہلی" },
+        { day: 16, month: 3,  name: "مولانا سید محمد بن سلیمان جزولی حسنی رحمۃ اللہ علیہ (مؤلف دلائل الخیرات)", year: "٨٧٠ھ", place: "مراکش" },
+        { day: 6,  month: 4,  name: "حضرت مولانا سید عبد العزیز التباع رحمۃ اللہ علیہ", year: "٩١٤ھ", place: "مراکش" },
+        { day: 11, month: 4,  name: "قطب الاقطاب غوث الاعظم سیدنا عبد القادر جیلانی رحمۃ اللہ علیہ", year: "٥٦١ھ", place: "بغداد شریف" },
+        { day: 12, month: 4,  name: "حضرت خواجہ خواجگاں ابو اسحاق شامی رحمۃ اللہ علیہ", year: "٣٢٩ھ", place: "شام" },
+        { day: 12, month: 4,  name: "حضرت نور المشائخ سید نوری شاہ چشتی قادری رحمۃ اللہ علیہ", year: "١٤١١ھ", place: "بندلہ گوڑہ، حیدرآباد" },
+        { day: 18, month: 4,  name: "سلطان المشائخ حضرت خواجہ نظام الدین اولیاء محبوب الٰہی رحمۃ اللہ علیہ", year: "٧٢٥ھ", place: "دہلی" },
+        { day: 22, month: 4,  name: "امام الموحدین سیدنا محمد محی الدین ابن عربی شیخ اکبر رحمۃ اللہ علیہ", year: "٦٣٨ھ", place: "دمشق" },
+        { day: 29, month: 4,  name: "حضرت محمد کمال اللہ شاہ مچھلی والے شاہ صاحب رحمۃ اللہ علیہ", year: "١٣٥١ھ", place: "حیدرآباد دکن" },
+        { day: 28, month: 5,  name: "حضرت شیخ ابراہیم بن ادہم بلخی رحمۃ اللہ علیہ", year: "١٦١ھ", place: "شام" },
+        { day: 1,  month: 6,  name: "حضرت شیخ سید ابی نصر رحمۃ اللہ علیہ", year: "٦١٨ھ", place: "دمشق" },
+        { day: 1,  month: 6,  name: "حضرت قدوۃ الدین ابو احمد ابدال چشتی رحمۃ اللہ علیہ", year: "٣٥٥ھ", place: "چشت خراسان" },
+        { day: 15, month: 6,  name: "حضرت خواجہ سید برہان الدین جانم بیجاپوری رحمۃ اللہ علیہ", year: "٩٩٠ھ", place: "شاہ پور، بیجاپور" },
+        { day: 21, month: 6,  name: "حضرت شیخ عبد العزیز تمیمی رحمۃ اللہ علیہ", year: "٣٣٧ھ", place: "یمن" },
+        { day: 22, month: 6,  name: "خلیفہ رسول اللہ سیدنا ابو بکر صدیق رضی اللہ عنہ", year: "١٣ھ", place: "مدینہ منورہ" },
+        { day: 1,  month: 7,  name: "حضرت خواجہ ابو محمد چشتی رحمۃ اللہ علیہ", year: "٤١١ھ", place: "چشت" },
+        { day: 1,  month: 7,  name: "حضرت قطب الدین مودود چشتی رحمۃ اللہ علیہ", year: "٥٢٧ھ", place: "چشت" },
+        { day: 6,  month: 7,  name: "حضرت خواجہ سید معین الدین چشتی اجمیری سنجری رحمۃ اللہ علیہ", year: "٦٣٣ھ", place: "اجمیر شریف" },
+        { day: 10, month: 7,  name: "حضرت حاجی شریف زندنی رحمۃ اللہ علیہ", year: "٦١٢ھ", place: "بخارا" },
+        { day: 10, month: 7,  name: "حضرت سیدی جمال اللہ شاہ حسینی مغربی رحمۃ اللہ علیہ", year: "٨٢٠ھ", place: "شاہ پور، بیجاپور" },
+        { day: 13, month: 7,  name: "حضرت ناصر الدین ابو یوسف چشتی رحمۃ اللہ علیہ", year: "٤٥٩ھ", place: "چشت" },
+        { day: 27, month: 7,  name: "حضرت شیخ جنید بغدادی رحمۃ اللہ علیہ", year: "٢٩٧ھ", place: "بغداد شریف" },
+        { day: 18, month: 8,  name: "حضرت شیخ ابو صالح نصر رحمۃ اللہ علیہ", year: "٦٩٩ھ", place: "مدینہ منورہ" },
+        { day: 27, month: 8,  name: "حضرت شیخ ابو سعید مخزومی رحمۃ اللہ علیہ", year: "٥١٣ھ", place: "بغداد شریف" },
+        { day: 8,  month: 9,  name: "حضرت مولانا سید عبد القادر الفاسی رحمۃ اللہ علیہ", year: "١٠٩١ھ", place: "فاس" },
+        { day: 9,  month: 9,  name: "حضرت شیخ داؤد طائی رحمۃ اللہ علیہ", year: "١٦٢ھ", place: "بغداد شریف" },
+        { day: 18, month: 9,  name: "حضرت خواجہ نصیر الدین محمود چراغ دہلوی رحمۃ اللہ علیہ", year: "٧٥٧ھ", place: "دہلی" },
+        { day: 21, month: 9,  name: "امیر المومنین حضرت سیدنا علی مرتضیٰ رضی اللہ عنہ", year: "٤٠ھ", place: "نجف اشرف" },
+        { day: 29, month: 9,  name: "حضرت خواجہ برہان الدین خدانما رحمۃ اللہ علیہ", year: "١٢٩٠ھ", place: "رائچوٹی" },
+        { day: 30, month: 9,  name: "حضرت شیخ سری سقطی رحمۃ اللہ علیہ", year: "٢٥٠ھ", place: "بغداد شریف" },
+        { day: 2,  month: 10, name: "حضرت کنز العرفان غوثی شاہ صاحب قبلہ رحمۃ اللہ علیہ", year: "١٣٧٣ھ", place: "بیگم بازار، حیدرآباد" },
+        { day: 6,  month: 10, name: "حضرت شیخ سید عبد الرزاق بن غوث الاعظم رحمۃ اللہ علیہ", year: "٥٩٥ھ", place: "بغداد شریف" },
+        { day: 15, month: 10, name: "حضرت خواجہ عثمان ہارونی رحمۃ اللہ علیہ", year: "٦١٧ھ", place: "مکہ معظمہ" },
+        { day: 16, month: 10, name: "مولانا سید محمد بن احمد المغنی رحمۃ اللہ علیہ", year: "١١٣٦ھ", place: "فاس" },
+        { day: 17, month: 10, name: "حضرت خواجہ امین الدین ہبیرہ بصری رحمۃ اللہ علیہ", year: "٢٨٧ھ", place: "بصرہ" },
+        { day: 24, month: 10, name: "حضرت خواجہ سدید الدین حذیفہ مرعشی رحمۃ اللہ علیہ", year: "٢٤٦ھ", place: "شام" },
+        { day: 25, month: 10, name: "حضرت سید خواجہ میراں جی شمس العشاق بیجاپوری رحمۃ اللہ علیہ", year: "٩٠٥ھ", place: "گلبرگہ شریف" },
+        { day: 16, month: 11, name: "حضرت خواجہ سید محمد حسینی گیسو دراز بندہ نواز رحمۃ اللہ علیہ", year: "٨٢٥ھ", place: "گلبرگہ شریف" },
+        { day: 1,  month: 12, name: "حضرت مولانا سید احمد بن موسیٰ السملالی رحمۃ اللہ علیہ", year: "٩٧١ھ", place: "مراکش" },
+        { day: 6,  month: 12, name: "حضرت خواجہ سید سلطان محمود اللہ چشتی رحمۃ اللہ علیہ", year: "١٣١١ھ", place: "حیدرآباد دکن" },
+        { day: 19, month: 12, name: "حضرت شیخ ابو الفضل عبد الواحد تمیمی رحمۃ اللہ علیہ", year: "٤٢٥ھ", place: "بغداد شریف" },
+        { day: 27, month: 12, name: "حضرت شیخ ابو بکر عبد اللہ شبلی رحمۃ اللہ علیہ", year: "٣٣٤ھ", place: "بغداد شریف" }
+    ];
+
+    function toUrduDigits(num) {
+        const urdu = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+        return String(num).replace(/\d/g, d => urdu[d]);
+    }
+
+    function getHijriForDate(baseDate) {
+        const d = new Date(baseDate.getTime());
+        d.setDate(d.getDate() + HIJRI_DAY_OFFSET);
+        let parts;
+        try {
+            parts = new Intl.DateTimeFormat("en-US-u-ca-islamic-umalqura-nu-latn", {
+                day: "numeric", month: "numeric", year: "numeric"
+            }).formatToParts(d);
+        } catch (e) {
+            parts = new Intl.DateTimeFormat("en-US-u-ca-islamic-nu-latn", {
+                day: "numeric", month: "numeric", year: "numeric"
+            }).formatToParts(d);
+        }
+        return {
+            day: parseInt(parts.find(p => p.type === "day").value, 10),
+            month: parseInt(parts.find(p => p.type === "month").value, 10),
+            year: parseInt(parts.find(p => p.type === "year").value, 10)
+        };
+    }
+
+    function getMatchesForHijri(hijri) {
+        return URS_DATABASE.filter(item => item.day === hijri.day && item.month === hijri.month);
+    }
+
+    function showUrsPopup(hijri, forceShow = false) {
+        const todayKey = `${hijri.year}-${hijri.month}-${hijri.day}`;
+        if (!forceShow && localStorage.getItem("urs_dismissed_date") === todayKey) return;
+
+        const matches = getMatchesForHijri(hijri);
+        if (matches.length === 0) return;
+
+        const existing = document.getElementById("urs-modal-overlay");
+        if (existing) existing.remove();
+
+        const isProphetDay = matches.some(m => m.isProphet);
+        const headerTitle = isProphetDay
+            ? "🕌 یاددہانیِ ١٢ ربیع الاول و درود و سلام"
+            : "🕌 یاددہانیِ یومِ وصال و فاتحہ خوانی";
+        const messageText = isProphetDay
+            ? "آج ١٢ ربیع الاول کا بابرکت دن ہے۔ کثرت سے درود و سلام کا نذرانہ بارگاہِ رسالت ﷺ میں پیش فرمائیں اور شجرہ شریف کی تلاوت کریں۔"
+            : "آج کے بابرکت دن ان بزرگِ دین کا یومِ وصال (عرسِ پاک) ہے۔ براہِ کرم حسبِ توفیق شجرہ شریف، سورہ فاتحہ (١ مرتبہ)، سورہ اخلاص (٣ مرتبہ) اور درود شریف پڑھ کر ان کی روحِ پرفتوح کو ایصالِ ثواب فرمائیں۔";
+
+        const saintsHtml = matches.map(m => `
+            <div class="urs-saint-item">
+                <div class="urs-saint-name">${m.name}</div>
+                <div class="urs-saint-meta">وصال: ${m.year} &nbsp;|&nbsp; مدفن: ${m.place}</div>
+            </div>
+        `).join("");
+
+        const hijriText = `${toUrduDigits(hijri.day)} ${HIJRI_MONTHS_UR[hijri.month]} ${toUrduDigits(hijri.year)}ھ`;
+
+        const overlay = document.createElement("div");
+        overlay.id = "urs-modal-overlay";
+        overlay.className = "urs-modal-overlay";
+        overlay.innerHTML = `
+            <div class="urs-modal-card" role="dialog" aria-modal="true">
+                <div class="urs-modal-header">
+                    <div class="urs-modal-title">${headerTitle}</div>
+                    <div class="urs-hijri-badge">${hijriText}</div>
+                </div>
+                <div class="urs-saint-list">${saintsHtml}</div>
+                <div class="urs-modal-message">${messageText}</div>
+                <div class="urs-modal-actions">
+                    <a href="Shajara_e_Alaviyya.html#qadriya" class="urs-btn urs-btn-primary" id="urs-read-btn">فاتحہ و شجرہ پڑھیں</a>
+                    <button type="button" class="urs-btn urs-btn-close" id="urs-close-btn">جزاک اللہ (بند کریں)</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        const dismiss = () => {
+            if (!forceShow) localStorage.setItem("urs_dismissed_date", todayKey);
+            overlay.remove();
+        };
+        overlay.querySelector("#urs-close-btn").addEventListener("click", dismiss);
+        overlay.querySelector("#urs-read-btn").addEventListener("click", dismiss);
+        overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(); });
+    }
+
+    async function scheduleAndroidUrsNotifications() {
+        const LocalNotifications = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LocalNotifications) return;
+
+        try {
+            let perm = await LocalNotifications.checkPermissions();
+            if (perm.display !== "granted") perm = await LocalNotifications.requestPermissions();
+            if (perm.display !== "granted") return;
+
+            if (typeof LocalNotifications.createChannel === "function") {
+                await LocalNotifications.createChannel({
+                    id: CHANNEL_ID,
+                    name: "یاددہانیِ یومِ وصال و فاتحہ",
+                    description: "مشائخ عظام کے یومِ وصال اور عرس کی یاددہانی",
+                    importance: 4,
+                    visibility: 1
+                }).catch(() => {});
+            }
+
+            const pending = await LocalNotifications.getPending();
+            const oldUrs = (pending.notifications || []).filter(n => n.id >= URS_ID_BASE && n.id < URS_ID_BASE + 100);
+            if (oldUrs.length > 0) {
+                await LocalNotifications.cancel({ notifications: oldUrs.map(n => ({ id: n.id })) });
+            }
+
+            const now = new Date();
+            const notificationsToSchedule = [];
+
+            for (let i = 0; i < SCHEDULE_DAYS_AHEAD; i++) {
+                const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i, NOTIFICATION_HOUR, NOTIFICATION_MINUTE, 0, 0);
+                if (targetDate <= now) continue;
+
+                const hijri = getHijriForDate(targetDate);
+                const matches = getMatchesForHijri(hijri);
+                if (matches.length === 0) continue;
+
+                const isProphetDay = matches.some(m => m.isProphet);
+                const hijriText = `${toUrduDigits(hijri.day)} ${HIJRI_MONTHS_UR[hijri.month]}`;
+                const namesList = matches.map(m => m.name).join(" اور ");
+
+                notificationsToSchedule.push({
+                    id: URS_ID_BASE + i,
+                    channelId: CHANNEL_ID,
+                    title: isProphetDay
+                        ? `🕌 ${hijriText} - یاددہانیِ درود و سلام`
+                        : `🕌 یاددہانیِ یومِ وصال (${hijriText})`,
+                    body: isProphetDay
+                        ? `آج ١٢ ربیع الاول ہے۔ کثرت سے درود و سلام پیش فرمائیں۔`
+                        : `آج ${namesList} کا عرسِ پاک ہے۔ فاتحہ خوانی اور ایصالِ ثواب فرمائیں۔`,
+                    schedule: { at: targetDate, allowWhileIdle: true }
+                });
+            }
+
+            if (notificationsToSchedule.length > 0) {
+                await LocalNotifications.schedule({ notifications: notificationsToSchedule });
+            }
+        } catch (err) {
+            console.warn("Urs LocalNotification error:", err);
+        }
+    }
+
+    window.testUrsPopup = function (day, month) {
+        const current = getHijriForDate(new Date());
+        showUrsPopup({ day, month, year: current.year }, true);
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+        showUrsPopup(getHijriForDate(new Date()), false);
+        scheduleAndroidUrsNotifications();
+    });
+})();
+/* === URS_NOTIFIER_END === */

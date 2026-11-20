@@ -2391,3 +2391,102 @@ body {
         font-family: var(--user-app-font) !important;
     }
 }
+
+/* === URS_POPUP_START === */
+.urs-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 99999;
+    direction: rtl;
+    animation: ursFadeIn 0.25s ease-out;
+}
+.urs-modal-card {
+    width: 100%;
+    max-width: 440px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: #ffffff;
+    color: #1f2937;
+    border-radius: 14px;
+    border: 2px solid #1b5e20;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    padding: 18px 20px;
+    text-align: center;
+}
+.urs-modal-header {
+    background: #1b5e20;
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+.urs-modal-title { font-size: 20px; font-weight: bold; margin: 0; }
+.urs-hijri-badge {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 14px;
+}
+.urs-saint-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.urs-saint-item {
+    background: #f1f8e9;
+    border-right: 4px solid #2e7d32;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: right;
+}
+.urs-saint-name { font-size: 18px; font-weight: bold; color: #1b5e20; line-height: 1.7; }
+.urs-saint-meta { font-size: 14px; color: #4b5563; margin-top: 4px; }
+.urs-modal-message {
+    font-size: 16px;
+    line-height: 1.9;
+    color: #374151;
+    margin: 12px 0 16px;
+    padding: 10px;
+    background: #fafafa;
+    border: 1px dashed #c8e6c9;
+    border-radius: 8px;
+}
+.urs-modal-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.urs-btn {
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+    transition: opacity 0.2s ease;
+}
+.urs-btn:active { opacity: 0.85; }
+.urs-btn-primary { background: #1b5e20; color: #ffffff; text-decoration: none; }
+.urs-btn-close { background: #e5e7eb; color: #1f2937; }
+
+body.dark-mode .urs-modal-card, [data-theme="dark"] .urs-modal-card {
+    background: #1e242b; color: #e5e7eb; border-color: #4caf50;
+}
+body.dark-mode .urs-modal-header, [data-theme="dark"] .urs-modal-header { background: #2e7d32; }
+body.dark-mode .urs-saint-item, [data-theme="dark"] .urs-saint-item {
+    background: #263238; border-right-color: #66bb6a;
+}
+body.dark-mode .urs-saint-name, [data-theme="dark"] .urs-saint-name { color: #a5d6a7; }
+body.dark-mode .urs-saint-meta, [data-theme="dark"] .urs-saint-meta { color: #cbd5e1; }
+body.dark-mode .urs-modal-message, [data-theme="dark"] .urs-modal-message {
+    background: #171c22; color: #d1d5db; border-color: #37474f;
+}
+body.dark-mode .urs-btn-close, [data-theme="dark"] .urs-btn-close {
+    background: #374151; color: #f3f4f6;
+}
+@keyframes ursFadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to { opacity: 1; transform: scale(1); }
+}
+/* === URS_POPUP_END === */
