@@ -1,14 +1,19 @@
 (function() {
   try {
     var root = document.documentElement;
+    var head = document.head || root;
     var isDark = localStorage.getItem('theme') === 'dark';
     var savedBg = localStorage.getItem('app_custom_bg');
     var savedText = localStorage.getItem('app_custom_text');
     var savedSize = localStorage.getItem('app_font_size');
+    var savedContentFont = localStorage.getItem('app_content_font');
+    var savedAppFont = localStorage.getItem('app_ui_font');
     var tajweedOff = localStorage.getItem('app_tajweed_colors') === 'false';
 
     if (isDark) root.classList.add('dark-mode');
     if (tajweedOff) root.classList.add('tajweed-colors-off');
+
+    var lockCss = '';
 
     if (savedBg && /^#[0-9a-fA-F]{6}$/.test(savedBg)) {
       var r = parseInt(savedBg.substring(1, 3), 16);
@@ -83,8 +88,31 @@
       root.style.setProperty('--auto-table-head-text', t.tableHeadText);
       root.classList.add('custom-bg-active');
       if (isDarkBg) root.classList.add('custom-bg-dark');
+
+      lockCss =
+        '@media screen{' +
+        'html,body,.continuous-frame,.continuous-inner{background:' + savedBg + ' !important;background-color:' + savedBg + ' !important;}' +
+        '.app-navbar{background-color:' + t.navBg + ' !important;border-bottom-color:' + t.border + ' !important;}' +
+        '.nav-card,.sub-nav-card,.daily-malfooz-container,.malfooz-card,.shijra-table,.name-card,.timer-card{background-color:' + t.cardBg + ' !important;border-color:' + t.border + ' !important;}' +
+        '}';
     } else if (isDark) {
       root.style.backgroundColor = '#121212';
+      lockCss =
+        '@media screen{' +
+        'html,body{background:#121212 !important;background-color:#121212 !important;color:#f5f6fa !important;}' +
+        '.continuous-frame,.continuous-inner{background:#1e1e1e !important;background-color:#1e1e1e !important;}' +
+        '.app-navbar{background-color:#2a2a2a !important;}' +
+        '}';
+    }
+
+    if (lockCss && head) {
+      var st = document.getElementById('awraad-preload-lock');
+      if (!st) {
+        st = document.createElement('style');
+        st.id = 'awraad-preload-lock';
+        head.appendChild(st);
+      }
+      st.textContent = lockCss;
     }
 
     if (savedText) {
@@ -95,7 +123,22 @@
       root.style.setProperty('--user-font-size', savedSize + 'px');
       root.classList.add('custom-size-active');
     }
+    if (savedContentFont) {
+      root.style.setProperty('--user-content-font', savedContentFont);
+      root.classList.add('custom-content-font-active');
+    }
+    if (savedAppFont) {
+      root.style.setProperty('--user-app-font', savedAppFont);
+      root.classList.add('custom-app-font-active');
+    }
+
+    // Load Amiri Google Font non-blockingly so CSS never stalls on network
+    if (head && !document.getElementById('awraad-amiri-font-link')) {
+      var fl = document.createElement('link');
+      fl.id = 'awraad-amiri-font-link';
+      fl.rel = 'stylesheet';
+      fl.href = 'https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap';
+      head.appendChild(fl);
+    }
   } catch (e) {}
 })();
-
-

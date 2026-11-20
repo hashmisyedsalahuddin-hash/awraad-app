@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap');
+/* Amiri font is loaded asynchronously (non-blocking) via theme-preload.js & Tajweed_rules.js */
 
 /* =========================================
    1. PAGE & PRINT SETUP
@@ -9,13 +9,13 @@
   @bottom-center { content: "- " counter(page) " -"; font-family: 'Amiri', serif; font-size: 17px; font-weight: 700; color: #c59b27; }
 }
 * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-body { background-color: #faf5e8; color: #111111; margin: 0; padding: 10px 0; direction: rtl; }
+body { background-color: var(--user-bg-color, #faf5e8); color: var(--user-text-color, var(--auto-text, #111111)); margin: 0; padding: 10px 0; direction: rtl; }
 
 /* =========================================
    2. MAIN CONTAINERS
    ========================================= */
-.continuous-frame { width: 100%; max-width: 780px; margin: 0 auto; background: #faf4e5; border: 3.5px solid #c59b27; padding: 3px; }
-.continuous-inner { border: 2px solid #111111; padding: 18px 20px; background: #faf4e5; }
+.continuous-frame { width: 100%; max-width: 780px; margin: 0 auto; background: var(--user-bg-color, #faf4e5); border: 3.5px solid var(--auto-border, #c59b27); padding: 3px; }
+.continuous-inner { border: 2px solid var(--auto-ruled-border, #111111); padding: 18px 20px; background: var(--user-bg-color, #faf4e5); }
 .screen-header { display: flex; justify-content: space-between; align-items: center; font-family: 'Amiri', serif; padding-bottom: 6px; margin-bottom: 12px; border-bottom: 2px solid #c59b27; }
 .screen-header-title { font-size: 22px; font-weight: 700; color: #1a1a1a; }
 .bismillah-header { color: #c59b27; font-size: 20px; font-weight: bold; }
@@ -158,7 +158,7 @@ body.dark-mode .durood-repeat-box, body.dark-mode .fourteen-times-box, body.dark
 /* =========================================
    10. SHIJRA TABLE & LIST STYLES
    ========================================= */
-.shijra-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-family: 'Amiri', serif; font-size: 20px; direction: rtl; background-color: #faf4e5; }
+.shijra-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-family: 'Amiri', serif; font-size: 20px; direction: rtl; background-color: var(--auto-card-bg, #faf4e5); }
 .shijra-table th, .shijra-table td { border: 2px solid #c59b27; padding: 10px; text-align: center; vertical-align: middle; line-height: 1.6; }
 .shijra-table th { background-color: #1a365d; color: #ffffff; font-size: 22px; font-weight: bold; line-height: normal; }
 .shijra-table tr:nth-child(even) { background-color: rgba(197, 155, 39, 0.1); }
@@ -183,7 +183,7 @@ body.dark-mode .hadith-text { color: #74b9ff; }
    ========================================= */
 .index-nav-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 35px; margin-bottom: 30px; }
 @media (min-width: 650px) { .index-nav-grid { grid-template-columns: 1fr 1fr; } }
-.nav-card { display: flex; flex-direction: column; justify-content: center; align-items: center; text-decoration: none; background-color: #faf4e5; border: 2px solid #c59b27; border-radius: 8px; padding: 22px 15px; text-align: center; transition: transform 0.12s ease, background-color 0.12s ease; color: #1a365d; font-family: 'Amiri', serif; font-size: 26px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.nav-card { display: flex; flex-direction: column; justify-content: center; align-items: center; text-decoration: none; background-color: var(--auto-card-bg, #faf4e5); border: 2px solid var(--auto-border, #c59b27); border-radius: 8px; padding: 22px 15px; text-align: center; transition: transform 0.12s ease, background-color 0.12s ease; color: #1a365d; font-family: 'Amiri', serif; font-size: 26px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 .nav-card:hover { background-color: #c59b27; color: #ffffff; transform: translateY(-4px); box-shadow: 0 8px 15px rgba(197, 155, 39, 0.3); border-color: #8c6d23; }
 .nav-card .urdu-sub { font-size: 19px; color: #666666; display: block; margin-top: 8px; font-weight: normal; }
 .nav-card:hover .urdu-sub { color: #fdfdfd; }
@@ -210,8 +210,8 @@ body.dark-mode .sub-nav-card:hover { background-color: #8c6d23; color: #111111; 
 .daily-malfooz-container {
     margin: 15px auto;
     max-width: 950px;
-    background-color: #fdf5e6;
-    border: 2px dashed #c59b27;
+    background-color: var(--auto-card-bg, #fdf5e6);
+    border: 2px dashed var(--auto-border, #c59b27);
     border-radius: 8px;
     padding: 15px;
     text-align: center;
@@ -334,8 +334,8 @@ body.dark-mode .btn-reset { background-color: #ff6b81; color: #111; }
 .app-navbar {
     position: sticky;
     top: 0;
-    background-color: #fdf5e6;
-    border-bottom: 1px solid #c59b27;
+    background-color: var(--auto-nav-bg, #fdf5e6);
+    border-bottom: 1px solid var(--auto-border, #c59b27);
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -1445,13 +1445,15 @@ body.custom-content-font-active .shijra-table,
 body.custom-content-font-active .names-grid,
 body.custom-content-font-active .malfooz-text,
 body.custom-content-font-active .daily-malfooz-text,
-body.custom-content-font-active .muqaddima-urdu {
+body.custom-content-font-active .muqaddima-urdu,
+body.custom-content-font-active .nav-hijri-date {
     font-family: var(--user-content-font) !important;
 }
 
 /* 6. Custom App UI Font */
 body.custom-app-font-active .app-navbar,
 body.custom-app-font-active .nav-btn,
+body.custom-app-font-active .nav-hijri-date,
 body.custom-app-font-active .dropdown-content a,
 body.custom-app-font-active .dropdown-content .submenu-toggle,
 body.custom-app-font-active .screen-header,
@@ -1478,11 +1480,13 @@ body.custom-app-font-active .muqaddima-subhead {
     text-align: center;
     font-family: 'Amiri', serif;
     font-size: 16px;
-    font-weight: bold;
+    font-weight: 700;
+    line-height: 1.6;
     color: #1a365d;
-    padding: 0 6px;
+    padding: 2px 6px;
     white-space: nowrap;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: visible;
     text-overflow: ellipsis;
     user-select: none;
 }
@@ -1974,4 +1978,416 @@ a, button, .nav-card, .sub-nav-card, .pt-option-row, .settings-nav-row, .color-p
 }
 .hizb-section, .index-section, .shijra-section {
     contain: style;
+}
+/* =========================================
+   27. TASBEEH TWO-FINGER PINCH RESIZE & DRAGGABLE WINDOW
+   ========================================= */
+#tasbeehModal.tasbeeh-modal.show {
+    display: block;
+}
+#tasbeehModal.tasbeeh-modal.tasbeeh-compact {
+    background: transparent !important;
+    pointer-events: none;
+}
+
+#tasbeehContentBox.tasbeeh-content {
+    position: fixed;
+    width: 320px;
+    max-width: 92vw;
+    margin: 0;
+    padding: 0 18px 18px 18px;
+    pointer-events: auto;
+    overflow: hidden;
+    transform-origin: 0 0;
+    will-change: transform, left, top;
+    touch-action: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.tasbeeh-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 -18px 12px -18px;
+    padding: 9px 12px;
+    background: rgba(197, 155, 39, 0.16);
+    border-bottom: 1.5px solid rgba(197, 155, 39, 0.45);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.tasbeeh-drag-handle:active {
+    cursor: grabbing;
+}
+
+.tasbeeh-drag-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #8c6d23;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tasbeeh-grip-icon {
+    font-size: 15px;
+    opacity: 0.75;
+    letter-spacing: -1px;
+}
+
+.tasbeeh-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.tasbeeh-icon-btn {
+    background: transparent;
+    border: 1px solid rgba(197, 155, 39, 0.55);
+    color: #1a365d;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+.tasbeeh-icon-btn:active {
+    transform: scale(0.92);
+    background: rgba(197, 155, 39, 0.22);
+}
+.tasbeeh-icon-btn.close-btn {
+    color: #c0392b;
+    font-size: 20px;
+}
+
+/* Subtle live zoom percentage indicator during pinch */
+.tasbeeh-zoom-indicator {
+    position: absolute;
+    top: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(26, 54, 93, 0.88);
+    color: #ffffff !important;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 3px 10px;
+    border-radius: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 20;
+}
+.tasbeeh-zoom-indicator.visible {
+    opacity: 1;
+}
+
+/* Draggable Minimized Pill */
+.tasbeeh-minimized {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Dark Mode Support for Draggable/Resizable Tasbeeh */
+body.dark-mode .tasbeeh-drag-handle {
+    background: rgba(197, 155, 39, 0.14);
+    border-bottom-color: #555555;
+}
+body.dark-mode .tasbeeh-drag-title {
+    color: #fbc531 !important;
+}
+body.dark-mode .tasbeeh-icon-btn {
+    color: #f5f6fa !important;
+    border-color: #666666;
+}
+body.dark-mode .tasbeeh-icon-btn.close-btn {
+    color: #ff6b81 !important;
+}
+body.dark-mode .tasbeeh-zoom-indicator {
+    background: rgba(197, 155, 39, 0.92);
+    color: #111111 !important;
+}
+/* =========================================
+   28. DOUBLE-TAP BACK TO EXIT TOAST
+   ========================================= */
+.exit-toast {
+    position: fixed;
+    bottom: 34px;
+    left: 50%;
+    transform: translateX(-50%) translateY(16px);
+    background: rgba(26, 54, 93, 0.94);
+    color: #ffffff !important;
+    border: 1.5px solid #c59b27;
+    padding: 10px 20px;
+    border-radius: 26px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    max-width: 90vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    z-index: 100030;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    direction: ltr;
+}
+.exit-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+body.dark-mode .exit-toast {
+    background: rgba(34, 34, 40, 0.96) !important;
+    color: #f5f6fa !important;
+    border-color: #c59b27 !important;
+}
+@media print {
+    .exit-toast { display: none !important; }
+}
+/* =========================================
+   29. ZERO HORIZONTAL OVERFLOW & RESPONSIVE TABLE FIX (MOBILE RTL)
+   ========================================= */
+html {
+    background-color: var(--user-bg-color, #faf5e8);
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+}
+body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+}
+.continuous-frame {
+    width: 100%;
+    max-width: min(780px, 100%);
+    overflow-x: clip;
+}
+.continuous-inner {
+    width: 100%;
+    max-width: 100%;
+}
+.app-navbar {
+    width: 100%;
+    max-width: 100%;
+}
+.nav-left, .nav-right {
+    flex-shrink: 0;
+}
+.nav-hijri-date {
+    min-width: 0;
+}
+.screen-header {
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.daily-malfooz-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+
+/* Table Wrapper prevents wide tables from pushing page width */
+.table-scroll-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 16px 0;
+}
+.table-scroll-wrap .shijra-table {
+    margin: 0;
+}
+.shijra-table {
+    width: 100%;
+    max-width: 100%;
+}
+.shijra-table th, .shijra-table td {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+@media (max-width: 650px) {
+    .continuous-inner {
+        padding: 14px 12px;
+    }
+    .shijra-table {
+        font-size: 16px;
+    }
+    .shijra-table th {
+        font-size: 17px;
+        padding: 7px 5px;
+    }
+    .shijra-table td {
+        padding: 6px 5px;
+    }
+}
+/* =========================================
+   30. ZERO-FLASH EARLY THEME PRELOAD (<html> LEVEL)
+   ========================================= */
+@media screen {
+    html.dark-mode,
+    html.dark-mode body {
+        background-color: #121212 !important;
+        color: #f5f6fa !important;
+    }
+    html.dark-mode .continuous-frame,
+    html.dark-mode .continuous-inner {
+        background-color: #1e1e1e !important;
+        border-color: #8c6d23 !important;
+    }
+    html.dark-mode .continuous-inner {
+        border-color: #555555 !important;
+    }
+    html.dark-mode .app-navbar {
+        background-color: #2a2a2a !important;
+        border-bottom-color: #b8860b !important;
+    }
+    html.dark-mode .nav-card,
+    html.dark-mode .sub-nav-card,
+    html.dark-mode .daily-malfooz-container,
+    html.dark-mode .malfooz-card,
+    html.dark-mode .shijra-table {
+        background-color: #1e1e1e !important;
+        border-color: #8c6d23 !important;
+        color: #f5f6fa !important;
+    }
+
+    html.custom-bg-active,
+    html.custom-bg-active body {
+        background-color: var(--user-bg-color) !important;
+        color: var(--auto-text) !important;
+    }
+    html.custom-bg-active .continuous-frame {
+        background-color: var(--user-bg-color) !important;
+        border-color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .continuous-inner {
+        background-color: var(--user-bg-color) !important;
+        border-color: var(--auto-ruled-border) !important;
+    }
+    html.custom-bg-active .app-navbar {
+        background-color: var(--auto-nav-bg) !important;
+        border-bottom-color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .app-navbar .nav-btn,
+    html.custom-bg-active .nav-hijri-date {
+        color: var(--auto-card-text) !important;
+        border-color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .nav-card,
+    html.custom-bg-active .sub-nav-card,
+    html.custom-bg-active .daily-malfooz-container,
+    html.custom-bg-active .malfooz-card,
+    html.custom-bg-active .malfooz-topic,
+    html.custom-bg-active .timer-card,
+    html.custom-bg-active .name-card,
+    html.custom-bg-active .durood-repeat-box,
+    html.custom-bg-active .fourteen-times-box,
+    html.custom-bg-active .abyat-box,
+    html.custom-bg-active .shijra-table {
+        background-color: var(--auto-card-bg) !important;
+        border-color: var(--auto-border) !important;
+        color: var(--auto-card-text) !important;
+    }
+    html.custom-bg-active .shijra-table th {
+        background-color: var(--auto-table-head-bg) !important;
+        color: var(--auto-table-head-text) !important;
+        border-color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .screen-header,
+    html.custom-bg-active .title-box,
+    html.custom-bg-active .section-heading,
+    html.custom-bg-active .muqaddima-subhead {
+        border-bottom-color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .screen-header-title,
+    html.custom-bg-active .title-main,
+    html.custom-bg-active .section-heading,
+    html.custom-bg-active .daily-malfooz-title {
+        color: var(--auto-card-text) !important;
+    }
+    html.custom-bg-active:not(.custom-text-active) .dua-entry,
+    html.custom-bg-active:not(.custom-text-active) .ruled-text,
+    html.custom-bg-active:not(.custom-text-active) .misra,
+    html.custom-bg-active:not(.custom-text-active) .malfooz-text,
+    html.custom-bg-active:not(.custom-text-active) .daily-malfooz-text,
+    html.custom-bg-active:not(.custom-text-active) .muqaddima-urdu,
+    html.custom-bg-active:not(.custom-text-active) .title-sub {
+        color: var(--auto-text) !important;
+    }
+    html.custom-text-active .dua-entry,
+    html.custom-text-active .ruled-text,
+    html.custom-text-active .misra,
+    html.custom-text-active .malfooz-text,
+    html.custom-text-active .daily-malfooz-text,
+    html.custom-text-active .muqaddima-urdu,
+    html.custom-text-active .title-sub {
+        color: var(--user-text-color) !important;
+    }
+    html.custom-size-active .dua-entry,
+    html.custom-size-active .durood-repeat-box,
+    html.custom-size-active .fourteen-times-box,
+    html.custom-size-active .abyat-box,
+    html.custom-size-active .sher-box {
+        font-size: var(--user-font-size) !important;
+    }
+
+    html.custom-bg-active .dropdown-content {
+        background-color: var(--auto-card-bg) !important;
+        border-color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .nav-card .urdu-sub {
+        color: var(--auto-card-subtext) !important;
+    }
+    html.custom-bg-active .bismillah-header {
+        color: var(--auto-border) !important;
+    }
+    html.custom-bg-active .ruled-text,
+    html.custom-bg-active .misra {
+        border-bottom-color: var(--auto-ruled-border) !important;
+    }
+    html.custom-content-font-active .dua-entry,
+    html.custom-content-font-active .durood-repeat-box,
+    html.custom-content-font-active .fourteen-times-box,
+    html.custom-content-font-active .abyat-box,
+    html.custom-content-font-active .sher-box,
+    html.custom-content-font-active .misra,
+    html.custom-content-font-active .shijra-table,
+    html.custom-content-font-active .names-grid,
+    html.custom-content-font-active .malfooz-text,
+    html.custom-content-font-active .daily-malfooz-text,
+    html.custom-content-font-active .muqaddima-urdu,
+    html.custom-content-font-active .nav-hijri-date {
+        font-family: var(--user-content-font) !important;
+    }
+    html.custom-app-font-active .app-navbar,
+    html.custom-app-font-active .nav-btn,
+    html.custom-app-font-active .nav-hijri-date,
+    html.custom-app-font-active .dropdown-content a,
+    html.custom-app-font-active .dropdown-content .submenu-toggle,
+    html.custom-app-font-active .screen-header,
+    html.custom-app-font-active .title-main,
+    html.custom-app-font-active .title-sub,
+    html.custom-app-font-active .section-heading,
+    html.custom-app-font-active .nav-card,
+    html.custom-app-font-active .sub-nav-card,
+    html.custom-app-font-active .daily-malfooz-title,
+    html.custom-app-font-active .malfooz-topic,
+    html.custom-app-font-active .muqaddima-subhead {
+        font-family: var(--user-app-font) !important;
+    }
 }

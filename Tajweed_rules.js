@@ -111,6 +111,14 @@
             root.classList.add('custom-size-active');
             if (body) body.classList.add('custom-size-active');
         }
+
+        if (document.head && !document.getElementById('awraad-amiri-font-link')) {
+            var amiriLink = document.createElement('link');
+            amiriLink.id = 'awraad-amiri-font-link';
+            amiriLink.rel = 'stylesheet';
+            amiriLink.href = 'https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap';
+            document.head.appendChild(amiriLink);
+        }
     } catch (e) {}
 })();
 
@@ -1206,8 +1214,8 @@
             styleEl.id = 'daily-malfooz-global-styles';
             styleEl.innerHTML = `
                 .daily-malfooz-container {
-                    background-color: var(--card-bg, #fdf5e6);
-                    border: 2px solid #c59b27;
+                    background-color: var(--auto-card-bg, #fdf5e6);
+                    border: 2px solid var(--auto-border, #c59b27);
                     border-radius: 8px;
                     padding: 15px 20px;
                     margin: 20px auto;
@@ -1219,14 +1227,14 @@
                     font-family: 'Amiri', serif;
                     font-size: 24px;
                     font-weight: bold;
-                    color: #8c6d23;
+                    color: var(--auto-card-text, #8c6d23);
                     margin-bottom: 8px;
                 }
                 .daily-malfooz-text {
                     font-family: 'Amiri', serif;
                     font-size: 22px;
                     line-height: 1.8;
-                    color: var(--text-color, #1a365d);
+                    color: var(--user-text-color, var(--auto-text, #1a365d));
                 }
             `;
             document.head.appendChild(styleEl);
@@ -3072,11 +3080,40 @@
             body.classList.toggle('custom-bg-dark', theme.isDarkBg);
             root.classList.add('custom-bg-active');
             root.classList.toggle('custom-bg-dark', theme.isDarkBg);
+
+            let preloadLock = document.getElementById('awraad-preload-lock');
+            if (!preloadLock && document.head) {
+                preloadLock = document.createElement('style');
+                preloadLock.id = 'awraad-preload-lock';
+                document.head.appendChild(preloadLock);
+            }
+            if (preloadLock) {
+                preloadLock.textContent =
+                    '@media screen{' +
+                    'html,body,.continuous-frame,.continuous-inner{background:' + savedBg + ' !important;background-color:' + savedBg + ' !important;}' +
+                    '.app-navbar{background-color:' + theme.navBg + ' !important;border-bottom-color:' + theme.border + ' !important;}' +
+                    '.nav-card,.sub-nav-card,.daily-malfooz-container,.malfooz-card,.shijra-table,.name-card,.timer-card{background-color:' + theme.cardBg + ' !important;border-color:' + theme.border + ' !important;}' +
+                    '}';
+            }
         } else {
             autoVars.forEach(v => root.style.removeProperty(v));
             body.classList.remove('custom-bg-active', 'custom-bg-dark');
             root.classList.remove('custom-bg-active', 'custom-bg-dark');
             root.style.backgroundColor = isDarkTheme ? '#121212' : '#faf5e8';
+
+            const preloadLock = document.getElementById('awraad-preload-lock');
+            if (preloadLock) {
+                if (isDarkTheme) {
+                    preloadLock.textContent =
+                        '@media screen{' +
+                        'html,body{background:#121212 !important;background-color:#121212 !important;color:#f5f6fa !important;}' +
+                        '.continuous-frame,.continuous-inner{background:#1e1e1e !important;background-color:#1e1e1e !important;}' +
+                        '.app-navbar{background-color:#2a2a2a !important;}' +
+                        '}';
+                } else {
+                    preloadLock.remove();
+                }
+            }
         }
 
         if (savedText) {
