@@ -288,7 +288,13 @@ jobs:
           java-version: '21'
 
       - name: Compile Android APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            mkdir -p ~/.android
+            echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+          fi
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
