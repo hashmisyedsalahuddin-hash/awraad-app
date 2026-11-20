@@ -1287,6 +1287,7 @@
 
                         <a href="#" id="openTasbeehBtn" class="menu-item"><span>Tasbeeh Counter</span> <span class="menu-icon">📿</span></a>
                         <a href="#" id="openBrightnessBtn" class="menu-item"><span>Brightness</span> <span class="menu-icon">🌞</span></a>
+                        <a href="#" id="openSettingsBtn" class="menu-item"><span>Settings</span> <span class="menu-icon">⚙️</span></a>
                     </div>
                 </div>
                 <button class="nav-btn" onclick="navBack()" title="Back">◀</button>
@@ -1391,7 +1392,6 @@
             }
         }
 
-
         // Navigation Warning Modal Logic
         const navWarningModal = document.getElementById('navWarningModal');
         const navWarnCancelBtn = document.getElementById('navWarnCancelBtn');
@@ -1452,7 +1452,7 @@
             
             let href = link.getAttribute('href');
             if (!href || href === '#' || href.startsWith('javascript:')) return;
-            if (link.id === 'openTasbeehBtn' || link.id === 'openBrightnessBtn' || link.id === 'langToggleBtn') return;
+            if (link.id === 'openTasbeehBtn' || link.id === 'openBrightnessBtn' || link.id === 'openSettingsBtn' || link.id === 'langToggleBtn') return;
 
             // If Tasbeeh is active, BLOCK ALL LINKS without exception!
             if (window.tasbeehSessionActive) {
@@ -1606,7 +1606,7 @@
         const mainTapBtn = document.getElementById('tasbeehMainBtn');
         const startBtn = document.getElementById('tasbeehStartBtn');
         const pauseBtn = document.getElementById('tasbeehPauseBtn');
-        const resumeBtn = document.getElementById('tasbeehResumeBtn'); // ADDED RESUME
+        const resumeBtn = document.getElementById('tasbeehResumeBtn');
         const resetBtn = document.getElementById('tasbeehResetBtn');
         const soundBtn = document.getElementById('tasbeehSoundBtn');
 
@@ -1650,7 +1650,6 @@
         function activateTasbeehGuard() {
             if (!window.tasbeehSessionActive) {
                 window.tasbeehSessionActive = true;
-                // Create a Deep History Trap Buffer to prevent rapid multi-tap bypass
                 for (let i = 1; i <= TRAP_DEPTH; i++) {
                     try {
                         history.pushState({tasbeehTrap: i}, null, '#t-' + i);
@@ -1667,7 +1666,6 @@
             countDisplay.innerText = count;
             updateProgress();
             
-            // UI reset
             if (modeSelect.value === 'auto') {
                 startBtn.style.display = 'inline-block';
                 resumeBtn.style.display = 'none';
@@ -1699,12 +1697,8 @@
             dropdownContent.classList.remove('show');
         });
 
-        // Close just minimizes it, leaving logic intact
         closeTasbeehBtn.addEventListener('click', () => {
             tasbeehModal.classList.remove('show');
-            // If they close, we do NOT reset. We can optionally pause it.
-            // Requirement: "Close existing functionality ke according work kare"
-            // Existing functionality was `pauseAuto()`. Let's keep it.
             pauseAuto(); 
         });
 
@@ -1804,7 +1798,7 @@
 
         mainTapBtn.addEventListener('click', () => {
             unlockAudio();
-            activateTasbeehGuard(); // Start trapping if they tap manually too
+            activateTasbeehGuard();
             if (count < target) incrementCount();
         });
 
@@ -1816,7 +1810,6 @@
                     currentLevel = e.state.tasbeehTrap;
                 }
                 
-                // If they pressed back, replenish the trap states immediately
                 let needed = TRAP_DEPTH - currentLevel;
                 for (let i = 1; i <= needed; i++) {
                     try {
@@ -1830,7 +1823,6 @@
             }
         });
 
-        // Final safety net to catch tab closes or catastrophic history bypasses
         window.addEventListener('beforeunload', function (e) {
             if (window.tasbeehSessionActive) {
                 e.preventDefault();
@@ -1860,11 +1852,10 @@
                 clearInterval(autoTimer);
                 autoTimer = null;
             }
-            // Guard intentionally kept ACTIVE as per requirement
             
             if(modeSelect.value === 'auto') {
                 startBtn.style.display = 'none';
-                resumeBtn.style.display = 'inline-block'; // Show RESUME
+                resumeBtn.style.display = 'inline-block';
                 pauseBtn.style.display = 'none';
             }
         }
@@ -1872,10 +1863,9 @@
         window.tasbeehPauseAuto = pauseAuto;
 
         startBtn.addEventListener('click', startAuto);
-        resumeBtn.addEventListener('click', startAuto); // Resume acts like start
+        resumeBtn.addEventListener('click', startAuto);
         pauseBtn.addEventListener('click', pauseAuto);
         resetBtn.addEventListener('click', resetCount);
-
     }
     
     if (document.readyState === 'loading') {
@@ -2222,7 +2212,7 @@
                 oscillator.frequency.value = 800;
                 oscillator.connect(audioCtx.destination);
                 oscillator.start(startTime + i * 0.5);
-                oscillator.stop(startTime + i * 0.5 + 0.3); // 0.3s beep, 0.2s silence
+                oscillator.stop(startTime + i * 0.5 + 0.3);
             }
         }
 
@@ -2327,9 +2317,8 @@
         var href = anchor.getAttribute('href');
         if (!href || href === '#' || href.startsWith('javascript:')) return;
 
-        if (anchor.id === 'openTasbeehBtn' || anchor.id === 'openBrightnessBtn' || anchor.id === 'langToggleBtn') return;
+        if (anchor.id === 'openTasbeehBtn' || anchor.id === 'openBrightnessBtn' || anchor.id === 'openSettingsBtn' || anchor.id === 'langToggleBtn') return;
         
-        // Tasbeeh active hone par click event already Part 4 ke capture listener ne block kar diya hoga
         if (window.tasbeehSessionActive) {
             e.preventDefault();
             return;
@@ -2368,13 +2357,11 @@
     function initLangToggle() {
         const navbarRight = document.querySelector('.nav-right');
         
-        // Bulletproof check for CX Explorer Android
-        // Check if it's the Tajweed Explanation page via URL OR if language elements exist
         let currentUrl = window.location.href.toLowerCase();
         let isTajweedPage = currentUrl.indexOf('tajweed_coding_explanation') !== -1;
         let hasLangElements = document.querySelectorAll('.lang-ur, .lang-en').length > 0;
         
-        if (!isTajweedPage && !hasLangElements) return; // Sirf Explanation page par chalay ga
+        if (!isTajweedPage && !hasLangElements) return;
         if (!navbarRight || document.getElementById('langToggleBtn')) return;
 
         const langBtn = document.createElement('button');
@@ -2418,5 +2405,568 @@
         document.addEventListener('DOMContentLoaded', initLangToggle);
     } else {
         initLangToggle();
+    }
+})();
+
+// ==========================================
+// PART 10: DISPLAY SETTINGS SYSTEM (TAJWEED TOGGLE, ADAPTIVE THEME, MATERIAL PALETTE, FONTS, SIZE, KEEP AWAKE)
+// ==========================================
+(function() {
+    let wakeLockSentinel = null;
+
+    const COLOR_PALETTES = [
+        { primary: '#F44336', shades: ['#FFEBEE','#FFCDD2','#EF9A9A','#E57373','#EF5350','#F44336','#E53935','#D32F2F','#C62828','#B71C1C'] },
+        { primary: '#E91E63', shades: ['#FCE4EC','#F8BBD0','#F48FB1','#F06292','#EC407A','#E91E63','#D81B60','#C2185B','#AD1457','#880E4F'] },
+        { primary: '#9C27B0', shades: ['#F3E5F5','#E1BEE7','#CE93D8','#BA68C8','#AB47BC','#9C27B0','#8E24AA','#7B1FA2','#6A1B9A','#4A148C'] },
+        { primary: '#673AB7', shades: ['#EDE7F6','#D1C4E9','#B39DDB','#9575CD','#7E57C2','#673AB7','#5E35B1','#512DA8','#4527A0','#311B92'] },
+        { primary: '#3F51B5', shades: ['#E8EAF6','#C5CAE9','#9FA8DA','#7986CB','#5C6BC0','#3F51B5','#3949AB','#303F9F','#283593','#1A237E'] },
+        { primary: '#2196F3', shades: ['#E3F2FD','#BBDEFB','#90CAF9','#64B5F6','#42A5F5','#2196F3','#1E88E5','#1976D2','#1565C0','#0D47A1'] },
+        { primary: '#03A9F4', shades: ['#E1F5FE','#B3E5FC','#81D4FA','#4FC3F7','#29B6F6','#03A9F4','#039BE5','#0288D1','#0277BD','#01579B'] },
+        { primary: '#00BCD4', shades: ['#E0F7FA','#B2EBF2','#80DEEA','#4DD0E1','#26C6DA','#00BCD4','#00ACC1','#0097A7','#00838F','#006064'] },
+        { primary: '#009688', shades: ['#E0F2F1','#B2DFDB','#80CBC4','#4DB6AC','#26A69A','#009688','#00897B','#00796B','#00695C','#004D40'] },
+        { primary: '#4CAF50', shades: ['#E8F5E9','#C8E6C9','#A5D6A7','#81C784','#66BB6A','#4CAF50','#43A047','#388E3C','#2E7D32','#1B5E20'] },
+        { primary: '#8BC34A', shades: ['#F1F8E9','#DCEDC8','#C5E1A5','#AED581','#9CCC65','#8BC34A','#7CB342','#689F38','#558B2F','#33691E'] },
+        { primary: '#CDDC39', shades: ['#F9FBE7','#F0F4C3','#E6EE9C','#DCE775','#D4E157','#CDDC39','#C0CA33','#AFB42B','#9E9D24','#827717'] },
+        { primary: '#FFEB3B', shades: ['#FFFDE7','#FFF9C4','#FFF59D','#FFF176','#FFEE58','#FFEB3B','#FDD835','#FBC02D','#F9A825','#F57F17'] },
+        { primary: '#FFC107', shades: ['#FFF8E1','#FFECB3','#FFE082','#FFD54F','#FFCA28','#FFC107','#FFB300','#FFA000','#FF8F00','#FF6F00'] },
+        { primary: '#FF9800', shades: ['#FFF3E0','#FFE0B2','#FFCC80','#FFB74D','#FFA726','#FF9800','#FB8C00','#F57C00','#EF6C00','#E65100'] },
+        { primary: '#FF5722', shades: ['#FBE9E7','#FFCCBC','#FFAB91','#FF8A65','#FF7043','#FF5722','#F4511E','#E64A19','#D84315','#BF360C'] },
+        { primary: '#795548', shades: ['#EFEBE9','#D7CCC8','#BCAAA4','#A1887F','#8D6E63','#795548','#6D4C41','#5D4037','#4E342E','#3E2723'] },
+        { primary: '#9E9E9E', shades: ['#FFFFFF','#FAF4E5','#F5F5F5','#E0E0E0','#BDBDBD','#9E9E9E','#757575','#424242','#1E1E1E','#000000'] },
+        { primary: '#607D8B', shades: ['#ECEFF1','#CFD8DC','#B0BEC5','#90A4AE','#78909C','#607D8B','#546E7A','#455A64','#37474F','#263238'] }
+    ];
+
+    function hexToRgb(hex) {
+        const clean = hex.replace('#', '');
+        return {
+            r: parseInt(clean.substring(0, 2), 16),
+            g: parseInt(clean.substring(2, 4), 16),
+            b: parseInt(clean.substring(4, 6), 16)
+        };
+    }
+
+    function rgbToHsl(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        let h = 0, s = 0, l = (max + min) / 2;
+        if (max !== min) {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h *= 60;
+        }
+        return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+    }
+
+    function getRelativeLuminance(r, g, b) {
+        const toLin = (c) => {
+            const v = c / 255;
+            return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        };
+        return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
+    }
+
+    // Selected background color ke mutabiq borders, nav cards aur fonts ka harmonious high-contrast theme banayein
+    function computeAdaptiveTheme(bgHex) {
+        const { r, g, b } = hexToRgb(bgHex);
+        const { h, s, l } = rgbToHsl(r, g, b);
+        const lum = getRelativeLuminance(r, g, b);
+        const isDarkBg = lum < 0.28;
+        const isNeutral = s < 10;
+
+        if (!isDarkBg) {
+            const cardL = l > 94 ? l - 4 : Math.min(l + 6, 98);
+            const navL = Math.max(l - 5, 76);
+            const borderL = Math.max(l - 34, 28);
+            return {
+                isDarkBg: false,
+                text: isNeutral ? '#111111' : `hsl(${h}, ${Math.min(s, 45)}%, 14%)`,
+                cardBg: isNeutral ? `hsl(0, 0%, ${cardL}%)` : `hsl(${h}, ${Math.min(s, 42)}%, ${cardL}%)`,
+                cardText: isNeutral ? '#1a365d' : `hsl(${h}, ${Math.min(s, 65)}%, 18%)`,
+                cardSubtext: isNeutral ? '#555555' : `hsl(${h}, ${Math.min(s, 38)}%, 34%)`,
+                cardHoverBg: isNeutral ? '#1a365d' : `hsl(${h}, ${Math.min(s + 10, 68)}%, 30%)`,
+                cardHoverText: '#ffffff',
+                border: isNeutral ? '#9a7b2c' : `hsl(${h}, ${Math.min(s + 10, 65)}%, ${borderL}%)`,
+                ruledBorder: isNeutral ? 'rgba(120, 130, 145, 0.45)' : `hsla(${h}, ${Math.min(s, 45)}%, ${borderL}%, 0.45)`,
+                navBg: isNeutral ? `hsl(0, 0%, ${navL}%)` : `hsl(${h}, ${Math.min(s, 35)}%, ${navL}%)`,
+                tableHeadBg: isNeutral ? '#1a365d' : `hsl(${h}, ${Math.min(s + 5, 60)}%, 26%)`,
+                tableHeadText: '#ffffff'
+            };
+        } else {
+            const cardL = Math.min(l + 9, 34);
+            const navL = Math.max(l - 4, 8);
+            const borderL = Math.min(l + 32, 74);
+            return {
+                isDarkBg: true,
+                text: isNeutral ? '#f5f6fa' : `hsl(${h}, ${Math.min(s, 25)}%, 95%)`,
+                cardBg: isNeutral ? `hsl(0, 0%, ${cardL}%)` : `hsl(${h}, ${Math.min(s, 38)}%, ${cardL}%)`,
+                cardText: isNeutral ? '#ffffff' : `hsl(${h}, ${Math.min(s, 32)}%, 96%)`,
+                cardSubtext: isNeutral ? '#c8ccd4' : `hsl(${h}, ${Math.min(s, 30)}%, 78%)`,
+                cardHoverBg: isNeutral ? '#c59b27' : `hsl(${h}, ${Math.min(s + 12, 70)}%, ${Math.min(l + 26, 68)}%)`,
+                cardHoverText: '#111111',
+                border: isNeutral ? '#c59b27' : `hsl(${h}, ${Math.min(s + 15, 70)}%, ${borderL}%)`,
+                ruledBorder: isNeutral ? 'rgba(220, 225, 235, 0.30)' : `hsla(${h}, ${Math.min(s, 45)}%, ${borderL}%, 0.38)`,
+                navBg: isNeutral ? `hsl(0, 0%, ${navL}%)` : `hsl(${h}, ${Math.min(s, 35)}%, ${navL}%)`,
+                tableHeadBg: isNeutral ? '#2d3748' : `hsl(${h}, ${Math.min(s + 8, 55)}%, ${Math.min(l + 16, 40)}%)`,
+                tableHeadText: '#ffffff'
+            };
+        }
+    }
+
+    function getContrastMarkColor(hex) {
+        const { r, g, b } = hexToRgb(hex);
+        return getRelativeLuminance(r, g, b) > 0.28 ? '#1a365d' : '#ffffff';
+    }
+
+    async function updateWakeLock(enabled) {
+        if (!('wakeLock' in navigator)) return;
+        try {
+            if (enabled) {
+                if (!wakeLockSentinel) {
+                    wakeLockSentinel = await navigator.wakeLock.request('screen');
+                    wakeLockSentinel.addEventListener('release', () => {
+                        wakeLockSentinel = null;
+                    });
+                }
+            } else if (wakeLockSentinel) {
+                await wakeLockSentinel.release();
+                wakeLockSentinel = null;
+            }
+        } catch (err) {
+            console.log('WakeLock unavailable:', err);
+        }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && localStorage.getItem('app_keep_awake') === 'true') {
+            updateWakeLock(true);
+        }
+    });
+
+    function applySavedDisplaySettings() {
+        const root = document.documentElement;
+        const body = document.body;
+
+        const savedBg = localStorage.getItem('app_custom_bg');
+        const savedText = localStorage.getItem('app_custom_text');
+        const savedSize = localStorage.getItem('app_font_size');
+        const savedContentFont = localStorage.getItem('app_content_font');
+        const savedAppFont = localStorage.getItem('app_ui_font');
+        const tajweedEnabled = localStorage.getItem('app_tajweed_colors') !== 'false';
+
+        // Tajweed Color Coding ON/OFF
+        if (tajweedEnabled) {
+            body.classList.remove('tajweed-colors-off');
+        } else {
+            body.classList.add('tajweed-colors-off');
+        }
+
+        // Custom Background + Adaptive Borders, Nav Cards & Fonts
+        const autoVars = [
+            '--user-bg-color', '--auto-text', '--auto-card-bg', '--auto-card-text',
+            '--auto-card-subtext', '--auto-card-hover-bg', '--auto-card-hover-text',
+            '--auto-border', '--auto-ruled-border', '--auto-nav-bg',
+            '--auto-table-head-bg', '--auto-table-head-text'
+        ];
+
+        if (savedBg) {
+            const theme = computeAdaptiveTheme(savedBg);
+            root.style.setProperty('--user-bg-color', savedBg);
+            root.style.setProperty('--auto-text', theme.text);
+            root.style.setProperty('--auto-card-bg', theme.cardBg);
+            root.style.setProperty('--auto-card-text', theme.cardText);
+            root.style.setProperty('--auto-card-subtext', theme.cardSubtext);
+            root.style.setProperty('--auto-card-hover-bg', theme.cardHoverBg);
+            root.style.setProperty('--auto-card-hover-text', theme.cardHoverText);
+            root.style.setProperty('--auto-border', theme.border);
+            root.style.setProperty('--auto-ruled-border', theme.ruledBorder);
+            root.style.setProperty('--auto-nav-bg', theme.navBg);
+            root.style.setProperty('--auto-table-head-bg', theme.tableHeadBg);
+            root.style.setProperty('--auto-table-head-text', theme.tableHeadText);
+            body.classList.add('custom-bg-active');
+            body.classList.toggle('custom-bg-dark', theme.isDarkBg);
+        } else {
+            autoVars.forEach(v => root.style.removeProperty(v));
+            body.classList.remove('custom-bg-active', 'custom-bg-dark');
+        }
+
+        // Manual Custom Text Color
+        if (savedText) {
+            root.style.setProperty('--user-text-color', savedText);
+            body.classList.add('custom-text-active');
+        } else {
+            root.style.removeProperty('--user-text-color');
+            body.classList.remove('custom-text-active');
+        }
+
+        // Font Size
+        if (savedSize) {
+            root.style.setProperty('--user-font-size', savedSize + 'px');
+            body.classList.add('custom-size-active');
+        } else {
+            root.style.removeProperty('--user-font-size');
+            body.classList.remove('custom-size-active');
+        }
+
+        // Content Font
+        if (savedContentFont) {
+            root.style.setProperty('--user-content-font', savedContentFont);
+            body.classList.add('custom-content-font-active');
+        } else {
+            root.style.removeProperty('--user-content-font');
+            body.classList.remove('custom-content-font-active');
+        }
+
+        // App UI Font
+        if (savedAppFont) {
+            root.style.setProperty('--user-app-font', savedAppFont);
+            body.classList.add('custom-app-font-active');
+        } else {
+            root.style.removeProperty('--user-app-font');
+            body.classList.remove('custom-app-font-active');
+        }
+    }
+
+    function initSettingsModal() {
+        applySavedDisplaySettings();
+
+        if (localStorage.getItem('app_keep_awake') === 'true') {
+            updateWakeLock(true);
+        }
+
+        if (document.getElementById('settingsModal')) return;
+
+        const fontOptionsHTML = `
+            <option value="'Amiri', serif">Amiri (Default)</option>
+            <option value="'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif">Jameel Noori / Nastaleeq</option>
+            <option value="'Scheherazade New', serif">Scheherazade New</option>
+            <option value="'Noto Naskh Arabic', serif">Noto Naskh Arabic</option>
+            <option value="'Lateef', serif">Lateef (Indo-Pak)</option>
+            <option value="'Gulzar', serif">Gulzar Nastaleeq</option>
+            <option value="Arial, sans-serif">System Simple</option>
+        `;
+
+        const settingsHTML = `
+        <div id="settingsModal" class="settings-modal print-none">
+            <div class="settings-card">
+                <div class="settings-header">
+                    <span>Settings</span>
+                    <button type="button" id="closeSettingsBtn" class="settings-close-btn" title="Close">&times;</button>
+                </div>
+                <div class="settings-body">
+                    <!-- Toggles: Keep Awake & Tajweed Colors -->
+                    <div class="settings-toggle-stack">
+                        <div class="settings-awake-row">
+                            <label class="awake-toggle">
+                                <input type="checkbox" id="keepAwakeCheckbox">
+                                <span class="awake-track" id="keepAwakeLabel">OFF</span>
+                            </label>
+                            <span class="settings-label-lg">Keep Awake</span>
+                        </div>
+                        <div class="settings-awake-row">
+                            <label class="awake-toggle">
+                                <input type="checkbox" id="tajweedToggleCheckbox" checked>
+                                <span class="awake-track" id="tajweedToggleLabel">ON</span>
+                            </label>
+                            <span class="settings-label-lg">Tajweed Colors</span>
+                        </div>
+                    </div>
+
+                    <hr class="settings-divider">
+
+                    <!-- Background & Text Color Pickers -->
+                    <div class="settings-colors-row">
+                        <div class="color-picker-item" id="bgColorRow">
+                            <span class="color-picker-label">Change<br>Background</span>
+                            <button type="button" id="bgColorBtn" class="color-wheel-wrap" title="Pick Background Color"></button>
+                        </div>
+                        <div class="color-picker-item" id="textColorRow">
+                            <span class="color-picker-label">Change Text<br>Color</span>
+                            <button type="button" id="textColorBtn" class="color-wheel-wrap" title="Pick Text Color"></button>
+                        </div>
+                    </div>
+
+                    <button type="button" id="resetDefaultColorsBtn" class="settings-default-btn">Set to Default Colors</button>
+
+                    <hr class="settings-divider">
+
+                    <!-- Live Preview -->
+                    <div class="settings-section-title">
+                        <span>Preview</span>
+                    </div>
+                    <div id="settingsPreviewBox" class="settings-preview-box">
+                        <div>بِسْمِ <span class="allah-name">اللّٰهِ</span> ال<span class="tajweed-ra-pur">رَّ</span>حْمٰنِ ال<span class="tajweed-ra-pur">رَّ</span>حِيْمِ</div>
+                        <div>إِ<span class="tajweed-ghunnah">نَّ</span> <span class="allah-name">اللّٰهَ</span> وَمَ<span class="tajweed-madd">لٰٓئِ</span>كَتَهٗ يُ<span class="tajweed-mustaliyah">صَ</span>لُّوْنَ عَلَى <span class="tajweed-ghunnah">النَّ</span>بِيِّ</div>
+                    </div>
+
+                    <!-- Font Size -->
+                    <div class="settings-section-title">
+                        <span>Font Size</span>
+                        <span id="fontSizeValueLabel">26px</span>
+                    </div>
+                    <input type="range" id="fontSizeSlider" class="settings-range-slider" min="16" max="42" step="1" value="26">
+
+                    <hr class="settings-divider">
+
+                    <!-- Choose Fonts -->
+                    <div class="settings-font-row">
+                        <span class="settings-label-lg" style="font-size:15px;">Content Font</span>
+                        <select id="contentFontSelect" class="settings-font-select">${fontOptionsHTML}</select>
+                    </div>
+                    <div class="settings-font-row">
+                        <span class="settings-label-lg" style="font-size:15px;">App Font</span>
+                        <select id="appFontSelect" class="settings-font-select">${fontOptionsHTML}</select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Material Vertical Color Palette Picker Modal -->
+        <div id="colorPaletteModal" class="palette-modal print-none">
+            <div class="palette-card">
+                <div class="palette-main">
+                    <div id="palettePrimaries" class="palette-primaries"></div>
+                    <div id="paletteShades" class="palette-shades"></div>
+                </div>
+                <div class="palette-footer">
+                    <button type="button" id="paletteCancelBtn" class="palette-action-btn">Cancel</button>
+                    <button type="button" id="paletteOkBtn" class="palette-action-btn">OK</button>
+                </div>
+            </div>
+        </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', settingsHTML);
+
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const keepAwakeCheckbox = document.getElementById('keepAwakeCheckbox');
+        const keepAwakeLabel = document.getElementById('keepAwakeLabel');
+        const tajweedToggleCheckbox = document.getElementById('tajweedToggleCheckbox');
+        const tajweedToggleLabel = document.getElementById('tajweedToggleLabel');
+        const bgColorRow = document.getElementById('bgColorRow');
+        const textColorRow = document.getElementById('textColorRow');
+        const resetDefaultColorsBtn = document.getElementById('resetDefaultColorsBtn');
+        const previewBox = document.getElementById('settingsPreviewBox');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeValueLabel = document.getElementById('fontSizeValueLabel');
+        const contentFontSelect = document.getElementById('contentFontSelect');
+        const appFontSelect = document.getElementById('appFontSelect');
+
+        // Palette Elements
+        const paletteModal = document.getElementById('colorPaletteModal');
+        const palettePrimaries = document.getElementById('palettePrimaries');
+        const paletteShades = document.getElementById('paletteShades');
+        const paletteCancelBtn = document.getElementById('paletteCancelBtn');
+        const paletteOkBtn = document.getElementById('paletteOkBtn');
+
+        let activePaletteTarget = null;
+        let activeFamilyIndex = 0;
+        let pendingColorHex = null;
+
+        function renderPrimaryDots() {
+            palettePrimaries.innerHTML = '';
+            COLOR_PALETTES.forEach((fam, idx) => {
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.className = 'palette-primary-dot' + (idx === activeFamilyIndex ? ' active' : '');
+                dot.style.backgroundColor = fam.primary;
+                dot.addEventListener('click', () => {
+                    activeFamilyIndex = idx;
+                    renderPrimaryDots();
+                    renderShades();
+                    paletteShades.scrollTop = 0;
+                });
+                palettePrimaries.appendChild(dot);
+            });
+        }
+
+        function renderShades() {
+            paletteShades.innerHTML = '';
+            const shades = COLOR_PALETTES[activeFamilyIndex].shades;
+            shades.forEach((hex) => {
+                const bar = document.createElement('button');
+                bar.type = 'button';
+                const isSelected = pendingColorHex && pendingColorHex.toUpperCase() === hex.toUpperCase();
+                bar.className = 'palette-shade-bar' + (isSelected ? ' selected' : '');
+                bar.style.backgroundColor = hex;
+                if (isSelected) {
+                    bar.innerHTML = `<span style="color:${getContrastMarkColor(hex)} !important;">✓</span>`;
+                }
+                bar.addEventListener('click', () => {
+                    pendingColorHex = hex;
+                    renderShades();
+                });
+                paletteShades.appendChild(bar);
+            });
+        }
+
+        function openColorPalette(targetType) {
+            activePaletteTarget = targetType;
+            const isDark = document.body.classList.contains('dark-mode');
+            const currentHex = targetType === 'bg'
+                ? (localStorage.getItem('app_custom_bg') || (isDark ? '#1E1E1E' : '#FAF4E5'))
+                : (localStorage.getItem('app_custom_text') || (isDark ? '#F5F6FA' : '#000000'));
+
+            pendingColorHex = currentHex;
+            activeFamilyIndex = 0;
+
+            for (let i = 0; i < COLOR_PALETTES.length; i++) {
+                const found = COLOR_PALETTES[i].shades.some(s => s.toUpperCase() === currentHex.toUpperCase());
+                if (found) {
+                    activeFamilyIndex = i;
+                    break;
+                }
+            }
+
+            renderPrimaryDots();
+            renderShades();
+            paletteModal.classList.add('show');
+        }
+
+        bgColorRow.addEventListener('click', () => openColorPalette('bg'));
+        textColorRow.addEventListener('click', () => openColorPalette('text'));
+
+        paletteCancelBtn.addEventListener('click', () => {
+            paletteModal.classList.remove('show');
+        });
+        paletteModal.addEventListener('click', (e) => {
+            if (e.target === paletteModal) paletteModal.classList.remove('show');
+        });
+
+        paletteOkBtn.addEventListener('click', () => {
+            if (pendingColorHex && activePaletteTarget) {
+                if (activePaletteTarget === 'bg') {
+                    localStorage.setItem('app_custom_bg', pendingColorHex);
+                } else {
+                    localStorage.setItem('app_custom_text', pendingColorHex);
+                }
+                applySavedDisplaySettings();
+                syncSettingsUI();
+            }
+            paletteModal.classList.remove('show');
+        });
+
+        function syncSettingsUI() {
+            const isDark = document.body.classList.contains('dark-mode');
+            const savedBg = localStorage.getItem('app_custom_bg');
+            const savedText = localStorage.getItem('app_custom_text');
+            const bg = savedBg || (isDark ? '#1e1e1e' : '#faf4e5');
+            const adaptive = savedBg ? computeAdaptiveTheme(savedBg) : null;
+            const text = savedText || (adaptive ? adaptive.text : (isDark ? '#f5f6fa' : '#050505'));
+            const border = adaptive ? adaptive.border : 'rgba(197, 155, 39, 0.55)';
+            const size = localStorage.getItem('app_font_size') || '26';
+            const contentFont = localStorage.getItem('app_content_font') || "'Amiri', serif";
+            const appFont = localStorage.getItem('app_ui_font') || "'Amiri', serif";
+            const awake = localStorage.getItem('app_keep_awake') === 'true';
+            const tajweedOn = localStorage.getItem('app_tajweed_colors') !== 'false';
+
+            fontSizeSlider.value = size;
+            fontSizeValueLabel.textContent = size + 'px';
+            contentFontSelect.value = contentFont;
+            appFontSelect.value = appFont;
+
+            keepAwakeCheckbox.checked = awake;
+            keepAwakeLabel.textContent = awake ? 'ON' : 'OFF';
+
+            tajweedToggleCheckbox.checked = tajweedOn;
+            tajweedToggleLabel.textContent = tajweedOn ? 'ON' : 'OFF';
+
+            previewBox.style.setProperty('--preview-bg', bg);
+            previewBox.style.setProperty('--preview-text', text);
+            previewBox.style.setProperty('--preview-border', border);
+            previewBox.style.fontSize = size + 'px';
+            previewBox.style.fontFamily = contentFont;
+        }
+
+        // Open Settings from 3-dots menu
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('#openSettingsBtn');
+            if (!btn) return;
+            e.preventDefault();
+            syncSettingsUI();
+            settingsModal.classList.add('show');
+            const dropdown = document.querySelector('.dropdown-content');
+            if (dropdown) dropdown.classList.remove('show');
+        });
+
+        closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) settingsModal.classList.remove('show');
+        });
+
+        // Keep Awake Toggle
+        keepAwakeCheckbox.addEventListener('change', () => {
+            const enabled = keepAwakeCheckbox.checked;
+            keepAwakeLabel.textContent = enabled ? 'ON' : 'OFF';
+            localStorage.setItem('app_keep_awake', enabled ? 'true' : 'false');
+            updateWakeLock(enabled);
+        });
+
+        // Tajweed Colors ON/OFF Toggle
+        tajweedToggleCheckbox.addEventListener('change', () => {
+            const enabled = tajweedToggleCheckbox.checked;
+            tajweedToggleLabel.textContent = enabled ? 'ON' : 'OFF';
+            localStorage.setItem('app_tajweed_colors', enabled ? 'true' : 'false');
+            applySavedDisplaySettings();
+            syncSettingsUI();
+        });
+
+        // Set to Default Colors
+        resetDefaultColorsBtn.addEventListener('click', () => {
+            localStorage.removeItem('app_custom_bg');
+            localStorage.removeItem('app_custom_text');
+            applySavedDisplaySettings();
+            syncSettingsUI();
+        });
+
+        // Font Size
+        fontSizeSlider.addEventListener('input', () => {
+            localStorage.setItem('app_font_size', fontSizeSlider.value);
+            applySavedDisplaySettings();
+            syncSettingsUI();
+        });
+
+        // Content Font
+        contentFontSelect.addEventListener('change', () => {
+            if (contentFontSelect.value === "'Amiri', serif") {
+                localStorage.removeItem('app_content_font');
+            } else {
+                localStorage.setItem('app_content_font', contentFontSelect.value);
+            }
+            applySavedDisplaySettings();
+            syncSettingsUI();
+        });
+
+        // App Font
+        appFontSelect.addEventListener('change', () => {
+            if (appFontSelect.value === "'Amiri', serif") {
+                localStorage.removeItem('app_ui_font');
+            } else {
+                localStorage.setItem('app_ui_font', appFontSelect.value);
+            }
+            applySavedDisplaySettings();
+            syncSettingsUI();
+        });
+
+        // Dark Mode button tap hone par custom colors clear hon taake 🌙/☀️ foran kaam kare
+        const navDarkBtn = document.getElementById('darkModeToggleNav');
+        if (navDarkBtn) {
+            navDarkBtn.addEventListener('click', () => {
+                localStorage.removeItem('app_custom_bg');
+                localStorage.removeItem('app_custom_text');
+                applySavedDisplaySettings();
+            });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSettingsModal);
+    } else {
+        initSettingsModal();
     }
 })();

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&family=Gulzar&family=Lateef:wght@400;700&family=Noto+Naskh+Arabic:wght@500;700&family=Noto+Nastaliq+Urdu:wght@400;700&family=Scheherazade+New:wght@400;700&display=swap');
 
 /* =========================================
    1. PAGE & PRINT SETUP
@@ -75,19 +75,19 @@ body { background-color: #faf5e8; color: #111111; margin: 0; padding: 10px 0; di
 .ayah-bracket, .quran-ayat { color: #808080 !important; font-weight: 700; }
 .repeat-badge { display: inline-block; color: #1e7e34; background: rgba(30, 126, 52, 0.09); border: 1.2px solid #1e7e34; padding: 0 8px; border-radius: 4px; font-size: 0.8em; margin: 0 4px; vertical-align: middle; }
 .tasmiyyah-spacing, .salat-before-author, .salat-un-nabi-content { text-align: center; margin-bottom: 10px; }
-.word-lock { white-space: nowrap; display: inline-block; } 
+.word-lock { white-space: nowrap; display: inline-block; }
 
 /* =========================================
    6. TAJWEED COLORS
    ========================================= */
 .tajweed-madd, .tajweed-madd-muttasil, .tajweed-madd-munfasil, .tajweed-madd-lazim, .tajweed-madd-sila-tawilah, .tajweed-madd-sila-qasirah { color: #800080 !important; }
 .tajweed-ikhfa, .tajweed-ghunnah, .tajweed-iqlab, .tajweed-idgham-ghunnah, .tajweed-ikhfa-shafawi { color: #0000FF !important; }
-.tajweed-idgham-no-ghunnah { color: #808080 !important; } 
-.tajweed-iqlab-meem { color: #d35400 !important; } 
-.tajweed-ra-pur { color: #E91E63 !important; } 
-.tajweed-ra-baareek { color: #008080 !important; } 
-.tajweed-mustaliyah { color: #E91E63 !important; } 
-.tajweed-qalqalah { color: #B8860B !important; } 
+.tajweed-idgham-no-ghunnah { color: #808080 !important; }
+.tajweed-iqlab-meem { color: #d35400 !important; }
+.tajweed-ra-pur { color: #E91E63 !important; }
+.tajweed-ra-baareek { color: #008080 !important; }
+.tajweed-mustaliyah { color: #E91E63 !important; }
+.tajweed-qalqalah { color: #B8860B !important; }
 .wasl-wrapper { display: inline-grid !important; justify-items: center !important; vertical-align: baseline !important; line-height: 1 !important; }
 .noon-qutni { grid-row: 2 !important; font-size: 0.55em !important; color: #c0392b !important; line-height: 0.5 !important; margin-top: -3px !important; font-weight: bold !important; }
 .tajweed-legend-footer { display: none; }
@@ -114,7 +114,7 @@ body { background-color: #faf5e8; color: #111111; margin: 0; padding: 10px 0; di
   html, body { padding: 0; margin: 0; background-color: #faf4e5 !important; height: auto !important; }
   body::after { content: ""; position: fixed; inset: 0; background-color: #faf4e5 !important; z-index: -1; }
   .continuous-frame { max-width: 100%; margin: 0; background: transparent !important; border: none !important; padding: 0 !important; }
-  .continuous-inner { border: 2px solid #111111 !important; padding: 12px 14px 14px 14px !important; } 
+  .continuous-inner { border: 2px solid #111111 !important; padding: 12px 14px 14px 14px !important; }
   .ruled-text, .misra, .name-card { border-bottom-color: #9cb1c9 !important; }
   .durood-repeat-box .ruled-text { border-bottom-color: #1e7e34 !important; }
   @page { size: Letter portrait; margin: 12mm 10mm 14mm 10mm; }
@@ -134,20 +134,20 @@ body.dark-mode .dua-entry, body.dark-mode .title-sub, body.dark-mode .misra { co
 body.dark-mode .title-main, body.dark-mode .screen-header-title { color: #ffffff; }
 body.dark-mode .ruled-text, body.dark-mode .misra { border-bottom-color: #444; }
 
-body.dark-mode .allah-name { color: #ff6b81 !important; } 
-body.dark-mode .prophet-name { color: #7bed9f !important; } 
-body.dark-mode .shaykh-name, body.dark-mode .jazooli-name { color: #a29bfe !important; } 
-body.dark-mode .burdah-green-block, body.dark-mode .burdah-line { color: #74b9ff !important; } 
-body.dark-mode .ayah-bracket, body.dark-mode .quran-ayat { color: #b2bec3 !important; } 
+body.dark-mode .allah-name { color: #ff6b81 !important; }
+body.dark-mode .prophet-name { color: #7bed9f !important; }
+body.dark-mode .shaykh-name, body.dark-mode .jazooli-name { color: #a29bfe !important; }
+body.dark-mode .burdah-green-block, body.dark-mode .burdah-line { color: #74b9ff !important; }
+body.dark-mode .ayah-bracket, body.dark-mode .quran-ayat { color: #b2bec3 !important; }
 
-body.dark-mode .tajweed-madd { color: #e056fd !important; } 
-body.dark-mode .tajweed-ikhfa, body.dark-mode .tajweed-ghunnah, body.dark-mode .tajweed-idgham { color: #48dbfb !important; } 
-body.dark-mode .tajweed-idgham-no-ghunnah { color: #b2bec3 !important; } 
-body.dark-mode .tajweed-iqlab-meem { color: #ff9f43 !important; } 
-body.dark-mode .tajweed-ra-pur { color: #ff66b2 !important; } 
-body.dark-mode .tajweed-mustaliyah { color: #ff66b2 !important; } 
-body.dark-mode .tajweed-ra-baareek { color: #00e5ff !important; } 
-body.dark-mode .tajweed-qalqalah { color: #fbc531 !important; } 
+body.dark-mode .tajweed-madd { color: #e056fd !important; }
+body.dark-mode .tajweed-ikhfa, body.dark-mode .tajweed-ghunnah, body.dark-mode .tajweed-idgham { color: #48dbfb !important; }
+body.dark-mode .tajweed-idgham-no-ghunnah { color: #b2bec3 !important; }
+body.dark-mode .tajweed-iqlab-meem { color: #ff9f43 !important; }
+body.dark-mode .tajweed-ra-pur { color: #ff66b2 !important; }
+body.dark-mode .tajweed-mustaliyah { color: #ff66b2 !important; }
+body.dark-mode .tajweed-ra-baareek { color: #00e5ff !important; }
+body.dark-mode .tajweed-qalqalah { color: #fbc531 !important; }
 
 body.dark-mode .name-card { background-color: #2d2d2d; border-color: #8c6d23; color: #ff6b81 !important; }
 body.dark-mode .asma-nabi-grid .name-card { background-color: #1e2a22; border-color: #4cd137; color: #7bed9f !important; }
@@ -263,13 +263,13 @@ body.dark-mode .daily-malfooz-text { color: #e0e0e0; }
     color: #fff;
     font-weight: bold;
     font-size: 20px;
-    padding: 5px; /* Padding kam kardi gayi hai */
+    padding: 5px;
     border-radius: 20px;
     text-align: center;
     min-width: 45px;
-    width: auto; /* Fit to content */
+    width: auto;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    flex-shrink: 0; /* Box ko chhota hone se rokne ke liye */
+    flex-shrink: 0;
 }
 .malfooz-text {
     font-size: 22px;
@@ -302,7 +302,6 @@ body.dark-mode .daily-malfooz-text { color: #e0e0e0; }
 body.dark-mode .malfooz-card { background-color: #2a2a2a; border-color: #555; }
 body.dark-mode .malfooz-text { color: #e0e0e0; }
 body.dark-mode .malfooz-note { color: #aaa; }
-
 
 /* =========================================
    15. GLOBAL TIMER STYLES (ZIKR TIMER)
@@ -346,17 +345,17 @@ body.dark-mode .btn-reset { background-color: #ff6b81; color: #111; }
     box-sizing: border-box;
 }
 
-body.dark-mode .app-navbar { 
-    background-color: #2a2a2a; 
-    border-bottom: 1px solid #b8860b; 
+body.dark-mode .app-navbar {
+    background-color: #2a2a2a;
+    border-bottom: 1px solid #b8860b;
 }
 
 .nav-left, .nav-right { display: flex; gap: 10px; align-items: center; }
 
 .nav-btn {
-    background: transparent; 
-    border: 1px solid #1a365d; 
-    color: #1a365d; 
+    background: transparent;
+    border: 1px solid #1a365d;
+    color: #1a365d;
     padding: 6px 12px;
     border-radius: 5px;
     cursor: pointer;
@@ -385,10 +384,10 @@ body.dark-mode .nav-btn { color: #e0e0e0; border: 1px solid #b8860b; }
     border-radius: 8px;
     border: 1px solid #c59b27;
     top: 45px;
-    left: 0 !important; 
+    left: 0 !important;
     right: auto !important;
     margin: 0;
-    direction: ltr; 
+    direction: ltr;
 }
 body.dark-mode .dropdown-content { background-color: #1e1e1e; border-color: #b8860b; }
 .dropdown-content.show { display: block; }
@@ -397,7 +396,7 @@ body.dark-mode .dropdown-content { background-color: #1e1e1e; border-color: #b88
     display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;
     color: #1a365d; padding: 12px 16px; text-decoration: none; box-sizing: border-box;
     font-family: 'Amiri', serif; font-size: 0.7em; font-weight: bold;
-    border-bottom: 1px solid rgba(197, 155, 39, 0.3); text-align: left; white-space: nowrap; 
+    border-bottom: 1px solid rgba(197, 155, 39, 0.3); text-align: left; white-space: nowrap;
 }
 .dropdown-content a .menu-icon { flex-shrink: 0; margin-left: auto; }
 body.dark-mode .dropdown-content a { color: #f5f6fa; border-bottom-color: #555; }
@@ -426,7 +425,7 @@ body.dark-mode .tasbeeh-progress-bg { background-color: #333; }
 
 .tasbeeh-btn-large {
     background: #1e7e34; color: white; border: none; border-radius: 50%;
-    width: 110px; height: 110px; font-size: 24px; font-weight: bold; cursor: pointer; 
+    width: 110px; height: 110px; font-size: 24px; font-weight: bold; cursor: pointer;
     margin: 15px auto; display: block; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
 }
 .tasbeeh-btn-large:active { transform: scale(0.95); }
@@ -447,19 +446,17 @@ body.dark-mode .tasbeeh-controls button { background: #b8860b; color: #111; }
 /* =========================================
    17. RESPONSIVE FIXES (ADDED)
    ========================================= */
-/* Line-height ko normal karein taake text wrap hone par box se bahar na nikle */
 .names-grid {
-    line-height: 1.6 !important; 
+    line-height: 1.6 !important;
 }
 
-/* Mobile aur chhote tablets ke liye 2 columns */
 @media (max-width: 650px) {
     .names-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)); /* 3 ki jagah 2 columns */
-        font-size: 19px; /* Mobile par clear reading ke liye perfect size */
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        font-size: 19px;
         gap: 8px;
     }
-    
+
     .name-card {
         padding: 10px 4px;
     }
@@ -468,8 +465,7 @@ body.dark-mode .tasbeeh-controls button { background: #b8860b; color: #111; }
         font-size: 13px;
         margin-top: 4px;
     }
-    
-    /* Asma Ul Husna mein "ذُوْ الْجَلَالِ وَالْإِكْرَامِ" jo 3 columns le raha tha, usko 2 par set karein */
+
     .span-3 {
         grid-column: span 2;
     }
@@ -489,15 +485,15 @@ body.dark-mode .tasbeeh-controls button { background: #b8860b; color: #111; }
     accent-color: #c59b27;
 }
 .slider-menu-item {
-    display: flex; 
-    align-items: center; 
-    justify-content: space-between; 
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
-    color: #1a365d; 
-    padding: 12px 16px; 
+    color: #1a365d;
+    padding: 12px 16px;
     box-sizing: border-box;
-    font-family: 'Amiri', serif; 
-    font-size: 0.7em; 
+    font-family: 'Amiri', serif;
+    font-size: 0.7em;
     font-weight: bold;
     border-bottom: 1px solid rgba(197, 155, 39, 0.3);
 }
@@ -509,23 +505,19 @@ body.dark-mode .slider-menu-item {
 /* =========================================
    19. DARK MODE - BULLETPROOF TEXT VISIBILITY
    ========================================= */
-
-/* Make the base text white */
 body.dark-mode {
     color: #f5f6fa !important;
 }
 
-/* Force all typical containers and explicitly Tajweed Guide classes to have light text in dark mode */
-body.dark-mode div, 
-body.dark-mode p, 
-body.dark-mode span, 
-body.dark-mode table, 
-body.dark-mode td, 
-body.dark-mode th, 
-body.dark-mode tr, 
-body.dark-mode ul, 
+body.dark-mode div,
+body.dark-mode p,
+body.dark-mode span,
+body.dark-mode table,
+body.dark-mode td,
+body.dark-mode th,
+body.dark-mode tr,
+body.dark-mode ul,
 body.dark-mode li,
-/* Classes specific to Tajweed_Explanation.html */
 body.dark-mode .intro-box p,
 body.dark-mode .rule-header,
 body.dark-mode .rule-desc,
@@ -535,7 +527,6 @@ body.dark-mode .back-to-main-index a {
     color: #f5f6fa !important;
 }
 
-/* Dark mode specific backgrounds for cards to stand out nicely */
 body.dark-mode .intro-box,
 body.dark-mode .rule-card,
 body.dark-mode .rule-examples {
@@ -547,27 +538,21 @@ body.dark-mode .rule-header {
     border-bottom-color: #555 !important;
 }
 
-/* 
-   RE-APPLY TAJWEED COLORS STRONGLY
-   Since we made generic spans white above, we MUST re-enforce the specific Tajweed colors
-   using !important so they override the generic white color.
-*/
-body.dark-mode .tajweed-madd, body.dark-mode .badge-purple { color: #e056fd !important; } 
-body.dark-mode .tajweed-ikhfa, body.dark-mode .tajweed-ghunnah, body.dark-mode .tajweed-idgham, body.dark-mode .badge-blue { color: #48dbfb !important; } 
-body.dark-mode .tajweed-idgham-no-ghunnah, body.dark-mode .badge-gray { color: #b2bec3 !important; } 
-body.dark-mode .tajweed-iqlab-meem, body.dark-mode .iqlaab-meem { color: #ff9f43 !important; } 
-body.dark-mode .tajweed-ra-pur, body.dark-mode .badge-bold { color: #ff6b81 !important; } 
-body.dark-mode .tajweed-mustaliyah { color: #ff66b2 !important; } 
-body.dark-mode .tajweed-ra-baareek, body.dark-mode .badge-green { color: #00e5ff !important; } 
-body.dark-mode .tajweed-qalqalah { color: #fbc531 !important; } 
-body.dark-mode .allah-name { color: #ff6b81 !important; } 
+body.dark-mode .tajweed-madd, body.dark-mode .badge-purple { color: #e056fd !important; }
+body.dark-mode .tajweed-ikhfa, body.dark-mode .tajweed-ghunnah, body.dark-mode .tajweed-idgham, body.dark-mode .badge-blue { color: #48dbfb !important; }
+body.dark-mode .tajweed-idgham-no-ghunnah, body.dark-mode .badge-gray { color: #b2bec3 !important; }
+body.dark-mode .tajweed-iqlab-meem, body.dark-mode .iqlaab-meem { color: #ff9f43 !important; }
+body.dark-mode .tajweed-ra-pur, body.dark-mode .badge-bold { color: #ff6b81 !important; }
+body.dark-mode .tajweed-mustaliyah { color: #ff66b2 !important; }
+body.dark-mode .tajweed-ra-baareek, body.dark-mode .badge-green { color: #00e5ff !important; }
+body.dark-mode .tajweed-qalqalah { color: #fbc531 !important; }
+body.dark-mode .allah-name { color: #ff6b81 !important; }
 body.dark-mode .prophet-name { color: #7bed9f !important; }
-body.dark-mode .shaykh-name, body.dark-mode .jazooli-name { color: #a29bfe !important; } 
-body.dark-mode .burdah-green-block, body.dark-mode .burdah-line { color: #74b9ff !important; } 
+body.dark-mode .shaykh-name, body.dark-mode .jazooli-name { color: #a29bfe !important; }
+body.dark-mode .burdah-green-block, body.dark-mode .burdah-line { color: #74b9ff !important; }
 body.dark-mode .ayah-bracket, body.dark-mode .quran-ayat { color: #b2bec3 !important; }
 body.dark-mode .badge-pink, body.dark-mode .noon-qutni { color: #ff9ff3 !important; }
 
-/* Keep tables dark background so white text is readable */
 body.dark-mode table, body.dark-mode .shijra-table {
     background-color: #1e1e1e !important;
     border-color: #555 !important;
@@ -576,7 +561,6 @@ body.dark-mode td, body.dark-mode th {
     border-color: #555 !important;
 }
 
-/* Do NOT make the navbar text white, it has its own styling */
 body.dark-mode .app-navbar *,
 body.dark-mode .dropdown-content * {
     color: inherit;
@@ -586,32 +570,32 @@ body.dark-mode .dropdown-content * {
    20. TASBEEH MINIMIZE & MAXIMIZE STYLES
    ========================================= */
 .tasbeeh-minimize {
-    position: absolute; 
-    top: 3px; 
-    right: 48px; 
-    font-size: 26px; 
-    cursor: pointer; 
-    color: #1a365d; 
-    line-height: 1; 
+    position: absolute;
+    top: 3px;
+    right: 48px;
+    font-size: 26px;
+    cursor: pointer;
+    color: #1a365d;
+    line-height: 1;
     font-weight: bold;
 }
 body.dark-mode .tasbeeh-minimize { color: #e0e0e0; }
 
 .tasbeeh-minimized {
-    position: fixed; 
-    bottom: 25px; 
-    right: 25px; 
-    background: #1e7e34; 
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background: #1e7e34;
     color: white;
-    padding: 12px 25px; 
-    border-radius: 30px; 
-    display: flex; 
-    align-items: center; 
+    padding: 12px 25px;
+    border-radius: 30px;
+    display: flex;
+    align-items: center;
     gap: 15px;
-    z-index: 100005; 
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4); 
+    z-index: 100005;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     font-family: 'Amiri', Arial, sans-serif;
-    cursor: pointer; 
+    cursor: pointer;
     transition: transform 0.2s, background-color 0.2s;
     border: 2px solid #fff;
 }
@@ -677,7 +661,6 @@ body.dark-mode .tasbeeh-minimized { background: #b8860b; color: #111; border-col
     font-size: 0.65em;
 }
 
-/* Dark Mode Support for Submenus */
 body.dark-mode .dropdown-content .submenu-toggle {
     color: #f5f6fa;
     border-bottom-color: #555;
@@ -689,4 +672,783 @@ body.dark-mode .dropdown-content .submenu-toggle:hover {
 
 body.dark-mode .dropdown-submenu {
     background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* =========================================
+   22. DISPLAY SETTINGS MODAL, PALETTE, ADAPTIVE THEME & TAJWEED TOGGLE
+   ========================================= */
+.settings-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 100008;
+    justify-content: center;
+    align-items: center;
+    padding: 12px;
+    direction: ltr;
+}
+.settings-modal.show { display: flex; }
+
+.settings-card {
+    background: #ffffff;
+    color: #2c3e50;
+    width: 100%;
+    max-width: 400px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 14px;
+    border: 2px solid #c59b27;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    font-family: Arial, sans-serif;
+}
+
+.settings-header {
+    background: #354764;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    font-size: 19px;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+.settings-header span { color: #ffffff !important; }
+.settings-close-btn {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.settings-body { padding: 18px; }
+.settings-divider {
+    border: none;
+    border-top: 1.5px solid #d5dbe2;
+    margin: 16px 0;
+}
+
+/* Pill Switch Rows (Keep Awake & Tajweed Colors) */
+.settings-toggle-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.settings-awake-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.awake-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 74px;
+    height: 32px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.awake-toggle input { opacity: 0; width: 0; height: 0; }
+.awake-track {
+    position: absolute;
+    inset: 0;
+    border-radius: 30px;
+    border: 2px solid #354764;
+    background: #ffffff;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #354764;
+}
+.awake-track::after {
+    content: "";
+    position: absolute;
+    right: 4px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #354764;
+    transition: transform 0.25s ease, background 0.25s ease;
+}
+.awake-toggle input:checked + .awake-track {
+    background: #354764;
+    color: #ffffff;
+    justify-content: flex-end;
+}
+.awake-toggle input:checked + .awake-track::after {
+    background: #ffffff;
+    transform: translateX(-40px);
+}
+.settings-label-lg {
+    font-size: 17px;
+    font-weight: 600;
+    color: #333333;
+}
+
+/* Color Picker Trigger Wheels */
+.settings-colors-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.color-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    cursor: pointer;
+}
+.color-picker-label {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: #333333;
+}
+.color-wheel-wrap {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: conic-gradient(#ff3b30, #ffcc00, #34c759, #00c7be, #007aff, #af52de, #ff2d55, #ff3b30);
+    border: 2px solid #c59b27;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+    outline: none;
+}
+.color-wheel-wrap:active { transform: scale(0.93); }
+
+.settings-default-btn {
+    display: block;
+    margin: 0 auto;
+    background: #354764;
+    color: #ffffff;
+    border: none;
+    border-radius: 25px;
+    padding: 11px 28px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+    transition: opacity 0.2s ease;
+}
+.settings-default-btn:active { opacity: 0.85; }
+
+/* Live Preview Box */
+.settings-section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #444444;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.settings-preview-box {
+    border-radius: 12px;
+    padding: 18px 14px;
+    text-align: center;
+    direction: rtl;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+    border: 2px solid var(--preview-border, rgba(197, 155, 39, 0.55));
+    margin-bottom: 18px;
+    line-height: 2.3;
+    min-height: 110px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    background-color: var(--preview-bg, #faf4e5) !important;
+    color: var(--preview-text, #050505) !important;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.settings-preview-box div,
+body.dark-mode .settings-preview-box div {
+    color: var(--preview-text, #050505) !important;
+}
+
+/* Font Size Slider */
+.settings-range-slider {
+    width: 100%;
+    cursor: pointer;
+    accent-color: #354764;
+    height: 6px;
+}
+
+/* Font Dropdowns */
+.settings-font-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.settings-font-row:last-child { margin-bottom: 0; }
+.settings-font-select {
+    background: #8fa3ad;
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    width: 60%;
+    cursor: pointer;
+    outline: none;
+}
+.settings-font-select option {
+    background: #ffffff;
+    color: #1a365d;
+}
+
+/* =========================================
+   MATERIAL VERTICAL COLOR PALETTE PICKER
+   ========================================= */
+.palette-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.58);
+    z-index: 100015;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    direction: ltr;
+}
+.palette-modal.show { display: flex; }
+
+.palette-card {
+    background: #f2edf4;
+    width: 92%;
+    max-width: 340px;
+    height: 76vh;
+    max-height: 560px;
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    font-family: Arial, sans-serif;
+}
+
+.palette-main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.palette-primaries {
+    width: 64px;
+    background: #ffffff;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+    flex-shrink: 0;
+}
+.palette-primary-dot {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    padding: 0;
+}
+.palette-primary-dot.active {
+    transform: scale(1.16);
+    border-color: #354764;
+    box-shadow: 0 0 0 2px #ffffff inset, 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.palette-shades {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+.palette-shade-bar {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 4px;
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: bold;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+    padding: 0;
+}
+.palette-shade-bar:active { transform: scale(0.98); }
+.palette-shade-bar.selected {
+    border: 3px solid #354764;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.palette-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 20px 14px 20px;
+    background: #f2edf4;
+    flex-shrink: 0;
+}
+.palette-action-btn {
+    background: transparent;
+    border: none;
+    color: #4f577e;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.palette-action-btn:active {
+    background: rgba(79, 87, 126, 0.12);
+}
+
+/* Settings & Palette Modals in Dark Mode */
+body.dark-mode .settings-card {
+    background: #1e1e1e !important;
+    color: #f5f6fa !important;
+    border-color: #b8860b !important;
+}
+body.dark-mode .settings-header {
+    background: #2a3950 !important;
+    color: #ffffff !important;
+}
+body.dark-mode .settings-label-lg,
+body.dark-mode .color-picker-label,
+body.dark-mode .settings-section-title,
+body.dark-mode .settings-section-title span {
+    color: #f5f6fa !important;
+}
+body.dark-mode .settings-divider { border-top-color: #444444; }
+body.dark-mode .awake-track {
+    background: #2a2a2a;
+    border-color: #c59b27;
+    color: #f5f6fa !important;
+}
+body.dark-mode .awake-track::after { background: #c59b27; }
+body.dark-mode .awake-toggle input:checked + .awake-track {
+    background: #c59b27;
+    color: #111111 !important;
+}
+body.dark-mode .awake-toggle input:checked + .awake-track::after { background: #111111; }
+body.dark-mode .settings-default-btn {
+    background: #c59b27 !important;
+    color: #111111 !important;
+}
+body.dark-mode .settings-font-select {
+    background: #354764 !important;
+    color: #ffffff !important;
+}
+body.dark-mode .settings-font-select option {
+    background: #1e1e1e;
+    color: #f5f6fa;
+}
+body.dark-mode .palette-card,
+body.dark-mode .palette-footer {
+    background: #242428 !important;
+}
+body.dark-mode .palette-primaries {
+    background: #18181b !important;
+}
+body.dark-mode .palette-primary-dot.active {
+    border-color: #f5f6fa;
+    box-shadow: 0 0 0 2px #18181b inset;
+}
+body.dark-mode .palette-shade-bar.selected {
+    border-color: #ffffff;
+}
+body.dark-mode .palette-action-btn {
+    color: #d6c8ff !important;
+}
+
+/* =========================================
+   APPLY ADAPTIVE BACKGROUND, TEXT & TAJWEED SETTINGS (SCREEN ONLY)
+   ========================================= */
+@media screen {
+    /* 1. Custom Background + Adaptive Page & Frame Borders */
+    body.custom-bg-active,
+    body.dark-mode.custom-bg-active {
+        background-color: var(--user-bg-color) !important;
+        color: var(--auto-text) !important;
+    }
+    body.custom-bg-active .continuous-frame,
+    body.dark-mode.custom-bg-active .continuous-frame {
+        background-color: var(--user-bg-color) !important;
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .continuous-inner,
+    body.dark-mode.custom-bg-active .continuous-inner {
+        background-color: var(--user-bg-color) !important;
+        border-color: var(--auto-ruled-border) !important;
+    }
+
+    /* Adaptive Sticky Navbar & Dropdown */
+    body.custom-bg-active .app-navbar,
+    body.dark-mode.custom-bg-active .app-navbar {
+        background-color: var(--auto-nav-bg) !important;
+        border-bottom-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .app-navbar .nav-btn,
+    body.dark-mode.custom-bg-active .app-navbar .nav-btn {
+        color: var(--auto-card-text) !important;
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .dropdown-content,
+    body.dark-mode.custom-bg-active .dropdown-content {
+        background-color: var(--auto-card-bg) !important;
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .dropdown-content a,
+    body.custom-bg-active .dropdown-content .submenu-toggle,
+    body.dark-mode.custom-bg-active .dropdown-content a,
+    body.dark-mode.custom-bg-active .dropdown-content .submenu-toggle {
+        color: var(--auto-card-text) !important;
+        border-bottom-color: var(--auto-ruled-border) !important;
+    }
+    body.custom-bg-active .dropdown-content a:hover,
+    body.custom-bg-active .dropdown-content .submenu-toggle:hover,
+    body.dark-mode.custom-bg-active .dropdown-content a:hover,
+    body.dark-mode.custom-bg-active .dropdown-content .submenu-toggle:hover {
+        background-color: var(--auto-card-hover-bg) !important;
+        color: var(--auto-card-hover-text) !important;
+    }
+    body.custom-bg-active .dropdown-content a:hover span,
+    body.custom-bg-active .dropdown-content .submenu-toggle:hover span,
+    body.dark-mode.custom-bg-active .dropdown-content a:hover span,
+    body.dark-mode.custom-bg-active .dropdown-content .submenu-toggle:hover span {
+        color: var(--auto-card-hover-text) !important;
+    }
+
+    /* Adaptive Nav Cards & Sub-Nav Cards */
+    body.custom-bg-active .nav-card,
+    body.custom-bg-active .sub-nav-card,
+    body.dark-mode.custom-bg-active .nav-card,
+    body.dark-mode.custom-bg-active .sub-nav-card {
+        background-color: var(--auto-card-bg) !important;
+        border-color: var(--auto-border) !important;
+        color: var(--auto-card-text) !important;
+    }
+    body.custom-bg-active .nav-card .urdu-sub,
+    body.dark-mode.custom-bg-active .nav-card .urdu-sub {
+        color: var(--auto-card-subtext) !important;
+    }
+    body.custom-bg-active .nav-card:hover,
+    body.custom-bg-active .sub-nav-card:hover,
+    body.dark-mode.custom-bg-active .nav-card:hover,
+    body.dark-mode.custom-bg-active .sub-nav-card:hover {
+        background-color: var(--auto-card-hover-bg) !important;
+        border-color: var(--auto-border) !important;
+        color: var(--auto-card-hover-text) !important;
+    }
+    body.custom-bg-active .nav-card:hover .urdu-sub,
+    body.dark-mode.custom-bg-active .nav-card:hover .urdu-sub {
+        color: var(--auto-card-hover-text) !important;
+    }
+
+    /* Adaptive Headings, Headers, Ruled Lines & Boxes */
+    body.custom-bg-active .screen-header,
+    body.custom-bg-active .title-box,
+    body.custom-bg-active .section-heading,
+    body.custom-bg-active .muqaddima-subhead,
+    body.dark-mode.custom-bg-active .screen-header,
+    body.dark-mode.custom-bg-active .title-box,
+    body.dark-mode.custom-bg-active .section-heading,
+    body.dark-mode.custom-bg-active .muqaddima-subhead {
+        border-bottom-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .screen-header-title,
+    body.custom-bg-active .title-main,
+    body.custom-bg-active .section-heading,
+    body.custom-bg-active .section-heading .no-tajweed,
+    body.custom-bg-active .muqaddima-subhead,
+    body.custom-bg-active .daily-malfooz-title,
+    body.custom-bg-active .timer-heading,
+    body.custom-bg-active .zikr-display,
+    body.custom-bg-active .timer-colon,
+    body.dark-mode.custom-bg-active .screen-header-title,
+    body.dark-mode.custom-bg-active .title-main,
+    body.dark-mode.custom-bg-active .section-heading,
+    body.dark-mode.custom-bg-active .section-heading .no-tajweed,
+    body.dark-mode.custom-bg-active .muqaddima-subhead,
+    body.dark-mode.custom-bg-active .daily-malfooz-title,
+    body.dark-mode.custom-bg-active .timer-heading,
+    body.dark-mode.custom-bg-active .zikr-display,
+    body.dark-mode.custom-bg-active .timer-colon {
+        color: var(--auto-card-text) !important;
+    }
+    body.custom-bg-active .bismillah-header,
+    body.dark-mode.custom-bg-active .bismillah-header {
+        color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .ruled-text,
+    body.custom-bg-active .misra,
+    body.dark-mode.custom-bg-active .ruled-text,
+    body.dark-mode.custom-bg-active .misra {
+        border-bottom-color: var(--auto-ruled-border) !important;
+    }
+
+    /* Adaptive Cards, Tables, Malfoozat & Timer */
+    body.custom-bg-active .daily-malfooz-container,
+    body.custom-bg-active .malfooz-card,
+    body.custom-bg-active .malfooz-topic,
+    body.custom-bg-active .timer-card,
+    body.custom-bg-active .name-card,
+    body.custom-bg-active .durood-repeat-box,
+    body.custom-bg-active .fourteen-times-box,
+    body.custom-bg-active .abyat-box,
+    body.dark-mode.custom-bg-active .daily-malfooz-container,
+    body.dark-mode.custom-bg-active .malfooz-card,
+    body.dark-mode.custom-bg-active .malfooz-topic,
+    body.dark-mode.custom-bg-active .timer-card,
+    body.dark-mode.custom-bg-active .name-card,
+    body.dark-mode.custom-bg-active .durood-repeat-box,
+    body.dark-mode.custom-bg-active .fourteen-times-box,
+    body.dark-mode.custom-bg-active .abyat-box {
+        background-color: var(--auto-card-bg) !important;
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .timer-inputs input,
+    body.dark-mode.custom-bg-active .timer-inputs input {
+        background-color: var(--user-bg-color) !important;
+        border-color: var(--auto-border) !important;
+        color: var(--auto-card-text) !important;
+    }
+    body.custom-bg-active .shijra-table,
+    body.dark-mode.custom-bg-active .shijra-table {
+        background-color: var(--auto-card-bg) !important;
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .shijra-table th,
+    body.dark-mode.custom-bg-active .shijra-table th {
+        background-color: var(--auto-table-head-bg) !important;
+        color: var(--auto-table-head-text) !important;
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .shijra-table td,
+    body.dark-mode.custom-bg-active .shijra-table td {
+        border-color: var(--auto-border) !important;
+    }
+    body.custom-bg-active .shijra-table td:nth-child(1),
+    body.custom-bg-active .shijra-table td:nth-child(3),
+    body.custom-bg-active .shijra-table td:nth-child(4),
+    body.dark-mode.custom-bg-active .shijra-table td:nth-child(1),
+    body.dark-mode.custom-bg-active .shijra-table td:nth-child(3),
+    body.dark-mode.custom-bg-active .shijra-table td:nth-child(4) {
+        color: var(--auto-card-subtext) !important;
+    }
+
+    /* Auto-Readable Content Text when Custom BG is active (overridden if user picks Custom Text Color) */
+    body.custom-bg-active:not(.custom-text-active) .dua-entry,
+    body.custom-bg-active:not(.custom-text-active) .ruled-text,
+    body.custom-bg-active:not(.custom-text-active) .misra,
+    body.custom-bg-active:not(.custom-text-active) .shijra-table td:nth-child(2),
+    body.custom-bg-active:not(.custom-text-active) .malfooz-text,
+    body.custom-bg-active:not(.custom-text-active) .daily-malfooz-text,
+    body.custom-bg-active:not(.custom-text-active) .muqaddima-urdu,
+    body.custom-bg-active:not(.custom-text-active) .muqaddima-urdu p,
+    body.custom-bg-active:not(.custom-text-active) .muqaddima-list li,
+    body.custom-bg-active:not(.custom-text-active) .title-sub,
+    body.custom-bg-active:not(.custom-text-active) .dua-entry .no-tajweed,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .dua-entry,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .ruled-text,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .misra,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .shijra-table td:nth-child(2),
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .malfooz-text,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .daily-malfooz-text,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .muqaddima-urdu,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .muqaddima-urdu p,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .muqaddima-list li,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .title-sub,
+    body.dark-mode.custom-bg-active:not(.custom-text-active) .dua-entry .no-tajweed {
+        color: var(--auto-text) !important;
+    }
+
+    /* 2. Manual Custom Text Color */
+    body.custom-text-active .dua-entry,
+    body.custom-text-active .ruled-text,
+    body.custom-text-active .misra,
+    body.custom-text-active .shijra-table td:nth-child(2),
+    body.custom-text-active .malfooz-text,
+    body.custom-text-active .daily-malfooz-text,
+    body.custom-text-active .muqaddima-urdu,
+    body.custom-text-active .muqaddima-urdu p,
+    body.custom-text-active .muqaddima-list li,
+    body.custom-text-active .title-sub,
+    body.custom-text-active .dua-entry .no-tajweed,
+    body.dark-mode.custom-text-active .dua-entry,
+    body.dark-mode.custom-text-active .ruled-text,
+    body.dark-mode.custom-text-active .misra,
+    body.dark-mode.custom-text-active .shijra-table td:nth-child(2),
+    body.dark-mode.custom-text-active .malfooz-text,
+    body.dark-mode.custom-text-active .daily-malfooz-text,
+    body.dark-mode.custom-text-active .muqaddima-urdu,
+    body.dark-mode.custom-text-active .muqaddima-urdu p,
+    body.dark-mode.custom-text-active .muqaddima-list li,
+    body.dark-mode.custom-text-active .title-sub,
+    body.dark-mode.custom-text-active .dua-entry .no-tajweed {
+        color: var(--user-text-color) !important;
+    }
+
+    /* Re-protect Sacred Names & Tajweed Colors on Light Custom Themes */
+    body.custom-bg-active:not(.custom-bg-dark) .allah-name,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark) .allah-name { color: #c0392b !important; }
+    body.custom-bg-active:not(.custom-bg-dark) .prophet-name,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark) .prophet-name { color: #1e7e34 !important; }
+    body.custom-bg-active:not(.custom-bg-dark) .shaykh-name,
+    body.custom-bg-active:not(.custom-bg-dark) .jazooli-name,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark) .shaykh-name,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark) .jazooli-name { color: #6a1b9a !important; }
+
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-madd,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-madd { color: #800080 !important; }
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ikhfa,
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ghunnah,
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-idgham,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ikhfa,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ghunnah,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-idgham { color: #0000FF !important; }
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-idgham-no-ghunnah,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-idgham-no-ghunnah { color: #808080 !important; }
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-iqlab-meem,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-iqlab-meem { color: #d35400 !important; }
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ra-pur,
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-mustaliyah,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ra-pur,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-mustaliyah { color: #E91E63 !important; }
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ra-baareek,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-ra-baareek { color: #008080 !important; }
+    body.custom-bg-active:not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-qalqalah,
+    body.custom-text-active:not(.dark-mode):not(.custom-bg-dark):not(.tajweed-colors-off) .tajweed-qalqalah { color: #B8860B !important; }
+
+    /* Bright Sacred Names & Tajweed Colors on Dark Custom BG or Dark Mode */
+    body.custom-bg-dark .allah-name,
+    body.dark-mode.custom-text-active .allah-name { color: #ff6b81 !important; }
+    body.custom-bg-dark .prophet-name,
+    body.dark-mode.custom-text-active .prophet-name { color: #7bed9f !important; }
+    body.custom-bg-dark .shaykh-name, body.custom-bg-dark .jazooli-name,
+    body.dark-mode.custom-text-active .shaykh-name, body.dark-mode.custom-text-active .jazooli-name { color: #a29bfe !important; }
+
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-madd,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-madd { color: #e056fd !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-ikhfa,
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-ghunnah,
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-idgham,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-ikhfa,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-ghunnah,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-idgham { color: #48dbfb !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-idgham-no-ghunnah,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-idgham-no-ghunnah { color: #b2bec3 !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-iqlab-meem,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-iqlab-meem { color: #ff9f43 !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-ra-pur,
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-mustaliyah,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-ra-pur,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-mustaliyah { color: #ff66b2 !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-ra-baareek,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-ra-baareek { color: #00e5ff !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .tajweed-qalqalah,
+    body.dark-mode.custom-text-active:not(.tajweed-colors-off) .tajweed-qalqalah { color: #fbc531 !important; }
+    body.custom-bg-dark:not(.tajweed-colors-off) .noon-qutni { color: #ff9ff3 !important; }
+}
+
+/* 3. Tajweed Color Coding OFF Override (Always wins in Light, Dark & Custom Modes) */
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-madd,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-madd-muttasil,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-madd-munfasil,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-madd-lazim,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-madd-sila-tawilah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-madd-sila-qasirah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-ikhfa,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-ghunnah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-iqlab,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-idgham,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-idgham-ghunnah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-ikhfa-shafawi,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-idgham-no-ghunnah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-iqlab-meem,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-ra-pur,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-ra-baareek,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-mustaliyah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .tajweed-qalqalah,
+body.tajweed-colors-off.tajweed-colors-off.tajweed-colors-off .noon-qutni {
+    color: inherit !important;
+}
+
+/* 4. Custom Font Size */
+body.custom-size-active .dua-entry,
+body.custom-size-active .durood-repeat-box,
+body.custom-size-active .fourteen-times-box,
+body.custom-size-active .abyat-box,
+body.custom-size-active .sher-box {
+    font-size: var(--user-font-size) !important;
+}
+body.custom-size-active .muqaddima-urdu,
+body.custom-size-active .malfooz-text,
+body.custom-size-active .daily-malfooz-text,
+body.custom-size-active .names-grid {
+    font-size: calc(var(--user-font-size) * 0.85) !important;
+}
+body.custom-size-active .shijra-table {
+    font-size: calc(var(--user-font-size) * 0.78) !important;
+}
+
+/* 5. Custom Content Font */
+body.custom-content-font-active .dua-entry,
+body.custom-content-font-active .durood-repeat-box,
+body.custom-content-font-active .fourteen-times-box,
+body.custom-content-font-active .abyat-box,
+body.custom-content-font-active .sher-box,
+body.custom-content-font-active .misra,
+body.custom-content-font-active .shijra-table,
+body.custom-content-font-active .names-grid,
+body.custom-content-font-active .malfooz-text,
+body.custom-content-font-active .daily-malfooz-text,
+body.custom-content-font-active .muqaddima-urdu {
+    font-family: var(--user-content-font) !important;
+}
+
+/* 6. Custom App UI Font */
+body.custom-app-font-active .app-navbar,
+body.custom-app-font-active .nav-btn,
+body.custom-app-font-active .dropdown-content a,
+body.custom-app-font-active .dropdown-content .submenu-toggle,
+body.custom-app-font-active .screen-header,
+body.custom-app-font-active .title-main,
+body.custom-app-font-active .title-sub,
+body.custom-app-font-active .section-heading,
+body.custom-app-font-active .nav-card,
+body.custom-app-font-active .sub-nav-card,
+body.custom-app-font-active .daily-malfooz-title,
+body.custom-app-font-active .malfooz-topic,
+body.custom-app-font-active .muqaddima-subhead {
+    font-family: var(--user-app-font) !important;
+}
+
+@media print {
+    .settings-modal, .palette-modal { display: none !important; }
 }
