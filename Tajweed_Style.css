@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&family=Gulzar&family=Lateef:wght@400;700&family=Noto+Naskh+Arabic:wght@500;700&family=Noto+Nastaliq+Urdu:wght@400;700&family=Scheherazade+New:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap');
 
 /* =========================================
    1. PAGE & PRINT SETUP
@@ -183,13 +183,13 @@ body.dark-mode .hadith-text { color: #74b9ff; }
    ========================================= */
 .index-nav-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 35px; margin-bottom: 30px; }
 @media (min-width: 650px) { .index-nav-grid { grid-template-columns: 1fr 1fr; } }
-.nav-card { display: flex; flex-direction: column; justify-content: center; align-items: center; text-decoration: none; background-color: #faf4e5; border: 2px solid #c59b27; border-radius: 8px; padding: 22px 15px; text-align: center; transition: all 0.3s ease; color: #1a365d; font-family: 'Amiri', serif; font-size: 26px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.nav-card { display: flex; flex-direction: column; justify-content: center; align-items: center; text-decoration: none; background-color: #faf4e5; border: 2px solid #c59b27; border-radius: 8px; padding: 22px 15px; text-align: center; transition: transform 0.12s ease, background-color 0.12s ease; color: #1a365d; font-family: 'Amiri', serif; font-size: 26px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
 .nav-card:hover { background-color: #c59b27; color: #ffffff; transform: translateY(-4px); box-shadow: 0 8px 15px rgba(197, 155, 39, 0.3); border-color: #8c6d23; }
 .nav-card .urdu-sub { font-size: 19px; color: #666666; display: block; margin-top: 8px; font-weight: normal; }
 .nav-card:hover .urdu-sub { color: #fdfdfd; }
 .shijra-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 30px; }
 @media (max-width: 600px) { .shijra-grid { grid-template-columns: 1fr; } }
-.sub-nav-card { display: flex; flex-direction: column; justify-content: center; align-items: center; text-decoration: none; background-color: rgba(197, 155, 39, 0.1); border: 1.5px solid #c59b27; border-radius: 6px; padding: 14px 10px; text-align: center; transition: all 0.3s ease; color: #1a365d; font-family: 'Amiri', serif; font-size: 21px; font-weight: bold; }
+.sub-nav-card { display: flex; flex-direction: column; justify-content: center; align-items: center; text-decoration: none; background-color: rgba(197, 155, 39, 0.1); border: 1.5px solid #c59b27; border-radius: 6px; padding: 14px 10px; text-align: center; transition: transform 0.12s ease, background-color 0.12s ease; color: #1a365d; font-family: 'Amiri', serif; font-size: 21px; font-weight: bold; }
 .sub-nav-card:hover { background-color: #c59b27; color: #ffffff; transform: translateY(-2px); }
 
 body.dark-mode .nav-card { background-color: #1e1e1e; border-color: #8c6d23; color: #f5f6fa; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -314,7 +314,7 @@ body.dark-mode .malfooz-note { color: #aaa; }
 .timer-colon { font-size: 24px; font-weight: bold; margin: 0 8px; color: #1a365d; vertical-align: middle; }
 .zikr-display { font-family: Arial, sans-serif; font-size: 48px; font-weight: bold; color: #1a365d; margin-bottom: 20px; direction: ltr; letter-spacing: 2px; }
 .timer-buttons { display: flex; justify-content: center; gap: 15px; }
-.timer-buttons button { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; padding: 10px 25px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.3s ease; min-width: 100px; }
+.timer-buttons button { font-family: Arial, sans-serif; font-size: 18px; font-weight: bold; padding: 10px 25px; border: none; border-radius: 6px; cursor: pointer; transition: transform 0.12s ease, background-color 0.12s ease; min-width: 100px; }
 .btn-start { background-color: #1e7e34; color: #ffffff; }
 .btn-start:hover { background-color: #155724; }
 .btn-reset { background-color: #c0392b; color: #ffffff; }
@@ -716,7 +716,8 @@ body.dark-mode .dropdown-submenu {
     top: 0;
     z-index: 5;
 }
-.settings-header span { color: #ffffff !important; }
+.settings-header span,
+body.dark-mode .settings-header span { color: #ffffff !important; }
 .settings-close-btn {
     background: none;
     border: none;
@@ -734,7 +735,7 @@ body.dark-mode .dropdown-submenu {
     margin: 16px 0;
 }
 
-/* Pill Switch Rows (Keep Awake & Tajweed Colors) */
+/* Pill Switch Rows (Keep Awake, Tajweed Colors, Maghrib Rollover) */
 .settings-toggle-stack {
     display: flex;
     flex-direction: column;
@@ -879,12 +880,28 @@ body.dark-mode .settings-preview-box div {
     color: var(--preview-text, #050505) !important;
 }
 
-/* Font Size Slider */
+/* Font Size & Brightness Sliders */
 .settings-range-slider {
     width: 100%;
     cursor: pointer;
     accent-color: #354764;
     height: 6px;
+}
+.settings-brightness-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.settings-brightness-icon {
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.settings-brightness-row .settings-range-slider {
+    flex: 1;
+}
+body.dark-mode .settings-range-slider {
+    accent-color: #c59b27;
 }
 
 /* Font Dropdowns */
@@ -1451,4 +1468,510 @@ body.custom-app-font-active .muqaddima-subhead {
 
 @media print {
     .settings-modal, .palette-modal { display: none !important; }
+}
+
+/* =========================================
+   23. NAVBAR CENTER AUTO-LOCATION HIJRI DATE
+   ========================================= */
+.nav-hijri-date {
+    flex: 1;
+    text-align: center;
+    font-family: 'Amiri', serif;
+    font-size: 16px;
+    font-weight: bold;
+    color: #1a365d;
+    padding: 0 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: none;
+}
+body.dark-mode .nav-hijri-date {
+    color: #f5f6fa !important;
+}
+body.custom-bg-active .nav-hijri-date,
+body.dark-mode.custom-bg-active .nav-hijri-date {
+    color: var(--auto-card-text) !important;
+}
+@media (max-width: 400px) {
+    .nav-hijri-date {
+        font-size: 14px;
+    }
+}
+
+/* =========================================
+   24. PRAYER TIMES MODAL (METHODS, PRECAUTIONS, ASR & HIGH-LATITUDE)
+   ========================================= */
+.prayer-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 100012;
+    justify-content: center;
+    align-items: center;
+    padding: 12px;
+    direction: ltr;
+}
+.prayer-modal.show { display: flex; }
+
+.prayer-card {
+    background: #fdf5e6;
+    color: #1a365d;
+    width: 100%;
+    max-width: 390px;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 14px;
+    border: 2px solid #c59b27;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+    font-family: Arial, sans-serif;
+}
+
+.prayer-header {
+    background: #1a365d;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    font-size: 18px;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+.prayer-header span,
+body.dark-mode .prayer-header span { color: #ffffff !important; }
+.prayer-close-btn {
+    background: none;
+    border: none;
+    color: #ffffff;
+    font-size: 26px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.prayer-body { padding: 14px 16px 18px 16px; }
+
+.prayer-meta-info {
+    font-size: 12px;
+    color: #555555;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.prayer-times-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 16px;
+}
+.prayer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.75);
+    border: 1px solid rgba(197, 155, 39, 0.45);
+    font-size: 15px;
+}
+.prayer-name {
+    font-weight: bold;
+    color: #1a365d;
+}
+.prayer-time-val {
+    font-weight: bold;
+    color: #8c6d23;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Calculation Method Rows */
+.pt-section-label {
+    font-size: 13px;
+    font-weight: bold;
+    color: #8c6d23;
+    margin: 10px 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.pt-settings-box {
+    border: 1.5px solid rgba(197, 155, 39, 0.55);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.55);
+    overflow: hidden;
+}
+.pt-option-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 13px;
+    border-bottom: 1px solid rgba(197, 155, 39, 0.28);
+    cursor: pointer;
+    gap: 10px;
+}
+.pt-option-row:last-child { border-bottom: none; }
+.pt-option-row:active { background: rgba(197, 155, 39, 0.14); }
+.pt-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.pt-option-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1a365d;
+}
+.pt-option-sub {
+    font-size: 12px;
+    color: #555555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pt-option-chevron {
+    font-size: 18px;
+    font-weight: bold;
+    color: #8c6d23;
+    flex-shrink: 0;
+}
+
+/* Sub-picker Dialogs (Method, High-Latitude, Precautions, Asr) */
+.pt-submodal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.62);
+    z-index: 100022;
+    justify-content: center;
+    align-items: center;
+    padding: 14px;
+    direction: ltr;
+}
+.pt-submodal.show { display: flex; }
+
+.pt-subcard {
+    background: #ffffff;
+    color: #222222;
+    width: 94%;
+    max-width: 350px;
+    max-height: 82vh;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+    font-family: Arial, sans-serif;
+}
+.pt-subhead {
+    padding: 16px 18px 12px 18px;
+    font-size: 19px;
+    font-weight: bold;
+    color: #1a365d;
+    border-bottom: 1px solid #e2e6ea;
+}
+.pt-checklist {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+}
+.pt-check-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #222222;
+    border-bottom: 1px solid #f1f3f5;
+}
+.pt-check-item:last-child { border-bottom: none; }
+.pt-check-item:active { background: #f4f6f9; }
+.pt-check-box {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #757575;
+    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: #ffffff;
+}
+.pt-check-item.checked .pt-check-box,
+body.dark-mode .pt-check-item.checked .pt-check-box {
+    background: #2196f3;
+    border-color: #2196f3;
+    color: #ffffff !important;
+}
+
+/* Precautions 3x2 Grid */
+.precautions-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px 8px;
+    padding: 18px 12px;
+    text-align: center;
+}
+.precaution-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.precaution-label {
+    font-size: 14px;
+    color: #333333;
+    font-weight: 500;
+}
+.precaution-step-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.precaution-mini-btn {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid #009688;
+    background: transparent;
+    color: #00796b;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+}
+.precaution-mini-btn:active { background: rgba(0, 150, 136, 0.14); }
+.precaution-val {
+    min-width: 24px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #00897b;
+    font-variant-numeric: tabular-nums;
+}
+
+.pt-subfooter {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid #e2e6ea;
+    background: #fafafa;
+}
+.pt-dialog-btn {
+    background: transparent;
+    border: none;
+    color: #00897b;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.pt-dialog-btn:active { background: rgba(0, 137, 123, 0.1); }
+
+/* Dark Mode & Adaptive Support for Prayer Modal */
+body.dark-mode .prayer-card {
+    background: #1e1e1e !important;
+    color: #f5f6fa !important;
+    border-color: #b8860b !important;
+}
+body.dark-mode .prayer-header { background: #2a3950 !important; }
+body.dark-mode .prayer-meta-info,
+body.dark-mode .pt-option-sub { color: #bbbbbb !important; }
+body.dark-mode .prayer-row,
+body.dark-mode .pt-settings-box {
+    background: #2a2a2a !important;
+    border-color: #555555 !important;
+}
+body.dark-mode .prayer-name,
+body.dark-mode .pt-option-title { color: #f5f6fa !important; }
+body.dark-mode .prayer-time-val,
+body.dark-mode .pt-option-chevron,
+body.dark-mode .pt-section-label { color: #fbc531 !important; }
+body.dark-mode .pt-subcard {
+    background: #222226 !important;
+    color: #f5f6fa !important;
+}
+body.dark-mode .pt-subhead {
+    color: #ffffff !important;
+    border-bottom-color: #444444;
+}
+body.dark-mode .pt-check-item,
+body.dark-mode .pt-check-item span {
+    color: #f5f6fa !important;
+    border-bottom-color: #333333;
+}
+body.dark-mode .precaution-label { color: #e0e0e0 !important; }
+body.dark-mode .precaution-val,
+body.dark-mode .pt-dialog-btn { color: #48dbfb !important; }
+body.dark-mode .precaution-mini-btn {
+    border-color: #48dbfb;
+    color: #48dbfb;
+}
+body.dark-mode .pt-subfooter {
+    background: #1b1b1f !important;
+    border-top-color: #444444;
+}
+
+body.custom-bg-active .prayer-card,
+body.dark-mode.custom-bg-active .prayer-card {
+    background-color: var(--auto-card-bg) !important;
+    border-color: var(--auto-border) !important;
+    color: var(--auto-card-text) !important;
+}
+body.custom-bg-active .prayer-header,
+body.dark-mode.custom-bg-active .prayer-header {
+    background-color: var(--auto-table-head-bg) !important;
+    color: var(--auto-table-head-text) !important;
+}
+body.custom-bg-active .prayer-row,
+body.custom-bg-active .pt-settings-box,
+body.dark-mode.custom-bg-active .prayer-row,
+body.dark-mode.custom-bg-active .pt-settings-box {
+    background-color: var(--user-bg-color) !important;
+    border-color: var(--auto-ruled-border) !important;
+}
+body.custom-bg-active .prayer-name,
+body.custom-bg-active .prayer-time-val,
+body.custom-bg-active .pt-option-title,
+body.custom-bg-active .pt-option-chevron,
+body.custom-bg-active .pt-section-label,
+body.dark-mode.custom-bg-active .prayer-name,
+body.dark-mode.custom-bg-active .prayer-time-val,
+body.dark-mode.custom-bg-active .pt-option-title,
+body.dark-mode.custom-bg-active .pt-option-chevron,
+body.dark-mode.custom-bg-active .pt-section-label {
+    color: var(--auto-card-text) !important;
+}
+body.custom-bg-active .prayer-meta-info,
+body.custom-bg-active .pt-option-sub,
+body.dark-mode.custom-bg-active .prayer-meta-info,
+body.dark-mode.custom-bg-active .pt-option-sub {
+    color: var(--auto-card-subtext) !important;
+}
+
+@media print {
+    .prayer-modal, .pt-submodal { display: none !important; }
+}
+
+/* =========================================
+   25. HIJRI CALENDAR CORRECTION STEPPER POPUP
+   ========================================= */
+.settings-nav-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 4px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background-color 0.15s ease;
+}
+.settings-nav-row:active {
+    background-color: rgba(197, 155, 39, 0.15);
+}
+.settings-nav-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.settings-nav-badge {
+    font-size: 15px;
+    font-weight: bold;
+    color: #166987;
+    background: rgba(22, 105, 135, 0.12);
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+.settings-nav-arrow {
+    font-size: 20px;
+    font-weight: bold;
+    color: #777777;
+}
+
+/* Floating Teal Stepper Modal */
+.hijri-stepper-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 100020;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    direction: ltr;
+}
+.hijri-stepper-modal.show { display: flex; }
+
+.hijri-stepper-box {
+    background: #166987;
+    width: 82%;
+    max-width: 310px;
+    padding: 22px 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    user-select: none;
+}
+.hijri-step-btn,
+body.dark-mode .hijri-step-btn {
+    background: transparent;
+    border: none;
+    color: #ffffff !important;
+    font-size: 36px;
+    font-weight: bold;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+    padding: 0;
+    line-height: 1;
+}
+.hijri-step-btn:active {
+    background: rgba(255, 255, 255, 0.18);
+    transform: scale(0.92);
+}
+.hijri-step-value,
+body.dark-mode .hijri-step-value {
+    color: #ff9800 !important;
+    font-size: 46px;
+    font-weight: 500;
+    font-family: Arial, sans-serif;
+    min-width: 70px;
+    text-align: center;
+    line-height: 1;
+}
+
+body.dark-mode .settings-nav-badge {
+    color: #48dbfb !important;
+    background: rgba(72, 219, 251, 0.14);
+}
+body.dark-mode .settings-nav-arrow {
+    color: #bbbbbb !important;
+}
+
+@media print {
+    .hijri-stepper-modal { display: none !important; }
+}
+/* =========================================
+   26. PERFORMANCE & INSTANT TAP OPTIMIZATIONS
+   ========================================= */
+a, button, .nav-card, .sub-nav-card, .pt-option-row, .settings-nav-row, .color-picker-item {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+.hizb-section, .index-section, .shijra-section {
+    contain: style;
 }

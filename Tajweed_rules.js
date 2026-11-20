@@ -1164,13 +1164,15 @@
 })();
 
 // =========================================================
-// PART 4: CENTRALIZED NAVBAR & TASBEEH COUNTER
+// PART 4: CENTRALIZED NAVBAR & LAZY TASBEEH COUNTER
 // =========================================================
 (function() {
     window.tasbeehSessionActive = false;
     const TRAP_DEPTH = 7;
     let pendingNavAction = null;
     let pendingNavUrl = null;
+    let tasbeehInitialized = false;
+    let navWarningInitialized = false;
 
     // =========================================================
     // ORDERED PAGE SEQUENCE
@@ -1220,9 +1222,82 @@
         }
     }
 
+    function ensureNavWarningModal() {
+        if (navWarningInitialized && document.getElementById('navWarningModal')) return;
+        navWarningInitialized = true;
+
+        const navWarningHTML = `
+        <div id="navWarningModal" class="tasbeeh-modal print-none">
+            <div class="tasbeeh-content" style="max-width: 350px; padding: 25px 20px;">
+                <h3 style="margin-top:0; color:#c0392b;">⚠️ Warning</h3>
+                <p style="font-size: 18px; margin-bottom: 20px; line-height: 1.6; font-family: 'Amiri', Arial, sans-serif; color: var(--text-color, #1a365d);">
+                    Tasbeeh Counter <strong style="color:#1e7e34;">Active</strong> hai.<br>Page tabdeel karne se yeh <strong>stop</strong> ho jayega.<br><br>Kya aap waqai doosre page par jana chahte hain?
+                </p>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button id="navWarnCancelBtn" style="background: #1a365d; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">Cancel</button>
+                    <button id="navWarnProceedBtn" style="background: #c0392b; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">Proceed</button>
+                </div>
+            </div>
+        </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', navWarningHTML);
+
+        const navWarningModal = document.getElementById('navWarningModal');
+        const navWarnCancelBtn = document.getElementById('navWarnCancelBtn');
+        const navWarnProceedBtn = document.getElementById('navWarnProceedBtn');
+
+        if (navWarnCancelBtn) {
+            navWarnCancelBtn.addEventListener('click', () => {
+                navWarningModal.classList.remove('show');
+                pendingNavAction = null;
+                pendingNavUrl = null;
+            });
+        }
+
+        if (navWarnProceedBtn) {
+            navWarnProceedBtn.addEventListener('click', () => {
+                navWarningModal.classList.remove('show');
+
+                if (window.tasbeehPauseAuto) {
+                    window.tasbeehPauseAuto();
+                }
+                window.tasbeehSessionActive = false;
+
+                if (pendingNavUrl) {
+                    history.go(-TRAP_DEPTH);
+
+                    setTimeout(() => {
+                        let currentPath = window.location.pathname.split('/').pop().toLowerCase();
+                        if (currentPath === '' || currentPath === '/') currentPath = 'index.html';
+
+                        let linkPathFull = pendingNavUrl.split('#')[0].toLowerCase();
+                        let linkPath = linkPathFull.split('/').pop();
+                        let isSamePage = (linkPath === '' || linkPath === currentPath);
+
+                        if (isSamePage && pendingNavUrl.includes('#')) {
+                            history.replaceState(null, null, '#' + pendingNavUrl.split('#')[1]);
+                            if (typeof window.showActiveSection === 'function') window.showActiveSection();
+                        } else {
+                            window.location.href = pendingNavUrl;
+                        }
+                    }, 150);
+                } else if (pendingNavAction === 'browser_back' || pendingNavAction === 'back') {
+                    history.go(-(TRAP_DEPTH + 1));
+                } else if (pendingNavAction === 'next') {
+                    history.go(-TRAP_DEPTH);
+                    setTimeout(() => { history.forward(); }, 150);
+                } else if (pendingNavAction) {
+                    history.go(-TRAP_DEPTH);
+                    setTimeout(() => { executeNav(pendingNavAction); }, 150);
+                }
+            });
+        }
+    }
+
     function showNavWarning() {
+        ensureNavWarningModal();
         const modal = document.getElementById('navWarningModal');
-        if(modal) modal.classList.add('show');
+        if (modal) modal.classList.add('show');
     }
 
     window.navNext = function() {
@@ -1247,57 +1322,9 @@
         executeNav('back');
     };
 
-    function initNavbarSystem() {
-        document.querySelectorAll('.app-navbar').forEach(el => el.remove());
-
-        const isIndex = window.location.pathname.toLowerCase().endsWith('index.html') || window.location.pathname.endsWith('/');
-        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
-        const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
-        const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
-
-        const navbarHTML = `
-        <div id="injected-app-navbar" class="app-navbar print-none" dir="ltr">
-            <div class="nav-left">
-                <div class="dropdown">
-                    <button class="nav-btn kebab-btn" title="Menu">⋮</button>
-                    <div class="dropdown-content">
-                        <a href="${indexPath}" class="menu-item"><span>Main Menu</span> <span class="menu-icon">🏠</span></a>
-
-                        <!-- Shajara e Shareef Submenu -->
-                        <button type="button" class="submenu-toggle" data-target="submenu-shajara">
-                            <span>Shajara e Shareef</span> <span class="submenu-arrow">▾</span>
-                        </button>
-                        <div id="submenu-shajara" class="dropdown-submenu">
-                            <a href="${shajaraBase}#qadriya" class="menu-item"><span>Silsila e Qadriya</span></a>
-                            <a href="${shajaraBase}#chishtiyya" class="menu-item"><span>Silsila e Chishtiya</span></a>
-                            <a href="${shajaraBase}#akbariya" class="menu-item"><span>Silsila e Akbariya</span></a>
-                            <a href="${shajaraBase}#asnaad" class="menu-item"><span>Asnad e Dalail-ul-Khairat</span></a>
-                        </div>
-
-                        <!-- Awraad o Wazaef Submenu -->
-                        <button type="button" class="submenu-toggle" data-target="submenu-awraad">
-                            <span>Awraad o Wazaef</span> <span class="submenu-arrow">▾</span>
-                        </button>
-                        <div id="submenu-awraad" class="dropdown-submenu">
-                            <a href="${shajaraBase}#rozana" class="menu-item"><span>Rozana</span></a>
-                            <a href="${shajaraBase}#fajr-maghrib" class="menu-item"><span>Fajr / Maghrib</span></a>
-                            <a href="${shajaraBase}#har-namaz" class="menu-item"><span>Har Namaaz</span></a>
-                            <a href="${shajaraBase}#haftawari" class="menu-item"><span>Haftwaar</span></a>
-                        </div>
-
-                        <a href="#" id="openTasbeehBtn" class="menu-item"><span>Tasbeeh Counter</span> <span class="menu-icon">📿</span></a>
-                        <a href="#" id="openBrightnessBtn" class="menu-item"><span>Brightness</span> <span class="menu-icon">🌞</span></a>
-                        <a href="#" id="openSettingsBtn" class="menu-item"><span>Settings</span> <span class="menu-icon">⚙️</span></a>
-                    </div>
-                </div>
-                <button class="nav-btn" onclick="navBack()" title="Back">◀</button>
-            </div>
-            <div class="nav-right">
-                <button class="nav-btn" onclick="navNext()" title="Next">▶</button>
-                <button id="darkModeToggleNav" class="nav-btn" title="Toggle Dark/Light Mode">🌙</button>
-            </div>
-        </div>
-        `;
+    function ensureTasbeehModal() {
+        if (tasbeehInitialized && document.getElementById('tasbeehModal')) return;
+        tasbeehInitialized = true;
 
         const tasbeehHTML = `
         <div id="tasbeehModal" class="tasbeeh-modal print-none">
@@ -1349,37 +1376,295 @@
             <button id="maximizeTasbeehBtn">⛶</button>
         </div>
         `;
+        document.body.insertAdjacentHTML('beforeend', tasbeehHTML);
 
-        const brightnessHTML = `
-        <div id="brightnessModal" class="tasbeeh-modal print-none" style="align-items: flex-start; padding-top: 70px;">
-            <div class="tasbeeh-content" style="max-width: 320px; padding: 25px 20px;">
-                <span class="tasbeeh-close" id="closeBrightnessBtn">&times;</span>
-                <h3 style="margin-top:0; margin-bottom: 20px; color:#c59b27;">Adjust Brightness</h3>
-                <div style="display:flex; align-items:center; gap:12px; justify-content:center;">
-                    <span style="font-size:22px;">🔅</span>
-                    <input type="range" id="brightnessSlider" min="0.4" max="1.5" step="0.05" value="1" title="Adjust Brightness" style="width: 150px; cursor: pointer; accent-color: #c59b27;">
-                    <span style="font-size:22px;">☀️</span>
+        const tasbeehModal = document.getElementById('tasbeehModal');
+        const closeTasbeehBtn = document.getElementById('closeTasbeehBtn');
+        const targetSelect = document.getElementById('tasbeehTarget');
+        const customTargetInput = document.getElementById('tasbeehCustomTarget');
+        const modeSelect = document.getElementById('tasbeehMode');
+        const intervalSelect = document.getElementById('tasbeehInterval');
+        const customIntervalInput = document.getElementById('tasbeehCustomInterval');
+        const countDisplay = document.getElementById('tasbeehCount');
+        const progressBar = document.getElementById('tasbeehProgressBar');
+        const mainTapBtn = document.getElementById('tasbeehMainBtn');
+        const startBtn = document.getElementById('tasbeehStartBtn');
+        const pauseBtn = document.getElementById('tasbeehPauseBtn');
+        const resumeBtn = document.getElementById('tasbeehResumeBtn');
+        const resetBtn = document.getElementById('tasbeehResetBtn');
+        const soundBtn = document.getElementById('tasbeehSoundBtn');
+        const minimizeTasbeehBtn = document.getElementById('minimizeTasbeehBtn');
+        const tasbeehMinimized = document.getElementById('tasbeehMinimized');
+
+        let count = parseInt(localStorage.getItem('tasbeeh_count')) || 0;
+        let target = parseInt(localStorage.getItem('tasbeeh_target')) || 100;
+
+        if (targetSelect) {
+            targetSelect.value = target === 100 ? "100" : "custom";
+            if (target !== 100) {
+                customTargetInput.style.display = 'inline-block';
+                customTargetInput.value = target;
+            }
+        }
+        if (countDisplay) countDisplay.innerText = count;
+        let autoTimer = null;
+        let soundEnabled = true;
+        let beepPlayed = false;
+        let audioCtx = null;
+
+        function unlockAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function updateProgress() {
+            let percentage = (count / target) * 100;
+            if (percentage > 100) percentage = 100;
+            progressBar.style.width = percentage + "%";
+            const minimizedCount = document.getElementById('minimizedCount');
+            if (minimizedCount) minimizedCount.innerText = count + " / " + target;
+        }
+
+        function activateTasbeehGuard() {
+            if (!window.tasbeehSessionActive) {
+                window.tasbeehSessionActive = true;
+                for (let i = 1; i <= TRAP_DEPTH; i++) {
+                    try {
+                        history.pushState({tasbeehTrap: i}, null, '#t-' + i);
+                    } catch(e) {}
+                }
+            }
+        }
+
+        function resetCount() {
+            pauseAuto();
+            count = 0;
+            localStorage.setItem('tasbeeh_count', count);
+            beepPlayed = false;
+            countDisplay.innerText = count;
+            updateProgress();
+
+            if (modeSelect.value === 'auto') {
+                startBtn.style.display = 'inline-block';
+                resumeBtn.style.display = 'none';
+                pauseBtn.style.display = 'none';
+            }
+        }
+
+        updateProgress();
+
+        if (minimizeTasbeehBtn) {
+            minimizeTasbeehBtn.addEventListener('click', () => {
+                tasbeehModal.classList.remove('show');
+                tasbeehMinimized.style.display = 'flex';
+            });
+        }
+        if (tasbeehMinimized) {
+            tasbeehMinimized.addEventListener('click', () => {
+                tasbeehMinimized.style.display = 'none';
+                tasbeehModal.classList.add('show');
+            });
+        }
+
+        closeTasbeehBtn.addEventListener('click', () => {
+            tasbeehModal.classList.remove('show');
+            pauseAuto();
+        });
+
+        tasbeehModal.addEventListener('click', (e) => {
+            if (e.target === tasbeehModal) {
+                tasbeehModal.classList.remove('show');
+                if (tasbeehMinimized) {
+                    tasbeehMinimized.style.display = 'flex';
+                }
+            }
+        });
+
+        targetSelect.addEventListener('change', () => {
+            if (targetSelect.value === 'custom') {
+                customTargetInput.style.display = 'inline-block';
+                target = parseInt(customTargetInput.value) || 1;
+            } else {
+                customTargetInput.style.display = 'none';
+                target = parseInt(targetSelect.value);
+            }
+            localStorage.setItem('tasbeeh_target', target);
+            updateProgress();
+        });
+
+        customTargetInput.addEventListener('input', () => {
+            target = parseInt(customTargetInput.value) || 1;
+            localStorage.setItem('tasbeeh_target', target);
+            updateProgress();
+        });
+
+        modeSelect.addEventListener('change', () => {
+            pauseAuto();
+            if (modeSelect.value === 'auto') {
+                intervalSelect.style.display = 'inline-block';
+                if (intervalSelect.value === 'custom') customIntervalInput.style.display = 'inline-block';
+                startBtn.style.display = 'inline-block';
+                resumeBtn.style.display = 'none';
+                pauseBtn.style.display = 'none';
+                mainTapBtn.style.display = 'none';
+            } else {
+                intervalSelect.style.display = 'none';
+                customIntervalInput.style.display = 'none';
+                startBtn.style.display = 'none';
+                resumeBtn.style.display = 'none';
+                pauseBtn.style.display = 'none';
+                mainTapBtn.style.display = 'block';
+            }
+        });
+
+        intervalSelect.addEventListener('change', () => {
+            if (intervalSelect.value === 'custom') {
+                customIntervalInput.style.display = 'inline-block';
+            } else {
+                customIntervalInput.style.display = 'none';
+            }
+            if (autoTimer) {
+                pauseAuto();
+                startAuto();
+            }
+        });
+
+        soundBtn.addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            soundBtn.innerHTML = soundEnabled ? 'Sound: ON' : 'Sound: OFF';
+        });
+
+        function playBeep() {
+            if (!soundEnabled) return;
+            try {
+                unlockAudio();
+                const oscillator = audioCtx.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 800;
+                oscillator.connect(audioCtx.destination);
+                oscillator.start();
+                setTimeout(() => oscillator.stop(), 800);
+            } catch (error) {}
+        }
+
+        function incrementCount() {
+            if (count < target) {
+                count++;
+                localStorage.setItem('tasbeeh_count', count);
+                countDisplay.innerText = count;
+                updateProgress();
+                if (count === target) {
+                    pauseAuto();
+                    if (!beepPlayed) {
+                        playBeep();
+                        beepPlayed = true;
+                    }
+                }
+            }
+        }
+
+        mainTapBtn.addEventListener('click', () => {
+            unlockAudio();
+            activateTasbeehGuard();
+            if (count < target) incrementCount();
+        });
+
+        function startAuto() {
+            unlockAudio();
+            if (count >= target) return;
+            if (autoTimer) clearInterval(autoTimer);
+            let interval = intervalSelect.value === 'custom' ? parseInt(customIntervalInput.value) * 1000 : parseInt(intervalSelect.value);
+            if (!interval || interval < 1000) interval = 1000;
+
+            activateTasbeehGuard();
+
+            startBtn.style.display = 'none';
+            resumeBtn.style.display = 'none';
+            pauseBtn.style.display = 'inline-block';
+
+            autoTimer = setInterval(incrementCount, interval);
+        }
+
+        function pauseAuto() {
+            if (autoTimer) {
+                clearInterval(autoTimer);
+                autoTimer = null;
+            }
+            if (modeSelect.value === 'auto') {
+                startBtn.style.display = 'none';
+                resumeBtn.style.display = 'inline-block';
+                pauseBtn.style.display = 'none';
+            }
+        }
+
+        window.tasbeehPauseAuto = pauseAuto;
+
+        startBtn.addEventListener('click', startAuto);
+        resumeBtn.addEventListener('click', startAuto);
+        pauseBtn.addEventListener('click', pauseAuto);
+        resetBtn.addEventListener('click', resetCount);
+    }
+
+    function initNavbarSystem() {
+        document.querySelectorAll('.app-navbar').forEach(el => el.remove());
+
+        const isIndex = window.location.pathname.toLowerCase().endsWith('index.html') || window.location.pathname.endsWith('/');
+        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
+        const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
+        const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
+
+        const navbarHTML = `
+        <div id="injected-app-navbar" class="app-navbar print-none" dir="ltr">
+            <div class="nav-left">
+                <div class="dropdown">
+                    <button class="nav-btn kebab-btn" title="Menu">⋮</button>
+                    <div class="dropdown-content">
+                        <a href="${indexPath}" class="menu-item"><span>Main Menu</span> <span class="menu-icon">🏠</span></a>
+
+                        <!-- Shajara e Shareef Submenu -->
+                        <button type="button" class="submenu-toggle" data-target="submenu-shajara">
+                            <span>Shajara e Shareef</span> <span class="submenu-arrow">▾</span>
+                        </button>
+                        <div id="submenu-shajara" class="dropdown-submenu">
+                            <a href="${shajaraBase}#qadriya" class="menu-item"><span>Silsila e Qadriya</span></a>
+                            <a href="${shajaraBase}#chishtiyya" class="menu-item"><span>Silsila e Chishtiya</span></a>
+                            <a href="${shajaraBase}#akbariya" class="menu-item"><span>Silsila e Akbariya</span></a>
+                            <a href="${shajaraBase}#asnaad" class="menu-item"><span>Asnad e Dalail-ul-Khairat</span></a>
+                        </div>
+
+                        <!-- Awraad o Wazaef Submenu -->
+                        <button type="button" class="submenu-toggle" data-target="submenu-awraad">
+                            <span>Awraad o Wazaef</span> <span class="submenu-arrow">▾</span>
+                        </button>
+                        <div id="submenu-awraad" class="dropdown-submenu">
+                            <a href="${shajaraBase}#rozana" class="menu-item"><span>Rozana</span></a>
+                            <a href="${shajaraBase}#fajr-maghrib" class="menu-item"><span>Fajr / Maghrib</span></a>
+                            <a href="${shajaraBase}#har-namaz" class="menu-item"><span>Har Namaaz</span></a>
+                            <a href="${shajaraBase}#haftawari" class="menu-item"><span>Haftwaar</span></a>
+                        </div>
+
+                        <a href="#" id="openTasbeehBtn" class="menu-item"><span>Tasbeeh Counter</span> <span class="menu-icon">📿</span></a>
+                        <a href="#" id="openPrayerTimesBtn" class="menu-item"><span>Prayer Times</span> <span class="menu-icon">🕌</span></a>
+                        <a href="#" id="openSettingsBtn" class="menu-item"><span>Settings</span> <span class="menu-icon">⚙️</span></a>
+                    </div>
                 </div>
+                <button class="nav-btn" onclick="navBack()" title="Back">◀</button>
+            </div>
+            <div id="navHijriDate" class="nav-hijri-date" dir="rtl"></div>
+            <div class="nav-right">
+                <button class="nav-btn" onclick="navNext()" title="Next">▶</button>
+                <button id="darkModeToggleNav" class="nav-btn" title="Toggle Dark/Light Mode">🌙</button>
             </div>
         </div>
         `;
-        
-        const navWarningHTML = `
-        <div id="navWarningModal" class="tasbeeh-modal print-none">
-            <div class="tasbeeh-content" style="max-width: 350px; padding: 25px 20px;">
-                <h3 style="margin-top:0; color:#c0392b;">⚠️ Warning</h3>
-                <p style="font-size: 18px; margin-bottom: 20px; line-height: 1.6; font-family: 'Amiri', Arial, sans-serif; color: var(--text-color, #1a365d);">
-                    Tasbeeh Counter <strong style="color:#1e7e34;">Active</strong> hai.<br>Page tabdeel karne se yeh <strong>stop</strong> ho jayega.<br><br>Kya aap waqai doosre page par jana chahte hain?
-                </p>
-                <div style="display: flex; gap: 15px; justify-content: center;">
-                    <button id="navWarnCancelBtn" style="background: #1a365d; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">Cancel</button>
-                    <button id="navWarnProceedBtn" style="background: #c0392b; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;">Proceed</button>
-                </div>
-            </div>
-        </div>
-        `;
-        document.body.insertAdjacentHTML('afterbegin', navbarHTML + tasbeehHTML + brightnessHTML + navWarningHTML);
-        // Sequence boundaries indicator (Pehle page par Back aur aakhri page par Next ko dim karna)
+
+        document.body.insertAdjacentHTML('afterbegin', navbarHTML);
+
         const currentIdx = getCurrentPageIndex();
         if (currentIdx !== -1) {
             const backBtn = document.querySelector('#injected-app-navbar .nav-left button[onclick="navBack()"]');
@@ -1392,79 +1677,24 @@
             }
         }
 
-        // Navigation Warning Modal Logic
-        const navWarningModal = document.getElementById('navWarningModal');
-        const navWarnCancelBtn = document.getElementById('navWarnCancelBtn');
-        const navWarnProceedBtn = document.getElementById('navWarnProceedBtn');
-
-        if (navWarnCancelBtn) {
-            navWarnCancelBtn.addEventListener('click', () => {
-                navWarningModal.classList.remove('show');
-                pendingNavAction = null;
-                pendingNavUrl = null;
-            });
-        }
-        
-        if (navWarnProceedBtn) {
-            navWarnProceedBtn.addEventListener('click', () => {
-                navWarningModal.classList.remove('show');
-                
-                if (window.tasbeehPauseAuto) {
-                    window.tasbeehPauseAuto(); 
-                }
-                window.tasbeehSessionActive = false; // Disable Guard
-                
-                if (pendingNavUrl) {
-                    history.go(-TRAP_DEPTH); // Safely jump out of the trap buffer
-                    
-                    setTimeout(() => {
-                        let currentPath = window.location.pathname.split('/').pop().toLowerCase();
-                        if (currentPath === '' || currentPath === '/') currentPath = 'index.html';
-                        
-                        let linkPathFull = pendingNavUrl.split('#')[0].toLowerCase();
-                        let linkPath = linkPathFull.split('/').pop();
-                        let isSamePage = (linkPath === '' || linkPath === currentPath);
-                        
-                        if (isSamePage && pendingNavUrl.includes('#')) {
-                            history.replaceState(null, null, '#' + pendingNavUrl.split('#')[1]);
-                            if (typeof showActiveSection === 'function') showActiveSection();
-                        } else {
-                            window.location.href = pendingNavUrl;
-                        }
-                    }, 150);
-                } else if (pendingNavAction === 'browser_back' || pendingNavAction === 'back') {
-                    // True back navigates past the original page state (TRAP_DEPTH + 1)
-                    history.go(-(TRAP_DEPTH + 1)); 
-                } else if (pendingNavAction === 'next') {
-                    history.go(-TRAP_DEPTH);
-                    setTimeout(() => { history.forward(); }, 150);
-                } else if (pendingNavAction) {
-                    history.go(-TRAP_DEPTH);
-                    setTimeout(() => { executeNav(pendingNavAction); }, 150);
-                }
-            });
-        }
-
         // UNIVERSAL GLOBAL LINK INTERCEPTOR
         document.body.addEventListener('click', function(e) {
             let link = e.target.closest('a');
-            if (!link) return; 
-            
+            if (!link) return;
+
             let href = link.getAttribute('href');
             if (!href || href === '#' || href.startsWith('javascript:')) return;
-            if (link.id === 'openTasbeehBtn' || link.id === 'openBrightnessBtn' || link.id === 'openSettingsBtn' || link.id === 'langToggleBtn') return;
+            if (link.id === 'openTasbeehBtn' || link.id === 'openPrayerTimesBtn' || link.id === 'openSettingsBtn' || link.id === 'langToggleBtn') return;
 
-            // If Tasbeeh is active, BLOCK ALL LINKS without exception!
             if (window.tasbeehSessionActive) {
-                e.preventDefault(); 
-                e.stopPropagation(); // Stop any other listeners
+                e.preventDefault();
+                e.stopPropagation();
                 pendingNavUrl = href;
                 pendingNavAction = null;
                 showNavWarning();
             }
-        }, true); // Use capture phase to ensure this runs BEFORE Part 8 click listener
+        }, true);
 
-        // ... (dropdown logic)
         const kebabBtn = document.querySelector('.kebab-btn');
         const dropdownContent = document.querySelector('.dropdown-content');
 
@@ -1478,7 +1708,7 @@
             const isOpen = dropdownContent.classList.toggle('show');
             if (!isOpen) closeAllSubmenus();
         });
-        
+
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.dropdown')) {
                 dropdownContent.classList.remove('show');
@@ -1486,7 +1716,6 @@
             }
         });
 
-        // Submenu accordion toggle (Shajara e Shareef & Awraad o Wazaef)
         const submenuToggles = document.querySelectorAll('.dropdown-content .submenu-toggle');
         submenuToggles.forEach(function(toggleBtn) {
             toggleBtn.addEventListener('click', function(e) {
@@ -1511,363 +1740,74 @@
             });
         });
 
-        // ... (dark mode and brightness logic)
+        // Open Tasbeeh lazily on click
+        const openTasbeehBtn = document.getElementById('openTasbeehBtn');
+        if (openTasbeehBtn) {
+            openTasbeehBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                ensureTasbeehModal();
+                const modal = document.getElementById('tasbeehModal');
+                const minBar = document.getElementById('tasbeehMinimized');
+                if (minBar) minBar.style.display = 'none';
+                if (modal) modal.classList.add('show');
+                dropdownContent.classList.remove('show');
+            });
+        }
+
+        // Dark mode toggle
         const navDarkModeBtn = document.getElementById('darkModeToggleNav');
         const body = document.body;
-        
+
         function updateDarkModeIcon() {
-            if(navDarkModeBtn) {
+            if (navDarkModeBtn) {
                 navDarkModeBtn.innerHTML = body.classList.contains('dark-mode') ? '☀️' : '🌙';
             }
         }
-        
+
         if (localStorage.getItem('theme') === 'dark' || body.classList.contains('dark-mode')) {
             body.classList.add('dark-mode');
             updateDarkModeIcon();
         }
 
-        if(navDarkModeBtn) {
+        if (navDarkModeBtn) {
             navDarkModeBtn.addEventListener('click', function() {
                 body.classList.toggle('dark-mode');
                 localStorage.setItem('theme', body.classList.contains('dark-mode') ? 'dark' : 'light');
                 updateDarkModeIcon();
-            });
-        }
-
-        const brightnessModal = document.getElementById('brightnessModal');
-        const openBrightnessBtn = document.getElementById('openBrightnessBtn');
-        const closeBrightnessBtn = document.getElementById('closeBrightnessBtn');
-        const brightnessSlider = document.getElementById('brightnessSlider');
-
-        let brightnessOverlay = document.getElementById('brightnessOverlay');
-        if (!brightnessOverlay) {
-            brightnessOverlay = document.createElement('div');
-            brightnessOverlay.id = 'brightnessOverlay';
-            brightnessOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999999; transition: background-color 0.1s;';
-            document.body.appendChild(brightnessOverlay);
-        }
-
-        function applyBrightness(val) {
-            let bValue = parseFloat(val);
-            if (bValue < 1) {
-                brightnessOverlay.style.backgroundColor = `rgba(0, 0, 0, ${1 - bValue})`;
-            } else if (bValue > 1) {
-                brightnessOverlay.style.backgroundColor = `rgba(255, 255, 255, ${(bValue - 1) * 0.4})`;
-            } else {
-                brightnessOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
-            }
-        }
-
-        let savedBrightness = localStorage.getItem('app_brightness') || 1;
-        if(brightnessSlider) brightnessSlider.value = savedBrightness;
-        
-        document.body.style.filter = '';
-        applyBrightness(savedBrightness);
-
-        if(brightnessSlider) {
-            brightnessSlider.addEventListener('input', function() {
-                applyBrightness(brightnessSlider.value);
-                localStorage.setItem('app_brightness', brightnessSlider.value);
-            });
-        }
-
-        if(openBrightnessBtn) {
-            openBrightnessBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                brightnessModal.classList.add('show');
-            });
-        }
-
-        if(closeBrightnessBtn) {
-            closeBrightnessBtn.addEventListener('click', () => {
-                brightnessModal.classList.remove('show');
-            });
-        }
-
-        if(brightnessModal) {
-            brightnessModal.addEventListener('click', (e) => {
-                if (e.target === brightnessModal) {
-                    brightnessModal.classList.remove('show');
+                if (typeof window.clearCustomColorsForDarkToggle === 'function') {
+                    window.clearCustomColorsForDarkToggle();
                 }
             });
         }
 
-        // TASBEEH COUNTER LOGIC
-        const tasbeehModal = document.getElementById('tasbeehModal');
-        const openTasbeehBtn = document.getElementById('openTasbeehBtn');
-        const closeTasbeehBtn = document.getElementById('closeTasbeehBtn');
-        const targetSelect = document.getElementById('tasbeehTarget');
-        const customTargetInput = document.getElementById('tasbeehCustomTarget');
-        const modeSelect = document.getElementById('tasbeehMode');
-        const intervalSelect = document.getElementById('tasbeehInterval');
-        const customIntervalInput = document.getElementById('tasbeehCustomInterval');
-        const countDisplay = document.getElementById('tasbeehCount');
-        const progressBar = document.getElementById('tasbeehProgressBar');
-        const mainTapBtn = document.getElementById('tasbeehMainBtn');
-        const startBtn = document.getElementById('tasbeehStartBtn');
-        const pauseBtn = document.getElementById('tasbeehPauseBtn');
-        const resumeBtn = document.getElementById('tasbeehResumeBtn');
-        const resetBtn = document.getElementById('tasbeehResetBtn');
-        const soundBtn = document.getElementById('tasbeehSoundBtn');
-
-        let count = parseInt(localStorage.getItem('tasbeeh_count')) || 0;
-        let target = parseInt(localStorage.getItem('tasbeeh_target')) || 100;
-        
-        if (targetSelect) {
-            targetSelect.value = target === 100 ? "100" : "custom";
-            if (target !== 100) {
-                customTargetInput.style.display = 'inline-block';
-                customTargetInput.value = target;
-            }
-        }
-        if (countDisplay) countDisplay.innerText = count;
-        let autoTimer = null;
-        let soundEnabled = true;
-        let beepPlayed = false;
-        let audioCtx = null;
-
-        function unlockAudio() {
-            if (!audioCtx) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-        }
-        document.body.addEventListener('touchstart', unlockAudio, { once: true });
-        document.body.addEventListener('click', unlockAudio, { once: true });
-
-        function updateProgress() {
-            let percentage = (count / target) * 100;
-            if(percentage > 100) percentage = 100;
-            progressBar.style.width = percentage + "%";
-            const minimizedCount = document.getElementById('minimizedCount');
-            if (minimizedCount) minimizedCount.innerText = count + " / " + target;
-        }
-
-        // Tasbeeh Guard Active Function
-        function activateTasbeehGuard() {
-            if (!window.tasbeehSessionActive) {
-                window.tasbeehSessionActive = true;
-                for (let i = 1; i <= TRAP_DEPTH; i++) {
-                    try {
-                        history.pushState({tasbeehTrap: i}, null, '#t-' + i);
-                    } catch(e) {}
-                }
-            }
-        }
-
-        function resetCount() {
-            pauseAuto();
-            count = 0;
-            localStorage.setItem('tasbeeh_count', count);
-            beepPlayed = false;
-            countDisplay.innerText = count;
-            updateProgress();
-            
-            if (modeSelect.value === 'auto') {
-                startBtn.style.display = 'inline-block';
-                resumeBtn.style.display = 'none';
-                pauseBtn.style.display = 'none';
-            }
-        }
-
-        updateProgress();
-
-        const minimizeTasbeehBtn = document.getElementById('minimizeTasbeehBtn');
-        const tasbeehMinimized = document.getElementById('tasbeehMinimized');
-        
-        if (minimizeTasbeehBtn) {
-            minimizeTasbeehBtn.addEventListener('click', () => {
-                tasbeehModal.classList.remove('show');
-                tasbeehMinimized.style.display = 'flex';
-            });
-        }
-        if (tasbeehMinimized) {
-            tasbeehMinimized.addEventListener('click', () => {
-                tasbeehMinimized.style.display = 'none';
-                tasbeehModal.classList.add('show');
-            });
-        }
-
-        openTasbeehBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            tasbeehModal.classList.add('show');
-            dropdownContent.classList.remove('show');
-        });
-
-        closeTasbeehBtn.addEventListener('click', () => {
-            tasbeehModal.classList.remove('show');
-            pauseAuto(); 
-        });
-
-        tasbeehModal.addEventListener('click', (e) => {
-            if (e.target === tasbeehModal) {
-                tasbeehModal.classList.remove('show');
-                if (tasbeehMinimized) {
-                    tasbeehMinimized.style.display = 'flex';
-                }
-            }
-        });
-
-        targetSelect.addEventListener('change', () => {
-            if(targetSelect.value === 'custom') {
-                customTargetInput.style.display = 'inline-block';
-                target = parseInt(customTargetInput.value) || 1;
-            } else {
-                customTargetInput.style.display = 'none';
-                target = parseInt(targetSelect.value);
-            }
-            localStorage.setItem('tasbeeh_target', target);
-            updateProgress();
-        });
-
-        customTargetInput.addEventListener('input', () => {
-            target = parseInt(customTargetInput.value) || 1;
-            localStorage.setItem('tasbeeh_target', target);
-            updateProgress();
-        });
-
-        modeSelect.addEventListener('change', () => {
-            pauseAuto();
-            if(modeSelect.value === 'auto') {
-                intervalSelect.style.display = 'inline-block';
-                if(intervalSelect.value === 'custom') customIntervalInput.style.display = 'inline-block';
-                startBtn.style.display = 'inline-block';
-                resumeBtn.style.display = 'none';
-                pauseBtn.style.display = 'none';
-                mainTapBtn.style.display = 'none';
-            } else {
-                intervalSelect.style.display = 'none';
-                customIntervalInput.style.display = 'none';
-                startBtn.style.display = 'none';
-                resumeBtn.style.display = 'none';
-                pauseBtn.style.display = 'none';
-                mainTapBtn.style.display = 'block';
-            }
-        });
-
-        intervalSelect.addEventListener('change', () => {
-            if(intervalSelect.value === 'custom') {
-                customIntervalInput.style.display = 'inline-block';
-            } else {
-                customIntervalInput.style.display = 'none';
-            }
-            if(autoTimer) {
-                pauseAuto();
-                startAuto();
-            }
-        });
-
-        soundBtn.addEventListener('click', () => {
-            soundEnabled = !soundEnabled;
-            soundBtn.innerHTML = soundEnabled ? 'Sound: ON' : 'Sound: OFF';
-        });
-
-        function playBeep() {
-            if (!soundEnabled) return;
-            try {
-                unlockAudio();
-                const oscillator = audioCtx.createOscillator();
-                oscillator.type = 'sine';
-                oscillator.frequency.value = 800;
-                oscillator.connect(audioCtx.destination);
-                oscillator.start();
-                setTimeout(() => oscillator.stop(), 800);
-            } catch (error) {
-                console.log("Audio not supported or blocked.");
-            }
-        }
-
-        function incrementCount() {
-            if (count < target) {
-                count++;
-                localStorage.setItem('tasbeeh_count', count);
-                countDisplay.innerText = count;
-                updateProgress();
-                if (count === target) {
-                    pauseAuto();
-                    if(!beepPlayed) {
-                        playBeep();
-                        beepPlayed = true;
-                    }
-                }
-            }
-        }
-
-        mainTapBtn.addEventListener('click', () => {
-            unlockAudio();
-            activateTasbeehGuard();
-            if (count < target) incrementCount();
-        });
-
-        // 100% BULLETPROOF POPSTATE TRAP (SELF-HEALING BUFFER)
+        // Popstate trap for active Tasbeeh session
         window.addEventListener('popstate', function(e) {
             if (window.tasbeehSessionActive) {
                 let currentLevel = 0;
                 if (e.state && e.state.tasbeehTrap) {
                     currentLevel = e.state.tasbeehTrap;
                 }
-                
                 let needed = TRAP_DEPTH - currentLevel;
                 for (let i = 1; i <= needed; i++) {
                     try {
                         history.pushState({tasbeehTrap: currentLevel + i}, null, '#t-' + (currentLevel + i));
                     } catch(err) {}
                 }
-                
                 pendingNavAction = 'browser_back';
                 pendingNavUrl = null;
                 showNavWarning();
             }
         });
 
-        window.addEventListener('beforeunload', function (e) {
+        window.addEventListener('beforeunload', function(e) {
             if (window.tasbeehSessionActive) {
                 e.preventDefault();
                 e.returnValue = 'Tasbeeh is active. Are you sure you want to exit?';
                 return e.returnValue;
             }
         });
-
-        function startAuto() {
-            unlockAudio();
-            if(count >= target) return;
-            if(autoTimer) clearInterval(autoTimer);
-            let interval = intervalSelect.value === 'custom' ? parseInt(customIntervalInput.value) * 1000 : parseInt(intervalSelect.value);
-            if(!interval || interval < 1000) interval = 1000;
-            
-            activateTasbeehGuard();
-
-            startBtn.style.display = 'none';
-            resumeBtn.style.display = 'none';
-            pauseBtn.style.display = 'inline-block';
-
-            autoTimer = setInterval(incrementCount, interval);
-        }
-
-        function pauseAuto() {
-            if(autoTimer) {
-                clearInterval(autoTimer);
-                autoTimer = null;
-            }
-            
-            if(modeSelect.value === 'auto') {
-                startBtn.style.display = 'none';
-                resumeBtn.style.display = 'inline-block';
-                pauseBtn.style.display = 'none';
-            }
-        }
-
-        window.tasbeehPauseAuto = pauseAuto;
-
-        startBtn.addEventListener('click', startAuto);
-        resumeBtn.addEventListener('click', startAuto);
-        pauseBtn.addEventListener('click', pauseAuto);
-        resetBtn.addEventListener('click', resetCount);
     }
-    
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initNavbarSystem);
     } else {
@@ -1876,125 +1816,140 @@
 })();
 
 // ==========================================
-// PART 5: TAJWEED RULES PROCESSING (RUNS AFTER ALL INJECTIONS)
+// PART 5: FAST LAZY TAJWEED RULES PROCESSING (PER-SECTION + CHUNKED)
 // ==========================================
 (function() {
     try {
-        function applyTajweed() {
-            console.log("Tajweed Rules Processing Started (Force Permanent Fix Enabled)...");
-            
-            var duaEntries = [];
-            document.querySelectorAll('.dua-entry').forEach(function(el) {
-                if (!el.classList.contains('repeat-heading') && !el.classList.contains('fourteen-times-title') && !el.classList.contains('asma-nabi-repeat-heading')) {
-                    duaEntries.push(el);
-                }
-            });
+        // Pre-compile all regular expressions ONCE (huge speedup on mobile)
+        var sepPlus = "((?:###PROTECT_\\d+###|<[^>]+>|\\s|\\*|۝|\\u200C|\\u200D)+)";
+        var sepStar = "((?:###PROTECT_\\d+###|<[^>]+>|\\s|\\*|۝|\\u200C|\\u200D)*)";
+        var tanweenNoonRegex = "([\\u0621-\\u064A](?:[\\u064B-\\u065F\\u0670]*[\\u0627\\u0649])?[\\u064B-\\u065F\\u0670]*(?:[\\u064B\\u064C\\u064D]|\\u0646\\u0652?)[\\u0627\\u0649]?)";
 
-            if (!duaEntries.length) return;
+        var unwrapAllahRegex = /<span[^>]*class="allah-name"[^>]*>([\s\S]*?)<\/span>/g;
+        var unwrapProphetRegex = /<span[^>]*class="prophet-name"[^>]*>([\s\S]*?)<\/span>/g;
+        var allahRegex = /(اَللّٰهُمَّ|اللّٰهُمَّ|اَللَّهُمَّ|اللَّهُمَّ|لِلّٰهِ|لِلَّهِ|اَللّٰه[َُِ]?|اللّٰه[َُِ]?|اَللَّه[َُِ]?|اللَّه[َُِ]?)/g;
+        var prophetRegex = /(مُحَمَّد[ًٌٍَُِ]?ا?)/g;
 
-            var sepPlus = "((?:###PROTECT_\\d+###|<[^>]+>|\\s|\\*|۝|\\u200C|\\u200D)+)";
-            var sepStar = "((?:###PROTECT_\\d+###|<[^>]+>|\\s|\\*|۝|\\u200C|\\u200D)*)";
+        var idghamGhunnahRegex = new RegExp(tanweenNoonRegex + sepPlus + "([ينمو])([\\u064B-\\u065F\\u0670]*)", "g");
+        var idghamNoGhunnahRegex = new RegExp(tanweenNoonRegex + sepPlus + "([لر])([\\u064B-\\u065F\\u0670]*)", "g");
+        var meemRegex = new RegExp("(\\u0645\\u0652?)" + sepPlus + "(\\u0645)([\\u064B-\\u065F\\u0670]*)", "g");
+        var ikhfaShafawiRegex = new RegExp("(\\u0645\\u0652?)" + sepStar + "(ب)([\\u064B-\\u065F\\u0670]*)", "g");
+        var ikhfaRegex = new RegExp(tanweenNoonRegex + sepStar + "([تثجدذزسشصضطظفقكک])([\\u064B-\\u065F\\u0670]*)", "g");
+        var iqlaabRegex = new RegExp(tanweenNoonRegex + sepStar + "(ب)([\\u064B-\\u065F\\u0670]*)", "g");
 
-            function checkValidMadd(p1, maddLetterStr) {
-                var hasFatha = p1.indexOf('\u064E') !== -1;
-                var hasDamma = p1.indexOf('\u064F') !== -1;
-                var hasKasra = p1.indexOf('\u0650') !== -1;
-                var hasSukoon = p1.indexOf('\u0652') !== -1 || p1.indexOf('\u06DF') !== -1;
-                var hasTanween = /[\u064B\u064C\u064D]/.test(p1);
+        var maddCandidateRegex = /([\u0621-\u064A][\u064B-\u0652]*)((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)((?:[\u0627\u0648\u064A\u0649\u0622]\u0652?|\u0670[اى]?))([اى]?)((?:[\u0653\u06E4]?))((?:###PROTECT_\d+###|<[^>]+>|\s|\*|۝|[\u200C\u200D])*)((?:[ءأإئؤآ\u0674][\u064B-\u065F\u0670]*)|(?:ا[\u064B-\u065F\u0670]+))/g;
+        var maddLazimRegex = /([\u0621-\u064A][\u064B-\u0652]*)((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)((?:[\u0627\u0648\u064A\u0649\u0622]\u0652?|\u0670[اى]?))([اى]?)((?:[\u0653\u06E4]?))((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)([\u0621-\u064A][\u064B-\u065F\u0670]*\u0651[\u064B-\u065F\u0670]*)/g;
+        var silaTawilahRegex = /([\u0621-\u064A][\u064B-\u0652]*)((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)(\u0647[\u0656\u0657\u06E5\u06E6]+[\u0653\u06E4]?)((?:###PROTECT_\d+###|<[^>]+>|\s|\*|۝|[\u200C\u200D])+)((?:[ءأإئؤآ\u0674][\u064B-\u065F\u0670]*)|(?:ا[\u064B-\u065F\u0670]+))/g;
 
-                if (maddLetterStr.indexOf('\u0670') !== -1 || maddLetterStr.indexOf('\u0622') !== -1) return true;
-                if (hasTanween || hasSukoon) return false;
+        var maddAlifRegex = /(\u0622[\u064B-\u065F\u0670]*)/g;
+        var maddMarkRegex = /([\u0621-\u064A][\u064B-\u065F\u0670]*[\u0653\u06E4]+)/g;
+        var maddSilaRegex = /(\u0647[\u0656\u0657\u06E5\u06E6]+[\u0653\u06E4]?)/g;
+        var ghunnahMeemRegex = /(\u0645[\u064B-\u065F\u0670]*\u0651[\u064B-\u065F\u0670]*)/g;
+        var ghunnahNoonRegex = /(\u0646[\u064B-\u065F\u0670]*\u0651[\u064B-\u065F\u0670]*)/g;
 
-                if (maddLetterStr.indexOf('\u0627') !== -1) {
-                    if (hasDamma || hasKasra) return false; return true;
-                } else if (maddLetterStr.indexOf('\u0648') !== -1) {
-                    if (hasFatha || hasKasra) return false; return true;
-                } else if (maddLetterStr.indexOf('\u064A') !== -1 || maddLetterStr.indexOf('\u0649') !== -1) {
-                    if (hasFatha || hasDamma) return false; return true;
-                }
-                return false;
+        var raRegex = /(?:([\u0621-\u064A])((?:<[^>]+>)*)([\u064B-\u065F\u0670]*))?((?:<[^>]+>|[\u200C\u200D]|\s)*)(\u0631)((?:<[^>]+>)*)([\u064B-\u065F\u0670]*)/g;
+        var mustaliyahRegex = /([خصضغطظق])((?:<[^>]+>)*)([\u064B-\u065F\u0670]*)/g;
+        var qalqalahSukoonRegex = /([قطبجد])((?:<[^>]+>|[\u200C\u200D])*)([\u0652\u06DF])/g;
+        var qalqalahWaqfRegex = /([قطبجد])((?:<[^>]+>|[\u200C\u200D])*)([\u064B-\u065F\u0670]*)((?:<[^>]+>|\s|\*)*(?:۝|❀|<span[^>]*class="waqf-mark"[^>]*>))/g;
+
+        var arabicCheckRegex = /[\u0621-\u064A]/;
+        var stripTagsProtectRegex = /###PROTECT_\d+###|<[^>]+>/g;
+
+        function checkValidMadd(p1, maddLetterStr) {
+            var hasFatha = p1.indexOf('\u064E') !== -1;
+            var hasDamma = p1.indexOf('\u064F') !== -1;
+            var hasKasra = p1.indexOf('\u0650') !== -1;
+            var hasSukoon = p1.indexOf('\u0652') !== -1 || p1.indexOf('\u06DF') !== -1;
+            var hasTanween = /[\u064B\u064C\u064D]/.test(p1);
+
+            if (maddLetterStr.indexOf('\u0670') !== -1 || maddLetterStr.indexOf('\u0622') !== -1) return true;
+            if (hasTanween || hasSukoon) return false;
+
+            if (maddLetterStr.indexOf('\u0627') !== -1) {
+                return !(hasDamma || hasKasra);
+            } else if (maddLetterStr.indexOf('\u0648') !== -1) {
+                return !(hasFatha || hasKasra);
+            } else if (maddLetterStr.indexOf('\u064A') !== -1 || maddLetterStr.indexOf('\u0649') !== -1) {
+                return !(hasFatha || hasDamma);
+            }
+            return false;
+        }
+
+        function processSingleEntry(entry) {
+            if (!entry || entry.dataset.tajweedDone === '1') return;
+            entry.dataset.tajweedDone = '1';
+
+            var htmlContent = entry.innerHTML;
+
+            // Auto-Color sacred names
+            htmlContent = htmlContent.replace(unwrapAllahRegex, '$1');
+            htmlContent = htmlContent.replace(unwrapProphetRegex, '$1');
+            htmlContent = htmlContent.replace(allahRegex, '<span class="allah-name">$1</span>');
+            htmlContent = htmlContent.replace(prophetRegex, '<span class="prophet-name">$1</span>');
+
+            entry.innerHTML = htmlContent;
+
+            // Protect excluded nodes
+            var protectedItems = [];
+            var protectNodes = [];
+            var nodeList = entry.querySelectorAll('.no-tajweed, .repeat-badge, .dua-note, .wasl-wrapper');
+
+            for (var n = 0; n < nodeList.length; n++) { protectNodes.push(nodeList[n]); }
+            if (protectNodes.length > 1) {
+                protectNodes.sort(function(a, b) { return (b.compareDocumentPosition(a) & 16) ? -1 : 1; });
             }
 
-            duaEntries.forEach(function(entry) {
-                var htmlContent = entry.innerHTML;
+            for (var pIdx = 0; pIdx < protectNodes.length; pIdx++) {
+                var el = protectNodes[pIdx];
+                if (!el.parentNode) continue;
+                var marker = '###PROTECT_' + protectedItems.length + '###';
+                protectedItems.push(el.outerHTML);
+                el.parentNode.replaceChild(document.createTextNode(marker), el);
+            }
 
-                // Auto-Color
-                htmlContent = htmlContent.replace(/<span[^>]*class="allah-name"[^>]*>([\s\S]*?)<\/span>/g, '$1');
-                htmlContent = htmlContent.replace(/<span[^>]*class="prophet-name"[^>]*>([\s\S]*?)<\/span>/g, '$1');
-                var allahRegex = /(اَللّٰهُمَّ|اللّٰهُمَّ|اَللَّهُمَّ|اللَّهُمَّ|لِلّٰهِ|لِلَّهِ|اَللّٰه[َُِ]?|اللّٰه[َُِ]?|اَللَّه[َُِ]?|اللَّه[َُِ]?)/g;
-                htmlContent = htmlContent.replace(allahRegex, '<span class="allah-name">$1</span>');
-                var prophetRegex = /(مُحَمَّد[ًٌٍَُِ]?ا?)/g;
-                htmlContent = htmlContent.replace(prophetRegex, '<span class="prophet-name">$1</span>');
+            htmlContent = entry.innerHTML;
 
-                entry.innerHTML = htmlContent;
-
-                // PROTECT
-                var protectedItems = [];
-                var protectNodes = [];
-                var nodeList = entry.querySelectorAll('.no-tajweed, .repeat-badge, .dua-note, .wasl-wrapper');
-                
-                for (var n = 0; n < nodeList.length; n++) { protectNodes.push(nodeList[n]); }
-                protectNodes.sort(function(a, b) { return (b.compareDocumentPosition(a) & 16) ? -1 : 1; });
-
-                protectNodes.forEach(function(el) {
-                    if (!el.parentNode) return; 
-                    var marker = '###PROTECT_' + protectedItems.length + '###';
-                    protectedItems.push(el.outerHTML);
-                    var textNode = document.createTextNode(marker);
-                    el.parentNode.replaceChild(textNode, el);
-                });
-
-                htmlContent = entry.innerHTML;
-
-                // TAJWEED RULES
-                var tanweenNoonRegex = "([\\u0621-\\u064A](?:[\\u064B-\\u065F\\u0670]*[\\u0627\\u0649])?[\\u064B-\\u065F\\u0670]*(?:[\\u064B\\u064C\\u064D]|\\u0646\\u0652?)[\\u0627\\u0649]?)";
-
-                var idghamGhunnahRegex = new RegExp(tanweenNoonRegex + sepPlus + "([ينمو])([\\u064B-\\u065F\\u0670]*)", "g");
+            // Fast path: if no unprotected Arabic letters remain (e.g. pure .no-tajweed Urdu entries), skip heavy Tajweed regexes!
+            var unprotectedText = htmlContent.replace(stripTagsProtectRegex, '');
+            if (arabicCheckRegex.test(unprotectedText)) {
                 htmlContent = htmlContent.replace(idghamGhunnahRegex, function(match, p1, sep, p2, p3) {
                     var finalHarakaat = p3; if (finalHarakaat.indexOf('\u0651') === -1) { finalHarakaat = '\u0651' + finalHarakaat; }
                     return '<span class="tajweed-idgham tajweed-ghunnah">' + p1 + '</span>' + sep + '<span class="tajweed-idgham tajweed-ghunnah">' + p2 + finalHarakaat + '</span>';
                 });
 
-                var idghamNoGhunnahRegex = new RegExp(tanweenNoonRegex + sepPlus + "([لر])([\\u064B-\\u065F\\u0670]*)", "g");
                 htmlContent = htmlContent.replace(idghamNoGhunnahRegex, function(match, p1, sep, p2, p3) {
                     var finalHarakaat = p3; if (finalHarakaat.indexOf('\u0651') === -1) { finalHarakaat = '\u0651' + finalHarakaat; }
                     return '<span class="tajweed-idgham tajweed-idgham-no-ghunnah">' + p1 + '</span>' + sep + '<span class="tajweed-idgham tajweed-idgham-no-ghunnah">' + p2 + finalHarakaat + '</span>';
                 });
 
-                var meemRegex = new RegExp("(\\u0645\\u0652?)" + sepPlus + "(\\u0645)([\\u064B-\\u065F\\u0670]*)", "g");
                 htmlContent = htmlContent.replace(meemRegex, function(match, p1, sep, p2, p3) {
                     var finalHarakaat = p3; if (finalHarakaat.indexOf('\u0651') === -1) { finalHarakaat = '\u0651' + finalHarakaat; }
                     return '<span class="tajweed-idgham tajweed-ghunnah">' + p1 + '</span>' + sep + '<span class="tajweed-idgham tajweed-ghunnah">' + p2 + finalHarakaat + '</span>';
                 });
 
-                var ikhfaShafawiRegex = new RegExp("(\\u0645\\u0652?)" + sepStar + "(ب)([\\u064B-\\u065F\\u0670]*)", "g");
                 htmlContent = htmlContent.replace(ikhfaShafawiRegex, function(match, p1, sep, p2, p3) {
                     return (sep === "") ? '<span class="tajweed-ikhfa tajweed-ghunnah">' + p1 + p2 + p3 + '</span>' : '<span class="tajweed-ikhfa tajweed-ghunnah">' + p1 + '</span>' + sep + '<span class="tajweed-ikhfa tajweed-ghunnah">' + p2 + p3 + '</span>';
                 });
 
-                var ikhfaRegex = new RegExp(tanweenNoonRegex + sepStar + "([تثجدذزسشصضطظفقكک])([\\u064B-\\u065F\\u0670]*)", "g");
                 htmlContent = htmlContent.replace(ikhfaRegex, function(match, p1, sep, p2, p3) {
                     return (sep === "") ? '<span class="tajweed-ikhfa tajweed-ghunnah">' + p1 + p2 + p3 + '</span>' : '<span class="tajweed-ikhfa tajweed-ghunnah">' + p1 + '</span>' + sep + '<span class="tajweed-ikhfa tajweed-ghunnah">' + p2 + p3 + '</span>';
                 });
 
-                var iqlaabRegex = new RegExp(tanweenNoonRegex + sepStar + "(ب)([\\u064B-\\u065F\\u0670]*)", "g");
                 htmlContent = htmlContent.replace(iqlaabRegex, function(match, p1, sep, p2, p3) {
-                    var cleanP1 = p1.replace('\u06E2', ''); 
+                    var cleanP1 = p1.replace('\u06E2', '');
                     if (sep === "") {
-                        var coloredMeem = '\u200D<span class="tajweed-iqlab-meem" style="display: inline-block; width: 0; line-height: 0; position: relative; top: -0.4em; font-weight: bold; overflow: visible; z-index: 10;">\u200D\u06E2</span>\u200D'; 
+                        var coloredMeem = '\u200D<span class="tajweed-iqlab-meem" style="display: inline-block; width: 0; line-height: 0; position: relative; top: -0.4em; font-weight: bold; overflow: visible; z-index: 10;">\u200D\u06E2</span>\u200D';
                         return '<span class="tajweed-iqlab tajweed-ghunnah">' + cleanP1 + coloredMeem + p2 + p3 + '</span>';
                     } else {
-                        var coloredMeem = '<span class="tajweed-iqlab-meem" style="display: inline-block; width: 0; line-height: 0; position: relative; top: -0.4em; font-weight: bold; overflow: visible; z-index: 10;">\u200C\u06E2</span>'; 
+                        var coloredMeem = '<span class="tajweed-iqlab-meem" style="display: inline-block; width: 0; line-height: 0; position: relative; top: -0.4em; font-weight: bold; overflow: visible; z-index: 10;">\u200C\u06E2</span>';
                         return '<span class="tajweed-iqlab tajweed-ghunnah">' + cleanP1 + coloredMeem + '</span>' + sep + '<span class="tajweed-iqlab tajweed-ghunnah">' + p2 + p3 + '</span>';
                     }
                 });
 
-                var maddCandidateRegex = /([\u0621-\u064A][\u064B-\u0652]*)((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)((?:[\u0627\u0648\u064A\u0649\u0622]\u0652?|\u0670[اى]?))([اى]?)((?:[\u0653\u06E4]?))((?:###PROTECT_\d+###|<[^>]+>|\s|\*|۝|[\u200C\u200D])*)((?:[ءأإئؤآ\u0674][\u064B-\u065F\u0670]*)|(?:ا[\u064B-\u065F\u0670]+))/g;
                 htmlContent = htmlContent.replace(maddCandidateRegex, function(match, p1, tags1, maddChar, zaaedChar, existingMadd, sep, nextWord) {
                     var isHamzatulWasl = false;
                     if (maddChar.indexOf('\u0627') !== -1) {
                         var p1Clean = p1.replace(/[\u064B-\u065F\u0670\u0652\u06DF\u0653\u06E4]/g, '');
-                        var nextCharClean = nextWord.replace(/[\u064B-\u065F\u0670\u0651\u0652\u06DF\u0653\u06E4]/g, '');
                         var isBaKasra = (p1Clean === 'ب' && p1.indexOf('\u0650') !== -1);
                         var isLamKasra = (p1Clean === 'ل' && p1.indexOf('\u0650') !== -1);
                         if ((p1Clean === 'و' || p1Clean === 'ف' || p1Clean === 'ك' || isBaKasra || isLamKasra || p1Clean === 'أ' || p1Clean === 'لّ') && nextWord.indexOf('\u0651') !== -1) { isHamzatulWasl = true; }
@@ -2011,12 +1966,10 @@
                     return match;
                 });
 
-                var maddLazimRegex = /([\u0621-\u064A][\u064B-\u0652]*)((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)((?:[\u0627\u0648\u064A\u0649\u0622]\u0652?|\u0670[اى]?))([اى]?)((?:[\u0653\u06E4]?))((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)([\u0621-\u064A][\u064B-\u065F\u0670]*\u0651[\u064B-\u065F\u0670]*)/g;
                 htmlContent = htmlContent.replace(maddLazimRegex, function(match, p1, tags1, maddChar, zaaedChar, existingMadd, sep, nextWord) {
                     var isHamzatulWasl = false;
                     if (maddChar.indexOf('\u0627') !== -1) {
                         var p1Clean = p1.replace(/[\u064B-\u065F\u0670\u0652\u06DF\u0653\u06E4]/g, '');
-                        var nextCharClean = nextWord.replace(/[\u064B-\u065F\u0670\u0651\u0652\u06DF\u0653\u06E4]/g, '');
                         var isBaKasra = (p1Clean === 'ب' && p1.indexOf('\u0650') !== -1);
                         var isLamKasra = (p1Clean === 'ل' && p1.indexOf('\u0650') !== -1);
                         if ((p1Clean === 'و' || p1Clean === 'ف' || p1Clean === 'ك' || isBaKasra || isLamKasra || p1Clean === 'أ' || p1Clean === 'لّ') && nextWord.indexOf('\u0651') !== -1) { isHamzatulWasl = true; }
@@ -2033,96 +1986,151 @@
                     return match;
                 });
 
-                var silaTawilahRegex = /([\u0621-\u064A][\u064B-\u0652]*)((?:###PROTECT_\d+###|<[^>]+>|[\u200C\u200D])*)(\u0647[\u0656\u0657\u06E5\u06E6]+[\u0653\u06E4]?)((?:###PROTECT_\d+###|<[^>]+>|\s|\*|۝|[\u200C\u200D])+)((?:[ءأإئؤآ\u0674][\u064B-\u065F\u0670]*)|(?:ا[\u064B-\u065F\u0670]+))/g;
                 htmlContent = htmlContent.replace(silaTawilahRegex, function(match, p1, tags1, p2, p3, p4) {
                     var finalP2 = (p2.indexOf('\u0653') !== -1 || p2.indexOf('\u06E4') !== -1) ? p2 : p2 + '\u0653';
-                    if (tags1.indexOf('<') === -1) { return '<span class="tajweed-madd">' + p1 + tags1 + finalP2 + '</span>' + p3 + '<span class="tajweed-madd">' + p4 + '</span>'; } 
+                    if (tags1.indexOf('<') === -1) { return '<span class="tajweed-madd">' + p1 + tags1 + finalP2 + '</span>' + p3 + '<span class="tajweed-madd">' + p4 + '</span>'; }
                     else { return p1 + tags1 + '<span class="tajweed-madd">' + finalP2 + '</span>' + p3 + '<span class="tajweed-madd">' + p4 + '</span>'; }
                 });
 
-                htmlContent = htmlContent.replace(/(\u0622[\u064B-\u065F\u0670]*)/g, '<span class="tajweed-madd">$1</span>'); 
-                htmlContent = htmlContent.replace(/([\u0621-\u064A][\u064B-\u065F\u0670]*[\u0653\u06E4]+)/g, '<span class="tajweed-madd">$1</span>');
-                htmlContent = htmlContent.replace(/(\u0647[\u0656\u0657\u06E5\u06E6]+[\u0653\u06E4]?)/g, '<span class="tajweed-madd">$1</span>');
-                htmlContent = htmlContent.replace(/(\u0645[\u064B-\u065F\u0670]*\u0651[\u064B-\u065F\u0670]*)/g, '<span class="tajweed-ghunnah">$1</span>');
-                htmlContent = htmlContent.replace(/(\u0646[\u064B-\u065F\u0670]*\u0651[\u064B-\u065F\u0670]*)/g, '<span class="tajweed-ghunnah">$1</span>');
+                htmlContent = htmlContent.replace(maddAlifRegex, '<span class="tajweed-madd">$1</span>');
+                htmlContent = htmlContent.replace(maddMarkRegex, '<span class="tajweed-madd">$1</span>');
+                htmlContent = htmlContent.replace(maddSilaRegex, '<span class="tajweed-madd">$1</span>');
+                htmlContent = htmlContent.replace(ghunnahMeemRegex, '<span class="tajweed-ghunnah">$1</span>');
+                htmlContent = htmlContent.replace(ghunnahNoonRegex, '<span class="tajweed-ghunnah">$1</span>');
 
-                var raRegex = /(?:([\u0621-\u064A])((?:<[^>]+>)*)([\u064B-\u065F\u0670]*))?((?:<[^>]+>|[\u200C\u200D]|\s)*)(\u0631)((?:<[^>]+>)*)([\u064B-\u065F\u0670]*)/g;
                 htmlContent = htmlContent.replace(raRegex, function(match, p1, t1, h1, sep, ra, t2, h2) {
                     p1 = p1 || ''; t1 = t1 || ''; h1 = h1 || ''; sep = sep || ''; t2 = t2 || ''; h2 = h2 || '';
                     var isPur = false; var isBaareek = false;
                     var hasFathaDamma = /[\u064E\u064F\u064B\u064C]/.test(h2);
                     var hasKasra = /[\u0650\u064D]/.test(h2);
                     var isSakin = /[\u0652\u06DF]/.test(h2) || (!hasFathaDamma && !hasKasra && h2 !== "");
-                    
+
                     if (hasFathaDamma) { isPur = true; } else if (hasKasra) { isBaareek = true; } else if (isSakin || h2 === "") {
                         if (/[\u064E\u064F\u064B\u064C]/.test(h1)) { isPur = true; } else if (/[\u0650\u064D]/.test(h1)) { isBaareek = true; } else { isPur = true; }
                     }
-                    if (isPur) { return p1 + t1 + h1 + sep + '<span class="tajweed-ra-pur" style="font-weight: bold;">' + ra + t2 + h2 + '</span>'; } 
+                    if (isPur) { return p1 + t1 + h1 + sep + '<span class="tajweed-ra-pur" style="font-weight: bold;">' + ra + t2 + h2 + '</span>'; }
                     else if (isBaareek) { return p1 + t1 + h1 + sep + '<span class="tajweed-ra-baareek" style="font-weight: bold;">' + ra + t2 + h2 + '</span>'; }
                     return match;
                 });
 
-                var mustaliyahRegex = /([خصضغطظق])((?:<[^>]+>)*)([\u064B-\u065F\u0670]*)/g;
                 htmlContent = htmlContent.replace(mustaliyahRegex, function(match, letter, tags, harakaat) {
                     return '<span class="tajweed-mustaliyah" style="font-weight: bold;">' + letter + tags + harakaat + '</span>';
                 });
 
-                var qalqalahSukoonRegex = /([قطبجد])((?:<[^>]+>|[\u200C\u200D])*)([\u0652\u06DF])/g;
                 htmlContent = htmlContent.replace(qalqalahSukoonRegex, function(match, letter, tags, sukoon) {
                     return '<span class="tajweed-qalqalah" style="font-weight: bold;">' + letter + tags + sukoon + '</span>';
                 });
 
-                var qalqalahWaqfRegex = /([قطبجد])((?:<[^>]+>|[\u200C\u200D])*)([\u064B-\u065F\u0670]*)((?:<[^>]+>|\s|\*)*(?:۝|❀|<span[^>]*class="waqf-mark"[^>]*>))/g;
                 htmlContent = htmlContent.replace(qalqalahWaqfRegex, function(match, letter, tags, harakaat, waqfMarker) {
                     return '<span class="tajweed-qalqalah" style="font-weight: bold;">' + letter + tags + harakaat + '</span>' + waqfMarker;
                 });
+            }
 
-                // UNMASK
-                for (var i = protectedItems.length - 1; i >= 0; i--) {
-                    htmlContent = htmlContent.replace('###PROTECT_' + i + '###', protectedItems[i]);
-                }
-                
-                // IQLAAB & NOON-E-QUTNI WORD LOCK
+            // UNMASK
+            for (var i = protectedItems.length - 1; i >= 0; i--) {
+                htmlContent = htmlContent.replace('###PROTECT_' + i + '###', protectedItems[i]);
+            }
+
+            // IQLAAB & NOON-E-QUTNI WORD LOCK (only run split when actually needed!)
+            if (htmlContent.indexOf('tajweed-iqlab-meem') !== -1 || htmlContent.indexOf('class="wasl-wrapper"') !== -1) {
                 var tokens = htmlContent.split(/((?![^<]*>)\s+)/);
-                for (var i = 0; i < tokens.length; i++) {
-                    if (tokens[i].indexOf('tajweed-iqlab-meem') !== -1 || tokens[i].indexOf('class="wasl-wrapper"') !== -1) {
-                        var startIdx = i; var endIdx = i;
-                        var targetStr = tokens[i].indexOf('tajweed-iqlab-meem') !== -1 ? 'tajweed-iqlab-meem' : 'class="wasl-wrapper"';
-                        var targetIndex = tokens[i].indexOf(targetStr);
-                        
-                        var textBefore = tokens[i].substring(0, targetIndex).replace(/<[^>]+>/g, '');
-                        if (!textBefore.match(/[\u0621-\u064A]/) && i >= 2) { startIdx = i - 2; }
-                        
-                        var textAfter = tokens[i].substring(targetIndex).replace(/<[^>]+>/g, '');
-                        if (!textAfter.match(/[\u0621-\u064A]/) && i + 2 < tokens.length) { endIdx = i + 2; }
-                        
+                for (var t = 0; t < tokens.length; t++) {
+                    if (tokens[t].indexOf('tajweed-iqlab-meem') !== -1 || tokens[t].indexOf('class="wasl-wrapper"') !== -1) {
+                        var startIdx = t; var endIdx = t;
+                        var targetStr = tokens[t].indexOf('tajweed-iqlab-meem') !== -1 ? 'tajweed-iqlab-meem' : 'class="wasl-wrapper"';
+                        var targetIndex = tokens[t].indexOf(targetStr);
+
+                        var textBefore = tokens[t].substring(0, targetIndex).replace(/<[^>]+>/g, '');
+                        if (!arabicCheckRegex.test(textBefore) && t >= 2) { startIdx = t - 2; }
+
+                        var textAfter = tokens[t].substring(targetIndex).replace(/<[^>]+>/g, '');
+                        if (!arabicCheckRegex.test(textAfter) && t + 2 < tokens.length) { endIdx = t + 2; }
+
                         var combined = "";
                         for (var j = startIdx; j <= endIdx; j++) {
                             if (tokens[j]) {
                                 var safePart = tokens[j].replace(/(?![^<]*>)\s/g, '\u00A0');
                                 combined += safePart;
-                                tokens[j] = ""; 
+                                tokens[j] = "";
                             }
                         }
-                        tokens[i] = '<span class="word-lock tajweed-force-fix" style="white-space: nowrap !important; display: inline-block !important;">' + combined + '</span>';
+                        tokens[t] = '<span class="word-lock tajweed-force-fix" style="white-space: nowrap !important; display: inline-block !important;">' + combined + '</span>';
                     }
                 }
                 htmlContent = tokens.join('');
-                entry.innerHTML = htmlContent;
+            }
+
+            entry.innerHTML = htmlContent;
+        }
+
+        function applyTajweedToContainer(rootNode, immediate) {
+            var scope = rootNode || document;
+            var pending = [];
+            scope.querySelectorAll('.dua-entry').forEach(function(el) {
+                if (el.dataset.tajweedDone === '1') return;
+                if (el.classList.contains('repeat-heading') || el.classList.contains('fourteen-times-title') || el.classList.contains('asma-nabi-repeat-heading')) return;
+                pending.push(el);
             });
 
-            console.log("Bulletproof Tajweed Grammatical Rules Applied Perfectly!");
+            if (!pending.length) return;
+
+            if (immediate || pending.length <= 6) {
+                for (var i = 0; i < pending.length; i++) {
+                    processSingleEntry(pending[i]);
+                }
+                return;
+            }
+
+            // Process first 5 visible entries immediately, then chunk remaining on animation frames so UI never freezes
+            var idx = 0;
+            var firstBatch = Math.min(5, pending.length);
+            for (; idx < firstBatch; idx++) {
+                processSingleEntry(pending[idx]);
+            }
+
+            function processNextChunk() {
+                var end = Math.min(idx + 5, pending.length);
+                for (; idx < end; idx++) {
+                    processSingleEntry(pending[idx]);
+                }
+                if (idx < pending.length) {
+                    requestAnimationFrame(processNextChunk);
+                }
+            }
+            requestAnimationFrame(processNextChunk);
         }
-        if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", applyTajweed); } 
-        else { applyTajweed(); }
+
+        window.applyTajweedToContainer = applyTajweedToContainer;
+
+        function applyTajweedOnBoot() {
+            var sections = document.querySelectorAll('.hizb-section, .index-section, .shijra-section');
+            if (sections.length > 0) {
+                // Only process currently active section (hidden sections will be processed lazily when opened!)
+                var activeSec = document.querySelector('.hizb-section.active, .index-section.active, .shijra-section.active');
+                if (activeSec) {
+                    applyTajweedToContainer(activeSec, false);
+                }
+                // Also process any standalone .dua-entry outside section wrappers
+                document.querySelectorAll('.dua-entry').forEach(function(el) {
+                    if (el.dataset.tajweedDone === '1') return;
+                    if (!el.closest('.hizb-section, .index-section, .shijra-section')) {
+                        processSingleEntry(el);
+                    }
+                });
+            } else {
+                applyTajweedToContainer(document, false);
+            }
+        }
+
+        if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", applyTajweedOnBoot); }
+        else { applyTajweedOnBoot(); }
     } catch (error) { console.error("Tajweed Execution Error: ", error); }
 })();
 
 // ==========================================
-// PART 6: UI & DYNAMIC PRINT PAGINATION
+// PART 6: UI & DYNAMIC PRINT PAGINATION (PRINT-ONLY, ZERO SCREEN LAG)
 // ==========================================
 (function () {
-  const toggleBtn = document.getElementById('darkModeToggleNav');
   const body = document.body;
 
   if (localStorage.getItem('theme') === 'dark') {
@@ -2130,10 +2138,15 @@
   }
 
   function applySmartPrintPagination() {
+      // Ensure all sections have Tajweed applied before printing
+      if (typeof window.applyTajweedToContainer === 'function') {
+          window.applyTajweedToContainer(document, true);
+      }
+
       document.querySelectorAll('.smart-page-break').forEach(function(el) { el.remove(); });
       var pageHeight = 980;
-      var thresholdSection = pageHeight * 0.50; 
-      var thresholdDurood = pageHeight * 0.85;  
+      var thresholdSection = pageHeight * 0.50;
+      var thresholdDurood = pageHeight * 0.85;
 
       function getDocOffsetTop(elem) {
           var box = elem.getBoundingClientRect();
@@ -2171,7 +2184,7 @@
           var elHeight = el.offsetHeight;
           var shouldBreak = false;
           var isSection = el.classList.contains('section-group') || el.classList.contains('section-heading');
-          
+
           if (isSection && posOnPage > thresholdSection && posOnPage < (pageHeight - 20)) { shouldBreak = true; }
           var isDuroodSegment = el.classList.contains('dua-entry') && !isSection;
           if (isDuroodSegment && posOnPage > thresholdDurood && (posOnPage + elHeight) > pageHeight) { shouldBreak = true; }
@@ -2184,8 +2197,9 @@
           }
       });
   }
+
+  // Only run heavy print pagination when actually printing (removed slow 800ms window.load reflow)
   window.addEventListener('beforeprint', applySmartPrintPagination);
-  window.addEventListener('load', function() { setTimeout(applySmartPrintPagination, 800); });
 })();
 
 // ==========================================
@@ -2212,7 +2226,7 @@
                 oscillator.frequency.value = 800;
                 oscillator.connect(audioCtx.destination);
                 oscillator.start(startTime + i * 0.5);
-                oscillator.stop(startTime + i * 0.5 + 0.3);
+                oscillator.stop(startTime + i * 0.5 + 0.3); // 0.3s beep, 0.2s silence
             }
         }
 
@@ -2277,48 +2291,59 @@
 })();
 
 // ==========================================
-// PART 8: HASH NAVIGATION (UNIVERSAL SECTION TOGGLE)
+// PART 8: FAST HASH NAVIGATION (INSTANT SECTION TOGGLE + LAZY TAJWEED)
 // ==========================================
 (function() {
     function showActiveSection() {
         var hash = window.location.hash;
-        if (hash.startsWith('#t-')) return; 
+        if (hash.startsWith('#t-')) return;
 
         var sections = document.querySelectorAll('.hizb-section, .index-section, .shijra-section');
-        sections.forEach(function(section) {
-            section.classList.remove('active');
-        });
-        
-        var targetSection = null;
+        if (!sections.length) return;
+
+        var activeSection = null;
         if (hash && !hash.startsWith('#t-')) {
-            targetSection = document.querySelector(hash);
+            try {
+                activeSection = document.querySelector(hash);
+            } catch (err) {}
         }
-        
-        if (targetSection) {
-            targetSection.classList.add('active');
-        } else {
-            var defaultMenu = document.getElementById('main-menu') || 
-                              document.getElementById('index-menu') || 
-                              document.getElementById('default-view');
-            
-            if (defaultMenu) {
-                defaultMenu.classList.add('active');
-            } else if (sections.length > 0) {
-                sections[0].classList.add('active');
+
+        if (!activeSection) {
+            activeSection = document.getElementById('main-menu') ||
+                            document.getElementById('index-menu') ||
+                            document.getElementById('default-view') ||
+                            sections[0];
+        }
+
+        sections.forEach(function(section) {
+            if (section === activeSection) {
+                section.classList.add('active');
+            } else if (section.classList.contains('active')) {
+                section.classList.remove('active');
             }
-        }
+        });
+
         window.scrollTo(0, 0);
+
+        // Lazily apply Tajweed only to the newly opened section (after paint for instant switch!)
+        if (activeSection && typeof window.applyTajweedToContainer === 'function') {
+            requestAnimationFrame(function() {
+                window.applyTajweedToContainer(activeSection, false);
+            });
+        }
     }
-    
+
+    window.showActiveSection = showActiveSection;
+
     document.addEventListener('click', function (e) {
         var anchor = e.target.closest('a');
         if (!anchor) return;
-        
+
         var href = anchor.getAttribute('href');
         if (!href || href === '#' || href.startsWith('javascript:')) return;
 
-        if (anchor.id === 'openTasbeehBtn' || anchor.id === 'openBrightnessBtn' || anchor.id === 'openSettingsBtn' || anchor.id === 'langToggleBtn') return;
-        
+        if (anchor.id === 'openTasbeehBtn' || anchor.id === 'openPrayerTimesBtn' || anchor.id === 'openSettingsBtn' || anchor.id === 'langToggleBtn') return;
+
         if (window.tasbeehSessionActive) {
             e.preventDefault();
             return;
@@ -2326,28 +2351,34 @@
 
         let currentPath = window.location.pathname.split('/').pop().toLowerCase();
         if (currentPath === '' || currentPath === '/') currentPath = 'index.html';
-        
+
         let linkPathFull = href.split('#')[0].toLowerCase();
         let linkPath = linkPathFull.split('/').pop();
-        
+
         let isSamePage = (linkPath === '' || linkPath === currentPath);
         let hasHash = href.includes('#') && href.split('#')[1] !== '';
 
         if (isSamePage && hasHash) {
-            e.preventDefault(); 
+            e.preventDefault();
             var targetId = '#' + href.split('#')[1];
-            history.pushState(null, null, targetId); 
-            showActiveSection(); 
+            if (window.location.hash !== targetId) {
+                history.pushState(null, null, targetId);
+            }
+            showActiveSection();
         }
     });
-    
-    window.addEventListener('hashchange', function(e) {
+
+    window.addEventListener('hashchange', function() {
         if (!window.location.hash.startsWith('#t-')) {
             showActiveSection();
         }
     });
-    
-    window.addEventListener('DOMContentLoaded', showActiveSection);
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', showActiveSection);
+    } else {
+        showActiveSection();
+    }
 })();
 
 // ==========================================
@@ -2357,11 +2388,13 @@
     function initLangToggle() {
         const navbarRight = document.querySelector('.nav-right');
         
+        // Bulletproof check for CX Explorer Android
+        // Check if it's the Tajweed Explanation page via URL OR if language elements exist
         let currentUrl = window.location.href.toLowerCase();
         let isTajweedPage = currentUrl.indexOf('tajweed_coding_explanation') !== -1;
         let hasLangElements = document.querySelectorAll('.lang-ur, .lang-en').length > 0;
         
-        if (!isTajweedPage && !hasLangElements) return;
+        if (!isTajweedPage && !hasLangElements) return; // Sirf Explanation page par chalay ga
         if (!navbarRight || document.getElementById('langToggleBtn')) return;
 
         const langBtn = document.createElement('button');
@@ -2407,12 +2440,32 @@
         initLangToggle();
     }
 })();
-
 // ==========================================
-// PART 10: DISPLAY SETTINGS SYSTEM (TAJWEED TOGGLE, ADAPTIVE THEME, MATERIAL PALETTE, FONTS, SIZE, KEEP AWAKE)
+// PART 10: LAZY DISPLAY SETTINGS SYSTEM (ON-DEMAND FONTS, BRIGHTNESS, TAJWEED TOGGLE, ADAPTIVE THEME, PALETTE, HIJRI CORRECTION)
 // ==========================================
 (function() {
     let wakeLockSentinel = null;
+    let settingsModalInitialized = false;
+    const loadedFonts = { "'Amiri', serif": true };
+
+    const FONT_STYLESHEETS = {
+        "'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif": "https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;700&display=swap",
+        "'Scheherazade New', serif": "https://fonts.googleapis.com/css2?family=Scheherazade+New:wght@400;700&display=swap",
+        "'Noto Naskh Arabic', serif": "https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@500;700&display=swap",
+        "'Lateef', serif": "https://fonts.googleapis.com/css2?family=Lateef:wght@400;700&display=swap",
+        "'Gulzar', serif": "https://fonts.googleapis.com/css2?family=Gulzar&display=swap"
+    };
+
+    function ensureFontLoaded(fontFamily) {
+        if (!fontFamily || loadedFonts[fontFamily]) return;
+        const url = FONT_STYLESHEETS[fontFamily];
+        if (!url) return;
+        loadedFonts[fontFamily] = true;
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = url;
+        document.head.appendChild(link);
+    }
 
     const COLOR_PALETTES = [
         { primary: '#F44336', shades: ['#FFEBEE','#FFCDD2','#EF9A9A','#E57373','#EF5350','#F44336','#E53935','#D32F2F','#C62828','#B71C1C'] },
@@ -2470,7 +2523,6 @@
         return 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
     }
 
-    // Selected background color ke mutabiq borders, nav cards aur fonts ka harmonious high-contrast theme banayein
     function computeAdaptiveTheme(bgHex) {
         const { r, g, b } = hexToRgb(bgHex);
         const { h, s, l } = rgbToHsl(r, g, b);
@@ -2536,9 +2588,7 @@
                 await wakeLockSentinel.release();
                 wakeLockSentinel = null;
             }
-        } catch (err) {
-            console.log('WakeLock unavailable:', err);
-        }
+        } catch (err) {}
     }
 
     document.addEventListener('visibilitychange', () => {
@@ -2547,9 +2597,33 @@
         }
     });
 
+    function applyBrightness(val) {
+        const bValue = parseFloat(val);
+        let brightnessOverlay = document.getElementById('brightnessOverlay');
+        if (isNaN(bValue) || bValue === 1) {
+            if (brightnessOverlay) brightnessOverlay.style.backgroundColor = 'rgba(0,0,0,0)';
+            return;
+        }
+        if (!brightnessOverlay) {
+            brightnessOverlay = document.createElement('div');
+            brightnessOverlay.id = 'brightnessOverlay';
+            brightnessOverlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999999; transition: background-color 0.1s;';
+            document.body.appendChild(brightnessOverlay);
+        }
+        if (bValue < 1) {
+            brightnessOverlay.style.backgroundColor = `rgba(0, 0, 0, ${1 - bValue})`;
+        } else {
+            brightnessOverlay.style.backgroundColor = `rgba(255, 255, 255, ${(bValue - 1) * 0.4})`;
+        }
+    }
+
     function applySavedDisplaySettings() {
         const root = document.documentElement;
         const body = document.body;
+        if (!body) return;
+
+        const savedBrightness = localStorage.getItem('app_brightness') || '1';
+        applyBrightness(savedBrightness);
 
         const savedBg = localStorage.getItem('app_custom_bg');
         const savedText = localStorage.getItem('app_custom_text');
@@ -2558,14 +2632,12 @@
         const savedAppFont = localStorage.getItem('app_ui_font');
         const tajweedEnabled = localStorage.getItem('app_tajweed_colors') !== 'false';
 
-        // Tajweed Color Coding ON/OFF
         if (tajweedEnabled) {
             body.classList.remove('tajweed-colors-off');
         } else {
             body.classList.add('tajweed-colors-off');
         }
 
-        // Custom Background + Adaptive Borders, Nav Cards & Fonts
         const autoVars = [
             '--user-bg-color', '--auto-text', '--auto-card-bg', '--auto-card-text',
             '--auto-card-subtext', '--auto-card-hover-bg', '--auto-card-hover-text',
@@ -2594,7 +2666,6 @@
             body.classList.remove('custom-bg-active', 'custom-bg-dark');
         }
 
-        // Manual Custom Text Color
         if (savedText) {
             root.style.setProperty('--user-text-color', savedText);
             body.classList.add('custom-text-active');
@@ -2603,7 +2674,6 @@
             body.classList.remove('custom-text-active');
         }
 
-        // Font Size
         if (savedSize) {
             root.style.setProperty('--user-font-size', savedSize + 'px');
             body.classList.add('custom-size-active');
@@ -2612,8 +2682,8 @@
             body.classList.remove('custom-size-active');
         }
 
-        // Content Font
         if (savedContentFont) {
+            ensureFontLoaded(savedContentFont);
             root.style.setProperty('--user-content-font', savedContentFont);
             body.classList.add('custom-content-font-active');
         } else {
@@ -2621,8 +2691,8 @@
             body.classList.remove('custom-content-font-active');
         }
 
-        // App UI Font
         if (savedAppFont) {
+            ensureFontLoaded(savedAppFont);
             root.style.setProperty('--user-app-font', savedAppFont);
             body.classList.add('custom-app-font-active');
         } else {
@@ -2631,14 +2701,17 @@
         }
     }
 
-    function initSettingsModal() {
+    window.clearCustomColorsForDarkToggle = function() {
+        localStorage.removeItem('app_custom_bg');
+        localStorage.removeItem('app_custom_text');
         applySavedDisplaySettings();
+    };
 
-        if (localStorage.getItem('app_keep_awake') === 'true') {
-            updateWakeLock(true);
-        }
+    let syncSettingsUIRef = null;
 
-        if (document.getElementById('settingsModal')) return;
+    function buildSettingsModalOnce() {
+        if (settingsModalInitialized && document.getElementById('settingsModal')) return;
+        settingsModalInitialized = true;
 
         const fontOptionsHTML = `
             <option value="'Amiri', serif">Amiri (Default)</option>
@@ -2658,7 +2731,6 @@
                     <button type="button" id="closeSettingsBtn" class="settings-close-btn" title="Close">&times;</button>
                 </div>
                 <div class="settings-body">
-                    <!-- Toggles: Keep Awake & Tajweed Colors -->
                     <div class="settings-toggle-stack">
                         <div class="settings-awake-row">
                             <label class="awake-toggle">
@@ -2678,7 +2750,6 @@
 
                     <hr class="settings-divider">
 
-                    <!-- Background & Text Color Pickers -->
                     <div class="settings-colors-row">
                         <div class="color-picker-item" id="bgColorRow">
                             <span class="color-picker-label">Change<br>Background</span>
@@ -2694,7 +2765,6 @@
 
                     <hr class="settings-divider">
 
-                    <!-- Live Preview -->
                     <div class="settings-section-title">
                         <span>Preview</span>
                     </div>
@@ -2703,16 +2773,24 @@
                         <div>إِ<span class="tajweed-ghunnah">نَّ</span> <span class="allah-name">اللّٰهَ</span> وَمَ<span class="tajweed-madd">لٰٓئِ</span>كَتَهٗ يُ<span class="tajweed-mustaliyah">صَ</span>لُّوْنَ عَلَى <span class="tajweed-ghunnah">النَّ</span>بِيِّ</div>
                     </div>
 
-                    <!-- Font Size -->
                     <div class="settings-section-title">
                         <span>Font Size</span>
                         <span id="fontSizeValueLabel">26px</span>
                     </div>
                     <input type="range" id="fontSizeSlider" class="settings-range-slider" min="16" max="42" step="1" value="26">
 
+                    <div class="settings-section-title" style="margin-top: 16px;">
+                        <span>Brightness</span>
+                        <span id="brightnessValueLabel">100%</span>
+                    </div>
+                    <div class="settings-brightness-row">
+                        <span class="settings-brightness-icon">🔅</span>
+                        <input type="range" id="brightnessSlider" class="settings-range-slider" min="0.4" max="1.5" step="0.05" value="1" title="Adjust Brightness">
+                        <span class="settings-brightness-icon">☀️</span>
+                    </div>
+
                     <hr class="settings-divider">
 
-                    <!-- Choose Fonts -->
                     <div class="settings-font-row">
                         <span class="settings-label-lg" style="font-size:15px;">Content Font</span>
                         <select id="contentFontSelect" class="settings-font-select">${fontOptionsHTML}</select>
@@ -2721,11 +2799,28 @@
                         <span class="settings-label-lg" style="font-size:15px;">App Font</span>
                         <select id="appFontSelect" class="settings-font-select">${fontOptionsHTML}</select>
                     </div>
+
+                    <hr class="settings-divider">
+
+                    <div id="openHijriCorrectionRow" class="settings-nav-row">
+                        <span class="settings-label-lg" style="font-size:15px;">Hijri Calendar Correction</span>
+                        <div class="settings-nav-right">
+                            <span id="hijriCorrectionBadge" class="settings-nav-badge">-1</span>
+                            <span class="settings-nav-arrow">›</span>
+                        </div>
+                    </div>
+
+                    <div class="settings-awake-row" style="margin-top: 12px;">
+                        <label class="awake-toggle">
+                            <input type="checkbox" id="hijriMaghribCheckbox" checked>
+                            <span class="awake-track" id="hijriMaghribLabel">ON</span>
+                        </label>
+                        <span class="settings-label-lg" style="font-size:15px;">Change hijri day after maghrib time</span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Material Vertical Color Palette Picker Modal -->
         <div id="colorPaletteModal" class="palette-modal print-none">
             <div class="palette-card">
                 <div class="palette-main">
@@ -2736,6 +2831,14 @@
                     <button type="button" id="paletteCancelBtn" class="palette-action-btn">Cancel</button>
                     <button type="button" id="paletteOkBtn" class="palette-action-btn">OK</button>
                 </div>
+            </div>
+        </div>
+
+        <div id="hijriStepperModal" class="hijri-stepper-modal print-none">
+            <div class="hijri-stepper-box">
+                <button type="button" id="hijriMinusBtn" class="hijri-step-btn" title="Decrease Day">-</button>
+                <span id="hijriStepperValue" class="hijri-step-value">-1</span>
+                <button type="button" id="hijriPlusBtn" class="hijri-step-btn" title="Increase Day">+</button>
             </div>
         </div>
         `;
@@ -2754,15 +2857,22 @@
         const previewBox = document.getElementById('settingsPreviewBox');
         const fontSizeSlider = document.getElementById('fontSizeSlider');
         const fontSizeValueLabel = document.getElementById('fontSizeValueLabel');
+        const brightnessSlider = document.getElementById('brightnessSlider');
+        const brightnessValueLabel = document.getElementById('brightnessValueLabel');
         const contentFontSelect = document.getElementById('contentFontSelect');
         const appFontSelect = document.getElementById('appFontSelect');
 
-        // Palette Elements
         const paletteModal = document.getElementById('colorPaletteModal');
         const palettePrimaries = document.getElementById('palettePrimaries');
         const paletteShades = document.getElementById('paletteShades');
         const paletteCancelBtn = document.getElementById('paletteCancelBtn');
         const paletteOkBtn = document.getElementById('paletteOkBtn');
+
+        const openHijriRow = document.getElementById('openHijriCorrectionRow');
+        const hijriStepperModal = document.getElementById('hijriStepperModal');
+        const hijriMinusBtn = document.getElementById('hijriMinusBtn');
+        const hijriPlusBtn = document.getElementById('hijriPlusBtn');
+        const hijriMaghribCheckbox = document.getElementById('hijriMaghribCheckbox');
 
         let activePaletteTarget = null;
         let activeFamilyIndex = 0;
@@ -2831,9 +2941,7 @@
         bgColorRow.addEventListener('click', () => openColorPalette('bg'));
         textColorRow.addEventListener('click', () => openColorPalette('text'));
 
-        paletteCancelBtn.addEventListener('click', () => {
-            paletteModal.classList.remove('show');
-        });
+        paletteCancelBtn.addEventListener('click', () => paletteModal.classList.remove('show'));
         paletteModal.addEventListener('click', (e) => {
             if (e.target === paletteModal) paletteModal.classList.remove('show');
         });
@@ -2867,6 +2975,12 @@
 
             fontSizeSlider.value = size;
             fontSizeValueLabel.textContent = size + 'px';
+
+            const savedBrightness = localStorage.getItem('app_brightness') || '1';
+            if (brightnessSlider) brightnessSlider.value = savedBrightness;
+            if (brightnessValueLabel) {
+                brightnessValueLabel.textContent = Math.round(parseFloat(savedBrightness) * 100) + '%';
+            }
             contentFontSelect.value = contentFont;
             appFontSelect.value = appFont;
 
@@ -2881,25 +2995,31 @@
             previewBox.style.setProperty('--preview-border', border);
             previewBox.style.fontSize = size + 'px';
             previewBox.style.fontFamily = contentFont;
+
+            const hijriOffset = localStorage.getItem('app_hijri_manual_offset') !== null
+                ? parseInt(localStorage.getItem('app_hijri_manual_offset'), 10)
+                : parseInt(localStorage.getItem('app_auto_hijri_offset') || '-1', 10);
+            const hijriAfterMaghrib = localStorage.getItem('app_hijri_after_maghrib') !== 'false';
+
+            const badgeEl = document.getElementById('hijriCorrectionBadge');
+            const stepValEl = document.getElementById('hijriStepperValue');
+            const maghribChk = document.getElementById('hijriMaghribCheckbox');
+            const maghribLbl = document.getElementById('hijriMaghribLabel');
+
+            const formattedOffset = hijriOffset > 0 ? `+${hijriOffset}` : `${hijriOffset}`;
+            if (badgeEl) badgeEl.textContent = formattedOffset;
+            if (stepValEl) stepValEl.textContent = formattedOffset;
+            if (maghribChk) maghribChk.checked = hijriAfterMaghrib;
+            if (maghribLbl) maghribLbl.textContent = hijriAfterMaghrib ? 'ON' : 'OFF';
         }
 
-        // Open Settings from 3-dots menu
-        document.addEventListener('click', (e) => {
-            const btn = e.target.closest('#openSettingsBtn');
-            if (!btn) return;
-            e.preventDefault();
-            syncSettingsUI();
-            settingsModal.classList.add('show');
-            const dropdown = document.querySelector('.dropdown-content');
-            if (dropdown) dropdown.classList.remove('show');
-        });
+        syncSettingsUIRef = syncSettingsUI;
 
         closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
         settingsModal.addEventListener('click', (e) => {
             if (e.target === settingsModal) settingsModal.classList.remove('show');
         });
 
-        // Keep Awake Toggle
         keepAwakeCheckbox.addEventListener('change', () => {
             const enabled = keepAwakeCheckbox.checked;
             keepAwakeLabel.textContent = enabled ? 'ON' : 'OFF';
@@ -2907,7 +3027,6 @@
             updateWakeLock(enabled);
         });
 
-        // Tajweed Colors ON/OFF Toggle
         tajweedToggleCheckbox.addEventListener('change', () => {
             const enabled = tajweedToggleCheckbox.checked;
             tajweedToggleLabel.textContent = enabled ? 'ON' : 'OFF';
@@ -2916,7 +3035,6 @@
             syncSettingsUI();
         });
 
-        // Set to Default Colors
         resetDefaultColorsBtn.addEventListener('click', () => {
             localStorage.removeItem('app_custom_bg');
             localStorage.removeItem('app_custom_text');
@@ -2924,49 +3042,889 @@
             syncSettingsUI();
         });
 
-        // Font Size
         fontSizeSlider.addEventListener('input', () => {
             localStorage.setItem('app_font_size', fontSizeSlider.value);
             applySavedDisplaySettings();
             syncSettingsUI();
         });
 
-        // Content Font
+        if (brightnessSlider) {
+            brightnessSlider.addEventListener('input', () => {
+                localStorage.setItem('app_brightness', brightnessSlider.value);
+                applyBrightness(brightnessSlider.value);
+                if (brightnessValueLabel) {
+                    brightnessValueLabel.textContent = Math.round(parseFloat(brightnessSlider.value) * 100) + '%';
+                }
+            });
+        }
+
         contentFontSelect.addEventListener('change', () => {
             if (contentFontSelect.value === "'Amiri', serif") {
                 localStorage.removeItem('app_content_font');
             } else {
+                ensureFontLoaded(contentFontSelect.value);
                 localStorage.setItem('app_content_font', contentFontSelect.value);
             }
             applySavedDisplaySettings();
             syncSettingsUI();
         });
 
-        // App Font
         appFontSelect.addEventListener('change', () => {
             if (appFontSelect.value === "'Amiri', serif") {
                 localStorage.removeItem('app_ui_font');
             } else {
+                ensureFontLoaded(appFontSelect.value);
                 localStorage.setItem('app_ui_font', appFontSelect.value);
             }
             applySavedDisplaySettings();
             syncSettingsUI();
         });
 
-        // Dark Mode button tap hone par custom colors clear hon taake 🌙/☀️ foran kaam kare
-        const navDarkBtn = document.getElementById('darkModeToggleNav');
-        if (navDarkBtn) {
-            navDarkBtn.addEventListener('click', () => {
-                localStorage.removeItem('app_custom_bg');
-                localStorage.removeItem('app_custom_text');
-                applySavedDisplaySettings();
+        function changeHijriOffset(delta) {
+            const current = localStorage.getItem('app_hijri_manual_offset') !== null
+                ? parseInt(localStorage.getItem('app_hijri_manual_offset'), 10)
+                : parseInt(localStorage.getItem('app_auto_hijri_offset') || '-1', 10);
+            const next = Math.max(-5, Math.min(5, current + delta));
+            localStorage.setItem('app_hijri_manual_offset', String(next));
+            syncSettingsUI();
+            if (typeof window.refreshNavbarHijriDate === 'function') {
+                window.refreshNavbarHijriDate();
+            }
+        }
+
+        if (openHijriRow && hijriStepperModal) {
+            openHijriRow.addEventListener('click', () => {
+                syncSettingsUI();
+                hijriStepperModal.classList.add('show');
+            });
+            hijriStepperModal.addEventListener('click', (e) => {
+                if (e.target === hijriStepperModal) hijriStepperModal.classList.remove('show');
+            });
+        }
+        if (hijriMinusBtn) hijriMinusBtn.addEventListener('click', () => changeHijriOffset(-1));
+        if (hijriPlusBtn) hijriPlusBtn.addEventListener('click', () => changeHijriOffset(1));
+
+        if (hijriMaghribCheckbox) {
+            hijriMaghribCheckbox.addEventListener('change', () => {
+                const enabled = hijriMaghribCheckbox.checked;
+                localStorage.setItem('app_hijri_after_maghrib', enabled ? 'true' : 'false');
+                syncSettingsUI();
+                if (typeof window.refreshNavbarHijriDate === 'function') {
+                    window.refreshNavbarHijriDate();
+                }
             });
         }
     }
 
+    function bootSettingsSystem() {
+        applySavedDisplaySettings();
+        if (localStorage.getItem('app_keep_awake') === 'true') {
+            updateWakeLock(true);
+        }
+
+        // Lazy-build Settings modal only when user taps Settings in 3-dots menu
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('#openSettingsBtn');
+            if (!btn) return;
+            e.preventDefault();
+            buildSettingsModalOnce();
+            if (syncSettingsUIRef) syncSettingsUIRef();
+            const modal = document.getElementById('settingsModal');
+            if (modal) modal.classList.add('show');
+            const dropdown = document.querySelector('.dropdown-content');
+            if (dropdown) dropdown.classList.remove('show');
+        });
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initSettingsModal);
+        document.addEventListener('DOMContentLoaded', bootSettingsSystem);
     } else {
-        initSettingsModal();
+        bootSettingsSystem();
+    }
+})();
+
+// ==========================================
+// PART 11: AUTO LOCATION-BASED HIJRI DATE (CACHED GPS + MAGHRIB ROLLOVER + MANUAL CORRECTION)
+// ==========================================
+(function() {
+    const HIJRI_MONTHS_UR = [
+        'محرم', 'صفر', 'ربیع الاول', 'ربیع الثانی',
+        'جمادی الاول', 'جمادی الثانی', 'رجب', 'شعبان',
+        'رمضان', 'شوال', 'ذوالقعدہ', 'ذوالحجہ'
+    ];
+
+    const DEG2RAD = Math.PI / 180;
+    const RAD2DEG = 180 / Math.PI;
+    const COORDS_TTL_MS = 24 * 60 * 60 * 1000;
+
+    function getOffsetFromTimezone(tz) {
+        if (!tz) return -1;
+        const zone = tz.toLowerCase();
+        const zeroOffsetZones = [
+            'asia/riyadh', 'asia/jeddah', 'asia/mecca',
+            'asia/dubai', 'asia/abu_dhabi', 'asia/qatar', 'asia/doha',
+            'asia/kuwait', 'asia/bahrain', 'asia/muscat', 'asia/aden', 'asia/baghdad'
+        ];
+        if (zeroOffsetZones.some(z => zone.includes(z))) {
+            return 0;
+        }
+        return -1;
+    }
+
+    function getOffsetFromCoords(lat, lon) {
+        if (lat >= 15.5 && lat <= 32.5 && lon >= 34.5 && lon <= 56.5) {
+            return 0;
+        }
+        return -1;
+    }
+
+    function getMaghribMinutesFromCoords(date, lat, lon) {
+        const startOfYear = new Date(date.getFullYear(), 0, 0);
+        const dayOfYear = Math.floor((date - startOfYear) / 86400000);
+
+        const gamma = (2 * Math.PI / 365) * (dayOfYear - 1);
+        const eqTime = 229.18 * (
+            0.000075 +
+            0.001868 * Math.cos(gamma) -
+            0.032077 * Math.sin(gamma) -
+            0.014615 * Math.cos(2 * gamma) -
+            0.040849 * Math.sin(2 * gamma)
+        );
+
+        const decl =
+            0.006918 -
+            0.399912 * Math.cos(gamma) +
+            0.070257 * Math.sin(gamma) -
+            0.006758 * Math.cos(2 * gamma) +
+            0.000907 * Math.sin(2 * gamma) -
+            0.002697 * Math.cos(3 * gamma) +
+            0.00148 * Math.sin(3 * gamma);
+
+        const zenithCos = Math.cos(90.833 * DEG2RAD);
+        const latRad = lat * DEG2RAD;
+        const cosHa = (zenithCos / (Math.cos(latRad) * Math.cos(decl))) - Math.tan(latRad) * Math.tan(decl);
+
+        if (cosHa >= 1 || cosHa <= -1) {
+            return 18 * 60;
+        }
+
+        const ha = Math.acos(cosHa) * RAD2DEG;
+        const utcSunsetMinutes = 720 - 4 * (lon + ha) - eqTime;
+        const tzOffsetMinutes = -date.getTimezoneOffset();
+        const localSunsetMinutes = utcSunsetMinutes + tzOffsetMinutes;
+
+        return Math.round(localSunsetMinutes + 3);
+    }
+
+    function getFallbackMaghribMinutes(date, tz) {
+        const month = date.getMonth();
+        const zone = (tz || '').toLowerCase();
+
+        const seasonalMinutes = [17 * 60 + 45, 18 * 60 + 5, 18 * 60 + 25, 18 * 60 + 40, 18 * 60 + 55, 19 * 60 + 10, 19 * 60 + 5, 18 * 60 + 45, 18 * 60 + 15, 17 * 60 + 50, 17 * 60 + 30, 17 * 60 + 30];
+        let baseMins = seasonalMinutes[month] || (18 * 60);
+
+        if (zone.includes('kolkata') || zone.includes('calcutta') || zone.includes('india')) {
+            const indiaMins = [17 * 60 + 55, 18 * 60 + 12, 18 * 60 + 25, 18 * 60 + 35, 18 * 60 + 48, 18 * 60 + 55, 18 * 60 + 50, 18 * 60 + 30, 18 * 60 + 5, 17 * 60 + 45, 17 * 60 + 35, 17 * 60 + 42];
+            baseMins = indiaMins[month];
+        }
+        return baseMins;
+    }
+
+    function getEffectiveGregorianDate(regionOffset, coords, tz) {
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+        const maghribMinutes = coords
+            ? getMaghribMinutesFromCoords(now, coords.lat, coords.lon)
+            : getFallbackMaghribMinutes(now, tz);
+
+        const afterMaghribOffset = currentMinutes >= maghribMinutes ? 1 : 0;
+        const effective = new Date(now);
+        effective.setDate(effective.getDate() + regionOffset + afterMaghribOffset);
+        return effective;
+    }
+
+    function formatHijriFromDate(targetDate) {
+        try {
+            const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+                day: 'numeric',
+                month: 'numeric',
+                year: 'numeric'
+            }).formatToParts(targetDate);
+
+            const day = parts.find(p => p.type === 'day')?.value || '';
+            const monthNum = parseInt(parts.find(p => p.type === 'month')?.value, 10);
+            const year = parts.find(p => p.type === 'year')?.value || '';
+            const monthName = HIJRI_MONTHS_UR[monthNum - 1] || '';
+
+            if (day && monthName && year) {
+                return `${day} ${monthName} ${year}ھ`;
+            }
+        } catch (err) {}
+        return '';
+    }
+
+    // Shared GPS helper: calls GPS at most once per 24 hours
+    window.awraadRequestLocationOnce = function(callback) {
+        try {
+            const savedCoords = JSON.parse(localStorage.getItem('app_hijri_coords') || 'null');
+            const savedTs = parseInt(localStorage.getItem('app_hijri_coords_ts') || '0', 10);
+            if (savedCoords && typeof savedCoords.lat === 'number' && typeof savedCoords.lon === 'number' && (Date.now() - savedTs) < COORDS_TTL_MS) {
+                if (callback) callback(savedCoords);
+                return;
+            }
+        } catch (e) {}
+
+        if (navigator.geolocation && typeof navigator.geolocation.getCurrentPosition === 'function') {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+                    localStorage.setItem('app_hijri_coords', JSON.stringify(coords));
+                    localStorage.setItem('app_hijri_coords_ts', String(Date.now()));
+                    if (callback) callback(coords);
+                },
+                () => {
+                    localStorage.setItem('app_hijri_coords_ts', String(Date.now()));
+                },
+                { timeout: 4000, maximumAge: COORDS_TTL_MS }
+            );
+        }
+    };
+
+    function initAutoLocationHijriDate() {
+        const el = document.getElementById('navHijriDate');
+        if (!el) return;
+
+        const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        let currentOffset = getOffsetFromTimezone(detectedTz);
+        let currentCoords = null;
+
+        const cachedOffset = localStorage.getItem('app_auto_hijri_offset');
+        const cachedTz = localStorage.getItem('app_auto_hijri_tz');
+        if (cachedOffset !== null && cachedTz === detectedTz) {
+            currentOffset = parseInt(cachedOffset, 10);
+        } else {
+            localStorage.setItem('app_auto_hijri_offset', String(currentOffset));
+            localStorage.setItem('app_auto_hijri_tz', detectedTz);
+        }
+
+        try {
+            const savedCoords = JSON.parse(localStorage.getItem('app_hijri_coords') || 'null');
+            if (savedCoords && typeof savedCoords.lat === 'number' && typeof savedCoords.lon === 'number') {
+                currentCoords = savedCoords;
+            }
+        } catch (e) {}
+
+        function renderDate() {
+            const manualSaved = localStorage.getItem('app_hijri_manual_offset');
+            const activeOffset = manualSaved !== null ? parseInt(manualSaved, 10) : currentOffset;
+            const useMaghrib = localStorage.getItem('app_hijri_after_maghrib') !== 'false';
+
+            let effDate;
+            if (useMaghrib) {
+                effDate = getEffectiveGregorianDate(activeOffset, currentCoords, detectedTz);
+            } else {
+                effDate = new Date();
+                effDate.setDate(effDate.getDate() + activeOffset);
+            }
+
+            const text = formatHijriFromDate(effDate);
+            if (text) el.textContent = text;
+        }
+
+        window.refreshNavbarHijriDate = renderDate;
+
+        renderDate();
+        setInterval(renderDate, 60000);
+
+        // Defer GPS check slightly so it never blocks first render
+        setTimeout(() => {
+            window.awraadRequestLocationOnce((coords) => {
+                currentCoords = coords;
+                const coordOffset = getOffsetFromCoords(coords.lat, coords.lon);
+                if (coordOffset !== currentOffset) {
+                    currentOffset = coordOffset;
+                    localStorage.setItem('app_auto_hijri_offset', String(currentOffset));
+                }
+                renderDate();
+            });
+        }, 1200);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAutoLocationHijriDate);
+    } else {
+        initAutoLocationHijriDate();
+    }
+})();
+
+// ==========================================
+// PART 12: LAZY PRAYER TIMES SYSTEM (METHODS, PRECAUTIONS, ASR & HIGH-LATITUDE)
+// ==========================================
+(function() {
+    const D2R = Math.PI / 180;
+    const R2D = 180 / Math.PI;
+    let prayerModalInitialized = false;
+    let renderPrayerTimesRef = null;
+
+    const CALCULATION_METHODS = [
+        { id: 'karachi', name: 'University of Islamic Sciences, Karachi', fajr: 18, isha: 18, maghribOffset: 0 },
+        { id: 'turkey', name: 'Religious Turkey', fajr: 18, isha: 17, maghribOffset: 0 },
+        { id: 'isna', name: 'Islamic Society of North America (ISNA)', fajr: 15, isha: 15, maghribOffset: 0 },
+        { id: 'mwl', name: 'Muslim World League (MWL)', fajr: 18, isha: 17, maghribOffset: 0 },
+        { id: 'egypt', name: 'Egyptian General Authority of Survey', fajr: 19.5, isha: 17.5, maghribOffset: 0 },
+        { id: 'makkah', name: 'Umm al-Qura, Makkah', fajr: 18.5, isha: 90, ishaIsMinutes: true, maghribOffset: 0 },
+        { id: 'tehran', name: 'Institute of Geophysics, University of Tehran', fajr: 17.7, isha: 14, maghribOffset: 0 },
+        { id: 'jafari', name: 'ITNA to Ashari, Jafari', fajr: 16, isha: 14, maghribOffset: 0 },
+        { id: 'uoif', name: 'Union of Islamic Organizations of France UOIF', fajr: 12, isha: 12, maghribOffset: 0 },
+        { id: 'bis', name: 'Egypt (BIS)', fajr: 18.5, isha: 17, maghribOffset: 0 },
+        { id: 'cautious', name: 'Cautious Calendar', fajr: 18, isha: 18, maghribOffset: 3 },
+        { id: 'jakim', name: 'JAKIM (Malaysia Islamic Association)', fajr: 20, isha: 18, maghribOffset: 0 },
+        { id: 'kemenag', name: 'SIHAT / Kemenag (Indonesian Religious Affairs)', fajr: 20, isha: 18, maghribOffset: 0 },
+        { id: 'muis', name: 'MUIS (Singapore Muslim Union)', fajr: 20, isha: 18, maghribOffset: 0 },
+        { id: 'fixed_isha', name: 'Fixed Isha', fajr: 18, isha: 90, ishaIsMinutes: true, maghribOffset: 0 },
+        { id: 'personal', name: 'Personal', fajr: 18, isha: 18, maghribOffset: 0 }
+    ];
+
+    const HIGH_LAT_METHODS = [
+        { id: 'angle', name: 'Angle Based Method' },
+        { id: 'midnight', name: 'Midnight' },
+        { id: 'one_seventh', name: '1/7 of Night' },
+        { id: 'none', name: 'None' }
+    ];
+
+    function getDefaultCoordsByTimezone(tz) {
+        const z = (tz || '').toLowerCase();
+        if (z.includes('riyadh') || z.includes('jeddah') || z.includes('mecca')) {
+            return { lat: 21.4225, lon: 39.8262, label: 'Makkah (Auto)' };
+        }
+        if (z.includes('dubai') || z.includes('abu_dhabi')) {
+            return { lat: 25.2048, lon: 55.2708, label: 'Dubai (Auto)' };
+        }
+        if (z.includes('karachi') || z.includes('islamabad') || z.includes('lahore')) {
+            return { lat: 24.8607, lon: 67.0011, label: 'Karachi (Auto)' };
+        }
+        if (z.includes('dhaka')) {
+            return { lat: 23.8103, lon: 90.4125, label: 'Dhaka (Auto)' };
+        }
+        return { lat: 17.3850, lon: 78.4867, label: 'Hyderabad (Default)' };
+    }
+
+    function julianDay(date) {
+        const y = date.getFullYear();
+        const m = date.getMonth() + 1;
+        const d = date.getDate();
+        let yr = y, mo = m;
+        if (mo <= 2) { yr -= 1; mo += 12; }
+        const A = Math.floor(yr / 100);
+        const B = 2 - A + Math.floor(A / 4);
+        return Math.floor(365.25 * (yr + 4716)) + Math.floor(30.6001 * (mo + 1)) + d + B - 1524.5;
+    }
+
+    function sunPosition(jd) {
+        const D = jd - 2451545.0;
+        const g = (357.529 + 0.98560028 * D) % 360;
+        const q = (280.459 + 0.98564736 * D) % 360;
+        const L = (q + 1.915 * Math.sin(g * D2R) + 0.020 * Math.sin(2 * g * D2R)) % 360;
+        const e = 23.439 - 0.00000036 * D;
+        const RA = Math.atan2(Math.cos(e * D2R) * Math.sin(L * D2R), Math.cos(L * D2R)) * R2D / 15;
+        const decl = Math.asin(Math.sin(e * D2R) * Math.sin(L * D2R)) * R2D;
+        const EqT = q / 15 - ((RA % 24) + 24) % 24;
+        const eqNormalized = EqT > 12 ? EqT - 24 : (EqT < -12 ? EqT + 24 : EqT);
+        return { decl, eqTime: eqNormalized };
+    }
+
+    function hourAngleForAngle(angleDeg, latDeg, declDeg) {
+        const cosH = (Math.cos(angleDeg * D2R) - Math.sin(latDeg * D2R) * Math.sin(declDeg * D2R)) /
+                     (Math.cos(latDeg * D2R) * Math.cos(declDeg * D2R));
+        if (cosH < -1 || cosH > 1) return null;
+        return Math.acos(cosH) * R2D / 15;
+    }
+
+    function asrHourAngle(shadowFactor, latDeg, declDeg) {
+        const latR = latDeg * D2R;
+        const declR = declDeg * D2R;
+        const cotA = shadowFactor + Math.tan(Math.abs(latR - declR));
+        const sunAltR = Math.atan(1 / cotA);
+        const cosH = (Math.sin(sunAltR) - Math.sin(latR) * Math.sin(declR)) /
+                     (Math.cos(latR) * Math.cos(declR));
+        if (cosH < -1 || cosH > 1) return null;
+        return Math.acos(cosH) * R2D / 15;
+    }
+
+    function formatUtcHoursTo12Hr(hoursFloat, tzOffsetHours, precautionMins) {
+        if (typeof hoursFloat !== 'number' || isNaN(hoursFloat)) return '--:--';
+        let localHrs = (hoursFloat + tzOffsetHours) % 24;
+        if (localHrs < 0) localHrs += 24;
+
+        let totalMins = Math.round(localHrs * 60 + (precautionMins || 0));
+        totalMins = ((totalMins % 1440) + 1440) % 1440;
+
+        const h24 = Math.floor(totalMins / 60);
+        const mins = totalMins % 60;
+        const period = h24 >= 12 ? 'PM' : 'AM';
+        const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+
+        return `${String(h12).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${period}`;
+    }
+
+    function calculatePrayerTimes(date, lat, lon, cfg) {
+        const jd = julianDay(date) - lon / 360;
+        const { decl, eqTime } = sunPosition(jd);
+        const dhuhrUtc = 12 - eqTime - lon / 15;
+
+        const methodObj = CALCULATION_METHODS.find(m => m.id === cfg.methodId) || CALCULATION_METHODS[0];
+        const sunriseHa = hourAngleForAngle(90.833, lat, decl);
+        const sunsetHa = hourAngleForAngle(90.833, lat, decl);
+
+        const fajrHa = hourAngleForAngle(90 + methodObj.fajr, lat, decl);
+        let fajrUtc = fajrHa !== null ? dhuhrUtc - fajrHa : null;
+        const sunriseUtc = sunriseHa !== null ? dhuhrUtc - sunriseHa : null;
+        const maghribUtc = sunsetHa !== null ? dhuhrUtc + sunsetHa + ((methodObj.maghribOffset || 0) / 60) : null;
+
+        let ishaUtc = null;
+        if (methodObj.ishaIsMinutes) {
+            ishaUtc = maghribUtc !== null ? maghribUtc + (methodObj.isha / 60) : null;
+        } else {
+            const ishaHa = hourAngleForAngle(90 + methodObj.isha, lat, decl);
+            ishaUtc = ishaHa !== null ? dhuhrUtc + ishaHa : null;
+        }
+
+        if (sunriseUtc !== null && maghribUtc !== null && cfg.highLat !== 'none') {
+            const nightDuration = ((sunriseUtc - maghribUtc) % 24 + 24) % 24;
+
+            if (fajrUtc === null) {
+                if (cfg.highLat === 'midnight') {
+                    fajrUtc = sunriseUtc - nightDuration / 2;
+                } else if (cfg.highLat === 'one_seventh') {
+                    fajrUtc = sunriseUtc - nightDuration / 7;
+                } else {
+                    fajrUtc = sunriseUtc - (methodObj.fajr / 60) * nightDuration;
+                }
+            }
+            if (ishaUtc === null) {
+                if (cfg.highLat === 'midnight') {
+                    ishaUtc = maghribUtc + nightDuration / 2;
+                } else if (cfg.highLat === 'one_seventh') {
+                    ishaUtc = maghribUtc + nightDuration / 7;
+                } else {
+                    const ishaAngleVal = methodObj.ishaIsMinutes ? 15 : methodObj.isha;
+                    ishaUtc = maghribUtc + (ishaAngleVal / 60) * nightDuration;
+                }
+            }
+        }
+
+        const shadowFactor = cfg.asrMadhab === 'hanafi' ? 2 : 1;
+        const asrHa = asrHourAngle(shadowFactor, lat, decl);
+        const asrUtc = asrHa !== null ? dhuhrUtc + asrHa : null;
+
+        const tzOffsetHours = -date.getTimezoneOffset() / 60;
+        const p = cfg.precautions;
+
+        return {
+            fajr: formatUtcHoursTo12Hr(fajrUtc, tzOffsetHours, p.fajr),
+            sunrise: formatUtcHoursTo12Hr(sunriseUtc, tzOffsetHours, p.sunrise),
+            dhuhr: formatUtcHoursTo12Hr(dhuhrUtc + (2 / 60), tzOffsetHours, p.dhuhr),
+            asr: formatUtcHoursTo12Hr(asrUtc, tzOffsetHours, p.asr),
+            maghrib: formatUtcHoursTo12Hr(maghribUtc, tzOffsetHours, p.maghrib),
+            isha: formatUtcHoursTo12Hr(ishaUtc, tzOffsetHours, p.isha)
+        };
+    }
+
+    function loadPrayerConfig() {
+        const defaultPrecautions = { fajr: 0, sunrise: 0, dhuhr: 0, asr: 0, maghrib: 7, isha: 0 };
+        let precautions = { ...defaultPrecautions };
+        try {
+            const savedP = JSON.parse(localStorage.getItem('app_pt_precautions') || 'null');
+            if (savedP && typeof savedP === 'object') {
+                precautions = { ...defaultPrecautions, ...savedP };
+            }
+        } catch (e) {}
+
+        const savedMadhab = localStorage.getItem('app_madhab');
+        const asrMadhab = savedMadhab === 'shafi' ? 'shafi' : 'hanafi';
+
+        return {
+            methodId: localStorage.getItem('app_pt_method') || 'karachi',
+            highLat: localStorage.getItem('app_pt_highlat') || 'angle',
+            asrMadhab,
+            precautions
+        };
+    }
+
+    function buildPrayerModalOnce() {
+        if (prayerModalInitialized && document.getElementById('prayerTimesModal')) return;
+        prayerModalInitialized = true;
+
+        const modalHTML = `
+        <div id="prayerTimesModal" class="prayer-modal print-none">
+            <div class="prayer-card">
+                <div class="prayer-header">
+                    <span>Prayer Times</span>
+                    <button type="button" id="closePrayerTimesBtn" class="prayer-close-btn" title="Close">&times;</button>
+                </div>
+                <div class="prayer-body">
+                    <div id="prayerLocationLabel" class="prayer-meta-info"></div>
+
+                    <div class="prayer-times-list">
+                        <div class="prayer-row"><span class="prayer-name">Fajr</span><span id="ptFajr" class="prayer-time-val">--:--</span></div>
+                        <div class="prayer-row"><span class="prayer-name">Sunrise</span><span id="ptSunrise" class="prayer-time-val">--:--</span></div>
+                        <div class="prayer-row"><span class="prayer-name">Dhuhr</span><span id="ptDhuhr" class="prayer-time-val">--:--</span></div>
+                        <div class="prayer-row"><span class="prayer-name">Asr</span><span id="ptAsr" class="prayer-time-val">--:--</span></div>
+                        <div class="prayer-row"><span class="prayer-name">Maghrib</span><span id="ptMaghrib" class="prayer-time-val">--:--</span></div>
+                        <div class="prayer-row"><span class="prayer-name">Isha</span><span id="ptIsha" class="prayer-time-val">--:--</span></div>
+                    </div>
+
+                    <div class="pt-section-label">Calculation Method</div>
+                    <div class="pt-settings-box">
+                        <div id="openPtMethodRow" class="pt-option-row">
+                            <div class="pt-option-text">
+                                <span class="pt-option-title">Calculation Method</span>
+                                <span id="ptMethodSub" class="pt-option-sub">University of Islamic Sciences, Karachi</span>
+                            </div>
+                            <span class="pt-option-chevron">›</span>
+                        </div>
+                        <div id="openPtPrecautionsRow" class="pt-option-row">
+                            <div class="pt-option-text">
+                                <span class="pt-option-title">Precautions</span>
+                                <span id="ptPrecautionsSub" class="pt-option-sub">0,0,0,0,7,0</span>
+                            </div>
+                            <span class="pt-option-chevron">›</span>
+                        </div>
+                        <div id="openPtAsrRow" class="pt-option-row">
+                            <div class="pt-option-text">
+                                <span class="pt-option-title">Asr Calculation</span>
+                                <span id="ptAsrSub" class="pt-option-sub">Hanafi</span>
+                            </div>
+                            <span class="pt-option-chevron">›</span>
+                        </div>
+                        <div id="openPtHighLatRow" class="pt-option-row">
+                            <div class="pt-option-text">
+                                <span class="pt-option-title">High-Latitude Calculation</span>
+                                <span id="ptHighLatSub" class="pt-option-sub">Angle Based Method</span>
+                            </div>
+                            <span class="pt-option-chevron">›</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="ptMethodModal" class="pt-submodal print-none">
+            <div class="pt-subcard">
+                <div class="pt-subhead">Calculation Method</div>
+                <div id="ptMethodList" class="pt-checklist"></div>
+                <div class="pt-subfooter">
+                    <button type="button" id="ptMethodCancel" class="pt-dialog-btn">CANCEL</button>
+                    <button type="button" id="ptMethodOk" class="pt-dialog-btn">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="ptPrecautionsModal" class="pt-submodal print-none">
+            <div class="pt-subcard" style="max-width: 340px;">
+                <div class="pt-subhead">Precautions</div>
+                <div class="precautions-grid">
+                    <div class="precaution-cell">
+                        <span class="precaution-label">Fajr</span>
+                        <div class="precaution-step-controls">
+                            <button type="button" class="precaution-mini-btn" data-p="fajr" data-d="-1">-</button>
+                            <span id="pValFajr" class="precaution-val">0</span>
+                            <button type="button" class="precaution-mini-btn" data-p="fajr" data-d="1">+</button>
+                        </div>
+                    </div>
+                    <div class="precaution-cell">
+                        <span class="precaution-label">Sunrise</span>
+                        <div class="precaution-step-controls">
+                            <button type="button" class="precaution-mini-btn" data-p="sunrise" data-d="-1">-</button>
+                            <span id="pValSunrise" class="precaution-val">0</span>
+                            <button type="button" class="precaution-mini-btn" data-p="sunrise" data-d="1">+</button>
+                        </div>
+                    </div>
+                    <div class="precaution-cell">
+                        <span class="precaution-label">Dhuhr</span>
+                        <div class="precaution-step-controls">
+                            <button type="button" class="precaution-mini-btn" data-p="dhuhr" data-d="-1">-</button>
+                            <span id="pValDhuhr" class="precaution-val">0</span>
+                            <button type="button" class="precaution-mini-btn" data-p="dhuhr" data-d="1">+</button>
+                        </div>
+                    </div>
+                    <div class="precaution-cell">
+                        <span class="precaution-label">Asr</span>
+                        <div class="precaution-step-controls">
+                            <button type="button" class="precaution-mini-btn" data-p="asr" data-d="-1">-</button>
+                            <span id="pValAsr" class="precaution-val">0</span>
+                            <button type="button" class="precaution-mini-btn" data-p="asr" data-d="1">+</button>
+                        </div>
+                    </div>
+                    <div class="precaution-cell">
+                        <span class="precaution-label">Maghrib</span>
+                        <div class="precaution-step-controls">
+                            <button type="button" class="precaution-mini-btn" data-p="maghrib" data-d="-1">-</button>
+                            <span id="pValMaghrib" class="precaution-val">7</span>
+                            <button type="button" class="precaution-mini-btn" data-p="maghrib" data-d="1">+</button>
+                        </div>
+                    </div>
+                    <div class="precaution-cell">
+                        <span class="precaution-label">Isha</span>
+                        <div class="precaution-step-controls">
+                            <button type="button" class="precaution-mini-btn" data-p="isha" data-d="-1">-</button>
+                            <span id="pValIsha" class="precaution-val">0</span>
+                            <button type="button" class="precaution-mini-btn" data-p="isha" data-d="1">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-subfooter">
+                    <button type="button" id="ptPrecCancel" class="pt-dialog-btn">CANCEL</button>
+                    <button type="button" id="ptPrecOk" class="pt-dialog-btn">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="ptAsrModal" class="pt-submodal print-none">
+            <div class="pt-subcard" style="max-width: 320px;">
+                <div class="pt-subhead">Asr Calculation</div>
+                <div id="ptAsrList" class="pt-checklist"></div>
+                <div class="pt-subfooter">
+                    <button type="button" id="ptAsrCancel" class="pt-dialog-btn">CANCEL</button>
+                    <button type="button" id="ptAsrOk" class="pt-dialog-btn">OK</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="ptHighLatModal" class="pt-submodal print-none">
+            <div class="pt-subcard" style="max-width: 330px;">
+                <div class="pt-subhead">High-Latitude Calculation</div>
+                <div id="ptHighLatList" class="pt-checklist"></div>
+                <div class="pt-subfooter">
+                    <button type="button" id="ptHighLatCancel" class="pt-dialog-btn">CANCEL</button>
+                    <button type="button" id="ptHighLatOk" class="pt-dialog-btn">OK</button>
+                </div>
+            </div>
+        </div>
+        `;
+
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        const prayerModal = document.getElementById('prayerTimesModal');
+        const closeBtn = document.getElementById('closePrayerTimesBtn');
+        const locLabel = document.getElementById('prayerLocationLabel');
+
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        let coords = getDefaultCoordsByTimezone(tz);
+
+        function loadLatestCoords() {
+            try {
+                const savedCoords = JSON.parse(localStorage.getItem('app_hijri_coords') || 'null');
+                if (savedCoords && typeof savedCoords.lat === 'number' && typeof savedCoords.lon === 'number') {
+                    coords = { lat: savedCoords.lat, lon: savedCoords.lon, label: 'Current Location (GPS)' };
+                }
+            } catch (e) {}
+        }
+
+        function renderPrayerTimes() {
+            loadLatestCoords();
+            const cfg = loadPrayerConfig();
+            const methodObj = CALCULATION_METHODS.find(m => m.id === cfg.methodId) || CALCULATION_METHODS[0];
+            const highLatObj = HIGH_LAT_METHODS.find(h => h.id === cfg.highLat) || HIGH_LAT_METHODS[0];
+            const p = cfg.precautions;
+
+            document.getElementById('ptMethodSub').textContent = methodObj.name;
+            document.getElementById('ptPrecautionsSub').textContent =
+                `${p.fajr},${p.sunrise},${p.dhuhr},${p.asr},${p.maghrib},${p.isha}`;
+            document.getElementById('ptAsrSub').textContent = cfg.asrMadhab === 'hanafi' ? 'Hanafi' : 'Shafi';
+            document.getElementById('ptHighLatSub').textContent = highLatObj.name;
+
+            locLabel.textContent = `${coords.label} • ${cfg.asrMadhab === 'hanafi' ? 'Hanafi' : 'Shafi'}`;
+
+            const t = calculatePrayerTimes(new Date(), coords.lat, coords.lon, cfg);
+            document.getElementById('ptFajr').textContent = t.fajr;
+            document.getElementById('ptSunrise').textContent = t.sunrise;
+            document.getElementById('ptDhuhr').textContent = t.dhuhr;
+            document.getElementById('ptAsr').textContent = t.asr;
+            document.getElementById('ptMaghrib').textContent = t.maghrib;
+            document.getElementById('ptIsha').textContent = t.isha;
+        }
+
+        renderPrayerTimesRef = renderPrayerTimes;
+
+        closeBtn.addEventListener('click', () => prayerModal.classList.remove('show'));
+        prayerModal.addEventListener('click', (e) => {
+            if (e.target === prayerModal) prayerModal.classList.remove('show');
+        });
+
+        // 1. Calculation Method Picker
+        const methodModal = document.getElementById('ptMethodModal');
+        const methodListEl = document.getElementById('ptMethodList');
+        let tempMethodId = 'karachi';
+
+        function renderMethodList() {
+            methodListEl.innerHTML = '';
+            CALCULATION_METHODS.forEach((m) => {
+                const checked = m.id === tempMethodId;
+                const row = document.createElement('div');
+                row.className = 'pt-check-item' + (checked ? ' checked' : '');
+                row.innerHTML = `<span class="pt-check-box">${checked ? '✓' : ''}</span><span>${m.name}</span>`;
+                row.addEventListener('click', () => {
+                    tempMethodId = m.id;
+                    renderMethodList();
+                });
+                methodListEl.appendChild(row);
+            });
+        }
+
+        document.getElementById('openPtMethodRow').addEventListener('click', () => {
+            tempMethodId = loadPrayerConfig().methodId;
+            renderMethodList();
+            methodModal.classList.add('show');
+        });
+        methodModal.addEventListener('click', (e) => {
+            if (e.target === methodModal) methodModal.classList.remove('show');
+        });
+        document.getElementById('ptMethodCancel').addEventListener('click', () => methodModal.classList.remove('show'));
+        document.getElementById('ptMethodOk').addEventListener('click', () => {
+            localStorage.setItem('app_pt_method', tempMethodId);
+            methodModal.classList.remove('show');
+            renderPrayerTimes();
+        });
+
+        // 2. Precautions Picker
+        const precModal = document.getElementById('ptPrecautionsModal');
+        let tempPrec = { fajr: 0, sunrise: 0, dhuhr: 0, asr: 0, maghrib: 7, isha: 0 };
+
+        function syncPrecVals() {
+            document.getElementById('pValFajr').textContent = tempPrec.fajr;
+            document.getElementById('pValSunrise').textContent = tempPrec.sunrise;
+            document.getElementById('pValDhuhr').textContent = tempPrec.dhuhr;
+            document.getElementById('pValAsr').textContent = tempPrec.asr;
+            document.getElementById('pValMaghrib').textContent = tempPrec.maghrib;
+            document.getElementById('pValIsha').textContent = tempPrec.isha;
+        }
+
+        document.getElementById('openPtPrecautionsRow').addEventListener('click', () => {
+            tempPrec = { ...loadPrayerConfig().precautions };
+            syncPrecVals();
+            precModal.classList.add('show');
+        });
+        precModal.addEventListener('click', (e) => {
+            if (e.target === precModal) precModal.classList.remove('show');
+        });
+        precModal.querySelectorAll('.precaution-mini-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-p');
+                const delta = parseInt(btn.getAttribute('data-d'), 10);
+                tempPrec[key] = Math.max(-30, Math.min(30, (tempPrec[key] || 0) + delta));
+                syncPrecVals();
+            });
+        });
+        document.getElementById('ptPrecCancel').addEventListener('click', () => precModal.classList.remove('show'));
+        document.getElementById('ptPrecOk').addEventListener('click', () => {
+            localStorage.setItem('app_pt_precautions', JSON.stringify(tempPrec));
+            precModal.classList.remove('show');
+            renderPrayerTimes();
+        });
+
+        // 3. Asr Calculation Picker
+        const asrModal = document.getElementById('ptAsrModal');
+        const asrListEl = document.getElementById('ptAsrList');
+        let tempAsr = 'hanafi';
+        const ASR_OPTIONS = [
+            { id: 'hanafi', name: 'Hanafi' },
+            { id: 'shafi', name: 'Shafi' }
+        ];
+
+        function renderAsrList() {
+            asrListEl.innerHTML = '';
+            ASR_OPTIONS.forEach((opt) => {
+                const checked = opt.id === tempAsr;
+                const row = document.createElement('div');
+                row.className = 'pt-check-item' + (checked ? ' checked' : '');
+                row.innerHTML = `<span class="pt-check-box">${checked ? '✓' : ''}</span><span>${opt.name}</span>`;
+                row.addEventListener('click', () => {
+                    tempAsr = opt.id;
+                    renderAsrList();
+                });
+                asrListEl.appendChild(row);
+            });
+        }
+
+        document.getElementById('openPtAsrRow').addEventListener('click', () => {
+            tempAsr = loadPrayerConfig().asrMadhab;
+            renderAsrList();
+            asrModal.classList.add('show');
+        });
+        asrModal.addEventListener('click', (e) => {
+            if (e.target === asrModal) asrModal.classList.remove('show');
+        });
+        document.getElementById('ptAsrCancel').addEventListener('click', () => asrModal.classList.remove('show'));
+        document.getElementById('ptAsrOk').addEventListener('click', () => {
+            localStorage.setItem('app_madhab', tempAsr);
+            asrModal.classList.remove('show');
+            renderPrayerTimes();
+        });
+
+        // 4. High-Latitude Calculation Picker
+        const highLatModal = document.getElementById('ptHighLatModal');
+        const highLatListEl = document.getElementById('ptHighLatList');
+        let tempHighLat = 'angle';
+
+        function renderHighLatList() {
+            highLatListEl.innerHTML = '';
+            HIGH_LAT_METHODS.forEach((opt) => {
+                const checked = opt.id === tempHighLat;
+                const row = document.createElement('div');
+                row.className = 'pt-check-item' + (checked ? ' checked' : '');
+                row.innerHTML = `<span class="pt-check-box">${checked ? '✓' : ''}</span><span>${opt.name}</span>`;
+                row.addEventListener('click', () => {
+                    tempHighLat = opt.id;
+                    renderHighLatList();
+                });
+                highLatListEl.appendChild(row);
+            });
+        }
+
+        document.getElementById('openPtHighLatRow').addEventListener('click', () => {
+            tempHighLat = loadPrayerConfig().highLat;
+            renderHighLatList();
+            highLatModal.classList.add('show');
+        });
+        highLatModal.addEventListener('click', (e) => {
+            if (e.target === highLatModal) highLatModal.classList.remove('show');
+        });
+        document.getElementById('ptHighLatCancel').addEventListener('click', () => highLatModal.classList.remove('show'));
+        document.getElementById('ptHighLatOk').addEventListener('click', () => {
+            localStorage.setItem('app_pt_highlat', tempHighLat);
+            highLatModal.classList.remove('show');
+            renderPrayerTimes();
+        });
+    }
+
+    function bootPrayerTimes() {
+        // Lazy-build Prayer Times modal only when user clicks Prayer Times in 3-dots menu
+        document.addEventListener('click', (e) => {
+            const openBtn = e.target.closest('#openPrayerTimesBtn');
+            if (!openBtn) return;
+            e.preventDefault();
+            buildPrayerModalOnce();
+            if (renderPrayerTimesRef) renderPrayerTimesRef();
+            const prayerModal = document.getElementById('prayerTimesModal');
+            if (prayerModal) prayerModal.classList.add('show');
+            const dropdown = document.querySelector('.dropdown-content');
+            if (dropdown) dropdown.classList.remove('show');
+
+            if (typeof window.awraadRequestLocationOnce === 'function') {
+                window.awraadRequestLocationOnce(() => {
+                    if (prayerModal && prayerModal.classList.contains('show') && renderPrayerTimesRef) {
+                        renderPrayerTimesRef();
+                    }
+                });
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootPrayerTimes);
+    } else {
+        bootPrayerTimes();
     }
 })();
