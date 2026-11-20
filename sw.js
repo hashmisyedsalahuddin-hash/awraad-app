@@ -1,4 +1,4 @@
-const CACHE_NAME = 'awraad-live-v120';
+const CACHE_NAME = 'awraad-live-v121';
 const CORE_ASSETS = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', (event) => {
@@ -17,18 +17,21 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Network-First: Online hone par fresh GitHub update, Offline par saved cache
+// Instant Cache-First (Stale-While-Revalidate): 0ms mein page khulega aur background mein update hoga
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (response && response.status === 200) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then((cached) => {
+      const networkUpdate = fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || networkUpdate;
+    })
   );
 });
