@@ -1471,18 +1471,20 @@ body.custom-app-font-active .muqaddima-subhead {
 }
 
 /* =========================================
-   23. NAVBAR CENTER AUTO-LOCATION HIJRI DATE
+   23. NAVBAR CENTER AUTO-LOCATION HIJRI DATE (NASTALEEQ NEWSPAPER STYLE)
    ========================================= */
 .nav-hijri-date {
     flex: 1;
     text-align: center;
-    font-family: 'Amiri', serif;
-    font-size: 16px;
-    font-weight: bold;
+    font-family: 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif !important;
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.9;
     color: #1a365d;
-    padding: 0 6px;
+    padding: 2px 6px;
     white-space: nowrap;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: visible;
     text-overflow: ellipsis;
     user-select: none;
 }
@@ -1495,7 +1497,8 @@ body.dark-mode.custom-bg-active .nav-hijri-date {
 }
 @media (max-width: 400px) {
     .nav-hijri-date {
-        font-size: 14px;
+        font-size: 12px;
+        line-height: 1.85;
     }
 }
 
@@ -1974,4 +1977,142 @@ a, button, .nav-card, .sub-nav-card, .pt-option-row, .settings-nav-row, .color-p
 }
 .hizb-section, .index-section, .shijra-section {
     contain: style;
+}
+/* =========================================
+   27. TASBEEH TWO-FINGER PINCH RESIZE & DRAGGABLE WINDOW
+   ========================================= */
+#tasbeehModal.tasbeeh-modal.show {
+    display: block;
+}
+#tasbeehModal.tasbeeh-modal.tasbeeh-compact {
+    background: transparent !important;
+    pointer-events: none;
+}
+
+#tasbeehContentBox.tasbeeh-content {
+    position: fixed;
+    width: 320px;
+    max-width: 92vw;
+    margin: 0;
+    padding: 0 18px 18px 18px;
+    pointer-events: auto;
+    overflow: hidden;
+    transform-origin: 0 0;
+    will-change: transform, left, top;
+    touch-action: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.tasbeeh-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0 -18px 12px -18px;
+    padding: 9px 12px;
+    background: rgba(197, 155, 39, 0.16);
+    border-bottom: 1.5px solid rgba(197, 155, 39, 0.45);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.tasbeeh-drag-handle:active {
+    cursor: grabbing;
+}
+
+.tasbeeh-drag-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    color: #8c6d23;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tasbeeh-grip-icon {
+    font-size: 15px;
+    opacity: 0.75;
+    letter-spacing: -1px;
+}
+
+.tasbeeh-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.tasbeeh-icon-btn {
+    background: transparent;
+    border: 1px solid rgba(197, 155, 39, 0.55);
+    color: #1a365d;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+.tasbeeh-icon-btn:active {
+    transform: scale(0.92);
+    background: rgba(197, 155, 39, 0.22);
+}
+.tasbeeh-icon-btn.close-btn {
+    color: #c0392b;
+    font-size: 20px;
+}
+
+/* Subtle live zoom percentage indicator during pinch */
+.tasbeeh-zoom-indicator {
+    position: absolute;
+    top: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(26, 54, 93, 0.88);
+    color: #ffffff !important;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 3px 10px;
+    border-radius: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 20;
+}
+.tasbeeh-zoom-indicator.visible {
+    opacity: 1;
+}
+
+/* Draggable Minimized Pill */
+.tasbeeh-minimized {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Dark Mode Support for Draggable/Resizable Tasbeeh */
+body.dark-mode .tasbeeh-drag-handle {
+    background: rgba(197, 155, 39, 0.14);
+    border-bottom-color: #555555;
+}
+body.dark-mode .tasbeeh-drag-title {
+    color: #fbc531 !important;
+}
+body.dark-mode .tasbeeh-icon-btn {
+    color: #f5f6fa !important;
+    border-color: #666666;
+}
+body.dark-mode .tasbeeh-icon-btn.close-btn {
+    color: #ff6b81 !important;
+}
+body.dark-mode .tasbeeh-zoom-indicator {
+    background: rgba(197, 155, 39, 0.92);
+    color: #111111 !important;
 }

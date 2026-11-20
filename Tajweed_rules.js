@@ -1322,17 +1322,28 @@
         executeNav('back');
     };
 
+    let refreshTasbeehLayoutRef = null;
+
     function ensureTasbeehModal() {
         if (tasbeehInitialized && document.getElementById('tasbeehModal')) return;
         tasbeehInitialized = true;
 
         const tasbeehHTML = `
         <div id="tasbeehModal" class="tasbeeh-modal print-none">
-            <div class="tasbeeh-content">
-                <span class="tasbeeh-minimize" id="minimizeTasbeehBtn" title="Minimize">_</span>
-                <span class="tasbeeh-close" id="closeTasbeehBtn" title="Close">&times;</span>
-                <h3 style="margin-top:5px; margin-bottom: 20px; color:#c59b27;">Tasbeeh Counter</h3>
-                
+            <div id="tasbeehContentBox" class="tasbeeh-content">
+                <div id="tasbeehDragHandle" class="tasbeeh-drag-handle" title="Drag to move">
+                    <span class="tasbeeh-drag-title">
+                        <span class="tasbeeh-grip-icon">⋮⋮</span>
+                        <span>Tasbeeh Counter</span>
+                    </span>
+                    <div class="tasbeeh-header-actions">
+                        <button type="button" id="minimizeTasbeehBtn" class="tasbeeh-icon-btn" title="Minimize">_</button>
+                        <button type="button" id="closeTasbeehBtn" class="tasbeeh-icon-btn close-btn" title="Close">&times;</button>
+                    </div>
+                </div>
+
+                <div id="tasbeehZoomIndicator" class="tasbeeh-zoom-indicator">100%</div>
+
                 <div class="tasbeeh-controls">
                     <select id="tasbeehTarget">
                         <option value="100">Target: 100</option>
@@ -1346,7 +1357,7 @@
                         <option value="manual">Manual Mode</option>
                         <option value="auto">Auto Mode</option>
                     </select>
-                    
+
                     <select id="tasbeehInterval" style="display:none;">
                         <option value="custom" selected>Custom</option>
                     </select>
@@ -1354,7 +1365,7 @@
                 </div>
 
                 <div class="tasbeeh-count-display" id="tasbeehCount">0</div>
-                
+
                 <div class="tasbeeh-progress-bg">
                     <div id="tasbeehProgressBar" class="tasbeeh-progress-bar"></div>
                 </div>
@@ -1370,7 +1381,7 @@
                 </div>
             </div>
         </div>
-        <div id="tasbeehMinimized" class="tasbeeh-minimized print-none" style="display:none;" title="Maximize Tasbeeh">
+        <div id="tasbeehMinimized" class="tasbeeh-minimized print-none" style="display:none;" title="Drag ya Tap karke open karein">
             <span class="menu-icon" style="font-size:20px;">📿</span>
             <span id="minimizedCount">0 / 100</span>
             <button id="maximizeTasbeehBtn">⛶</button>
@@ -1379,6 +1390,9 @@
         document.body.insertAdjacentHTML('beforeend', tasbeehHTML);
 
         const tasbeehModal = document.getElementById('tasbeehModal');
+        const tasbeehContent = document.getElementById('tasbeehContentBox');
+        const dragHandle = document.getElementById('tasbeehDragHandle');
+        const zoomIndicator = document.getElementById('tasbeehZoomIndicator');
         const closeTasbeehBtn = document.getElementById('closeTasbeehBtn');
         const targetSelect = document.getElementById('tasbeehTarget');
         const customTargetInput = document.getElementById('tasbeehCustomTarget');
@@ -1396,8 +1410,22 @@
         const minimizeTasbeehBtn = document.getElementById('minimizeTasbeehBtn');
         const tasbeehMinimized = document.getElementById('tasbeehMinimized');
 
+        const MIN_SCALE = 0.45;
+        const MAX_SCALE = 1.15;
+
         let count = parseInt(localStorage.getItem('tasbeeh_count')) || 0;
         let target = parseInt(localStorage.getItem('tasbeeh_target')) || 100;
+        let currentScale = parseFloat(localStorage.getItem('tasbeeh_scale'));
+        if (isNaN(currentScale) || currentScale < MIN_SCALE || currentScale > MAX_SCALE) {
+            currentScale = 1;
+        }
+        let currentLeft = 0;
+        let currentTop = 0;
+        let hasCustomPos = false;
+        let isDragging = false;
+        let isPinching = false;
+        let lastPinchEndTime = 0;
+        let zoomBadgeTimer = null;
 
         if (targetSelect) {
             targetSelect.value = target === 100 ? "100" : "custom";
@@ -1430,6 +1458,267 @@
             if (minimizedCount) minimizedCount.innerText = count + " / " + target;
         }
 
+        function showZoomBadge(scaleVal) {
+            if (!zoomIndicator) return;
+            zoomIndicator.textContent = Math.round(scaleVal * 100) + '%';
+            zoomIndicator.classList.add('visible');
+            if (zoomBadgeTimer) clearTimeout(zoomBadgeTimer);
+            zoomBadgeTimer = setTimeout(() => {
+                zoomIndicator.classList.remove('visible');
+            }, 700);
+        }
+
+        function getMaxAllowedScale() {
+            const baseW = tasbeehContent.offsetWidth || 320;
+            return Math.min(MAX_SCALE, Math.max(MIN_SCALE, (window.innerWidth - 12) / baseW));
+        }
+
+        function clampScaledPosition(left, top, scale) {
+            const baseW = tasbeehContent.offsetWidth || 320;
+            const baseH = tasbeehContent.offsetHeight || 400;
+            const visW = baseW * scale;
+            const visH = baseH * scale;
+            const maxLeft = Math.max(6, window.innerWidth - visW - 6);
+            const maxTop = Math.max(6, window.innerHeight - visH - 6);
+            return {
+                left: Math.min(Math.max(6, left), maxLeft),
+                top: Math.min(Math.max(6, top), maxTop)
+            };
+        }
+
+        function clampPillPosition(pillEl, left, top) {
+            const rect = pillEl.getBoundingClientRect();
+            const w = rect.width || 160;
+            const h = rect.height || 52;
+            const maxLeft = Math.max(6, window.innerWidth - w - 6);
+            const maxTop = Math.max(6, window.innerHeight - h - 6);
+            return {
+                left: Math.min(Math.max(6, left), maxLeft),
+                top: Math.min(Math.max(6, top), maxTop)
+            };
+        }
+
+        function updateBackdropMode() {
+            // Chota zoom (< 95%) ya drag hone par transparent floating mode taake Awraad aaraam se padh aur scroll kar sakein
+            const isFloating = currentScale < 0.95 || hasCustomPos;
+            tasbeehModal.classList.toggle('tasbeeh-compact', isFloating);
+        }
+
+        function applyTasbeehTransform(left, top, scale) {
+            const clampedScale = Math.min(getMaxAllowedScale(), Math.max(MIN_SCALE, scale));
+            const pos = clampScaledPosition(left, top, clampedScale);
+            currentScale = clampedScale;
+            currentLeft = pos.left;
+            currentTop = pos.top;
+
+            tasbeehContent.style.left = currentLeft + 'px';
+            tasbeehContent.style.top = currentTop + 'px';
+            tasbeehContent.style.transform = `scale(${currentScale.toFixed(4)})`;
+            updateBackdropMode();
+        }
+
+        function saveTasbeehGeometry() {
+            localStorage.setItem('tasbeeh_scale', currentScale.toFixed(3));
+            if (hasCustomPos || currentScale < 0.95) {
+                localStorage.setItem('tasbeeh_pos', JSON.stringify({
+                    left: Math.round(currentLeft),
+                    top: Math.round(currentTop)
+                }));
+            }
+        }
+
+        function initTasbeehLayout() {
+            requestAnimationFrame(() => {
+                const maxAllowed = getMaxAllowedScale();
+                if (currentScale > maxAllowed) currentScale = maxAllowed;
+
+                let savedPos = null;
+                try {
+                    savedPos = JSON.parse(localStorage.getItem('tasbeeh_pos') || 'null');
+                } catch (e) {}
+
+                const baseW = tasbeehContent.offsetWidth || 320;
+                const baseH = tasbeehContent.offsetHeight || 400;
+                const defaultLeft = (window.innerWidth - baseW * currentScale) / 2;
+                const defaultTop = (window.innerHeight - baseH * currentScale) / 2;
+
+                if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
+                    hasCustomPos = true;
+                    applyTasbeehTransform(savedPos.left, savedPos.top, currentScale);
+                } else {
+                    hasCustomPos = false;
+                    applyTasbeehTransform(defaultLeft, defaultTop, currentScale);
+                }
+            });
+        }
+
+        refreshTasbeehLayoutRef = initTasbeehLayout;
+
+        // 1. Two-Finger Pinch Zoom-In / Zoom-Out Resizing (anywhere on Tasbeeh Window)
+        if (tasbeehContent) {
+            let pinchStartDist = 0;
+            let pinchStartScale = 1;
+            let pinchLocalX = 0;
+            let pinchLocalY = 0;
+
+            function getTouchDistance(t1, t2) {
+                return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+            }
+
+            tasbeehContent.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) {
+                    isPinching = true;
+                    isDragging = false;
+                    hasCustomPos = true;
+
+                    const t1 = e.touches[0];
+                    const t2 = e.touches[1];
+                    pinchStartDist = Math.max(10, getTouchDistance(t1, t2));
+                    pinchStartScale = currentScale;
+
+                    const midX = (t1.clientX + t2.clientX) / 2;
+                    const midY = (t1.clientY + t2.clientY) / 2;
+                    pinchLocalX = (midX - currentLeft) / pinchStartScale;
+                    pinchLocalY = (midY - currentTop) / pinchStartScale;
+
+                    showZoomBadge(currentScale);
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            tasbeehContent.addEventListener('touchmove', (e) => {
+                if (!isPinching || e.touches.length < 2) return;
+                e.preventDefault();
+
+                const t1 = e.touches[0];
+                const t2 = e.touches[1];
+                const newDist = getTouchDistance(t1, t2);
+                const ratio = newDist / pinchStartDist;
+                const targetScale = Math.min(getMaxAllowedScale(), Math.max(MIN_SCALE, pinchStartScale * ratio));
+
+                const midX = (t1.clientX + t2.clientX) / 2;
+                const midY = (t1.clientY + t2.clientY) / 2;
+                const newLeft = midX - pinchLocalX * targetScale;
+                const newTop = midY - pinchLocalY * targetScale;
+
+                applyTasbeehTransform(newLeft, newTop, targetScale);
+                showZoomBadge(currentScale);
+            }, { passive: false });
+
+            function endPinch(e) {
+                if (!isPinching) return;
+                if (!e.touches || e.touches.length < 2) {
+                    isPinching = false;
+                    lastPinchEndTime = Date.now();
+                    saveTasbeehGeometry();
+                }
+            }
+
+            tasbeehContent.addEventListener('touchend', endPinch);
+            tasbeehContent.addEventListener('touchcancel', endPinch);
+
+            // Trackpad / Ctrl+Wheel zoom support on desktop
+            tasbeehContent.addEventListener('wheel', (e) => {
+                if (!e.ctrlKey) return;
+                e.preventDefault();
+                hasCustomPos = true;
+                const delta = e.deltaY < 0 ? 0.06 : -0.06;
+                const targetScale = Math.min(getMaxAllowedScale(), Math.max(MIN_SCALE, currentScale + delta));
+                const localX = (e.clientX - currentLeft) / currentScale;
+                const localY = (e.clientY - currentTop) / currentScale;
+                applyTasbeehTransform(e.clientX - localX * targetScale, e.clientY - localY * targetScale, targetScale);
+                showZoomBadge(currentScale);
+                saveTasbeehGeometry();
+            }, { passive: false });
+        }
+
+        // 2. Smooth 1-Finger Touch + Mouse Dragging for Tasbeeh Window (via Header Handle)
+        if (dragHandle && tasbeehContent) {
+            let dragOffsetX = 0;
+            let dragOffsetY = 0;
+
+            dragHandle.addEventListener('pointerdown', (e) => {
+                if (isPinching || e.target.closest('button')) return;
+                isDragging = true;
+                dragOffsetX = e.clientX - currentLeft;
+                dragOffsetY = e.clientY - currentTop;
+                try { dragHandle.setPointerCapture(e.pointerId); } catch (err) {}
+                e.preventDefault();
+            });
+
+            dragHandle.addEventListener('pointermove', (e) => {
+                if (!isDragging || isPinching) return;
+                hasCustomPos = true;
+                applyTasbeehTransform(e.clientX - dragOffsetX, e.clientY - dragOffsetY, currentScale);
+            });
+
+            function finishDrag(e) {
+                if (!isDragging) return;
+                isDragging = false;
+                try { dragHandle.releasePointerCapture(e.pointerId); } catch (err) {}
+                saveTasbeehGeometry();
+            }
+
+            dragHandle.addEventListener('pointerup', finishDrag);
+            dragHandle.addEventListener('pointercancel', finishDrag);
+        }
+
+        // 3. Smooth Touch + Mouse Dragging for Minimized Pill (Tap = Open, Drag = Move)
+        if (tasbeehMinimized) {
+            let pillDragging = false;
+            let pillMoved = false;
+            let pillStartX = 0;
+            let pillStartY = 0;
+            let pillOffsetX = 0;
+            let pillOffsetY = 0;
+
+            tasbeehMinimized.addEventListener('pointerdown', (e) => {
+                pillDragging = true;
+                pillMoved = false;
+                pillStartX = e.clientX;
+                pillStartY = e.clientY;
+                const rect = tasbeehMinimized.getBoundingClientRect();
+                pillOffsetX = e.clientX - rect.left;
+                pillOffsetY = e.clientY - rect.top;
+                try { tasbeehMinimized.setPointerCapture(e.pointerId); } catch (err) {}
+            });
+
+            tasbeehMinimized.addEventListener('pointermove', (e) => {
+                if (!pillDragging) return;
+                if (!pillMoved && (Math.abs(e.clientX - pillStartX) > 6 || Math.abs(e.clientY - pillStartY) > 6)) {
+                    pillMoved = true;
+                    tasbeehMinimized.style.right = 'auto';
+                    tasbeehMinimized.style.bottom = 'auto';
+                }
+                if (pillMoved) {
+                    const pos = clampPillPosition(tasbeehMinimized, e.clientX - pillOffsetX, e.clientY - pillOffsetY);
+                    tasbeehMinimized.style.left = pos.left + 'px';
+                    tasbeehMinimized.style.top = pos.top + 'px';
+                }
+            });
+
+            function finishPillDrag(e) {
+                if (!pillDragging) return;
+                pillDragging = false;
+                try { tasbeehMinimized.releasePointerCapture(e.pointerId); } catch (err) {}
+                if (!pillMoved) {
+                    tasbeehMinimized.style.display = 'none';
+                    tasbeehModal.classList.add('show');
+                    initTasbeehLayout();
+                }
+            }
+
+            tasbeehMinimized.addEventListener('pointerup', finishPillDrag);
+            tasbeehMinimized.addEventListener('pointercancel', finishPillDrag);
+        }
+
+        // Keep floating Tasbeeh inside screen on rotate / resize
+        window.addEventListener('resize', () => {
+            if (tasbeehModal.classList.contains('show')) {
+                applyTasbeehTransform(currentLeft, currentTop, currentScale);
+            }
+        });
+
         function activateTasbeehGuard() {
             if (!window.tasbeehSessionActive) {
                 window.tasbeehSessionActive = true;
@@ -1459,25 +1748,21 @@
         updateProgress();
 
         if (minimizeTasbeehBtn) {
-            minimizeTasbeehBtn.addEventListener('click', () => {
+            minimizeTasbeehBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 tasbeehModal.classList.remove('show');
                 tasbeehMinimized.style.display = 'flex';
             });
         }
-        if (tasbeehMinimized) {
-            tasbeehMinimized.addEventListener('click', () => {
-                tasbeehMinimized.style.display = 'none';
-                tasbeehModal.classList.add('show');
-            });
-        }
 
-        closeTasbeehBtn.addEventListener('click', () => {
+        closeTasbeehBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             tasbeehModal.classList.remove('show');
             pauseAuto();
         });
 
         tasbeehModal.addEventListener('click', (e) => {
-            if (e.target === tasbeehModal) {
+            if (!tasbeehModal.classList.contains('tasbeeh-compact') && e.target === tasbeehModal) {
                 tasbeehModal.classList.remove('show');
                 if (tasbeehMinimized) {
                     tasbeehMinimized.style.display = 'flex';
@@ -1569,6 +1854,7 @@
         }
 
         mainTapBtn.addEventListener('click', () => {
+            if (isPinching || (Date.now() - lastPinchEndTime) < 260) return;
             unlockAudio();
             activateTasbeehGuard();
             if (count < target) incrementCount();
@@ -1750,6 +2036,7 @@
                 const minBar = document.getElementById('tasbeehMinimized');
                 if (minBar) minBar.style.display = 'none';
                 if (modal) modal.classList.add('show');
+                if (typeof refreshTasbeehLayoutRef === 'function') refreshTasbeehLayoutRef();
                 dropdownContent.classList.remove('show');
             });
         }
@@ -2466,6 +2753,7 @@
         link.href = url;
         document.head.appendChild(link);
     }
+    window.awraadEnsureFontLoaded = ensureFontLoaded;
 
     const COLOR_PALETTES = [
         { primary: '#F44336', shades: ['#FFEBEE','#FFCDD2','#EF9A9A','#E57373','#EF5350','#F44336','#E53935','#D32F2F','#C62828','#B71C1C'] },
@@ -3244,6 +3532,11 @@
         return effective;
     }
 
+    function toArabicDigits(str) {
+        const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+        return String(str).replace(/\d/g, (d) => digits[d]);
+    }
+
     function formatHijriFromDate(targetDate) {
         try {
             const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
@@ -3258,7 +3551,7 @@
             const monthName = HIJRI_MONTHS_UR[monthNum - 1] || '';
 
             if (day && monthName && year) {
-                return `${day} ${monthName} ${year}ھ`;
+                return `${toArabicDigits(day)} ${monthName} ${toArabicDigits(year)}ھ`;
             }
         } catch (err) {}
         return '';
@@ -3294,6 +3587,11 @@
     function initAutoLocationHijriDate() {
         const el = document.getElementById('navHijriDate');
         if (!el) return;
+
+        // Async non-blocking load of Nastaleeq font for Siasat Daily style Hijri date
+        if (typeof window.awraadEnsureFontLoaded === 'function') {
+            window.awraadEnsureFontLoaded("'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif");
+        }
 
         const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
         let currentOffset = getOffsetFromTimezone(detectedTz);
@@ -3926,5 +4224,177 @@
         document.addEventListener('DOMContentLoaded', bootPrayerTimes);
     } else {
         bootPrayerTimes();
+    }
+})();
+// ==========================================
+// PART 13: DOUBLE-TAP BACK TO EXIT & MODAL BACK HANDLER (PURE JS + CSS)
+// ==========================================
+(function() {
+    const EXIT_WINDOW_MS = 2000;
+    let exitResetTimer = null;
+    let lastCapacitorBackTime = 0;
+
+    function isMainMenuRoot() {
+        const path = (window.location.pathname || '').toLowerCase();
+        const isRootPage = path === '' || path === '/' || path.endsWith('/index.html') || path === 'index.html';
+        const hash = (window.location.hash || '').toLowerCase();
+        const isRootHash = hash === '' || hash === '#' || hash === '#main-menu';
+        return isRootPage && isRootHash;
+    }
+
+    function showExitToast(message) {
+        let toast = document.getElementById('awraadExitToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'awraadExitToast';
+            toast.className = 'exit-toast print-none';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message || 'App band karne ke liye dobara Back dabayein';
+        // Restart animation cleanly
+        toast.classList.remove('show');
+        void toast.offsetWidth;
+        toast.classList.add('show');
+    }
+
+    function hideExitToast() {
+        const toast = document.getElementById('awraadExitToast');
+        if (toast) toast.classList.remove('show');
+    }
+
+    function closeTopOpenModal() {
+        const selectors = [
+            '#navWarningModal.show',
+            '.hijri-stepper-modal.show',
+            '.pt-submodal.show',
+            '.palette-modal.show',
+            '.settings-modal.show',
+            '.prayer-modal.show',
+            '#tasbeehModal.show:not(.tasbeeh-compact)',
+            '.dropdown-content.show'
+        ];
+        for (let i = 0; i < selectors.length; i++) {
+            const el = document.querySelector(selectors[i]);
+            if (el) {
+                el.classList.remove('show');
+                if (selectors[i].indexOf('tasbeehModal') !== -1 && typeof window.tasbeehPauseAuto === 'function') {
+                    window.tasbeehPauseAuto();
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function armExitGuard() {
+        if (window.tasbeehSessionActive) return;
+        if (!isMainMenuRoot()) return;
+
+        try {
+            if (history.state && history.state.awraadExitGuard) return;
+
+            if (!history.state || !history.state.awraadExitBase) {
+                history.replaceState({ awraadExitBase: true }, '', window.location.href);
+            }
+            history.pushState({ awraadExitGuard: true }, '', window.location.href);
+        } catch (err) {}
+    }
+
+    // 1. Native Capacitor App Plugin listener (agar future mein @capacitor/app install ho to automatically use hoga)
+    let usingCapacitorPlugin = false;
+    function setupCapacitorBackListener() {
+        try {
+            const capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+            if (capApp && typeof capApp.addListener === 'function') {
+                usingCapacitorPlugin = true;
+                capApp.addListener('backButton', function(data) {
+                    if (window.tasbeehSessionActive) {
+                        window.history.back();
+                        return;
+                    }
+                    if (closeTopOpenModal()) return;
+
+                    if (!isMainMenuRoot() && data && data.canGoBack) {
+                        window.history.back();
+                        return;
+                    }
+
+                    const now = Date.now();
+                    if (now - lastCapacitorBackTime < EXIT_WINDOW_MS) {
+                        hideExitToast();
+                        if (typeof capApp.exitApp === 'function') {
+                            capApp.exitApp();
+                        }
+                    } else {
+                        lastCapacitorBackTime = now;
+                        showExitToast('App band karne ke liye dobara Back dabayein');
+                        if (exitResetTimer) clearTimeout(exitResetTimer);
+                        exitResetTimer = setTimeout(hideExitToast, EXIT_WINDOW_MS);
+                    }
+                });
+            }
+        } catch (err) {}
+    }
+
+    // 2. Pure JavaScript History Guard (Capacitor WebView without plugins + Mobile Browser / PWA)
+    function initBackGuardSystem() {
+        setupCapacitorBackListener();
+        if (usingCapacitorPlugin) return;
+
+        armExitGuard();
+
+        // First user tap/scroll par ensure karein ke guard armed ho (Chrome History Intervention safety)
+        const onFirstGesture = () => {
+            if (!exitResetTimer && isMainMenuRoot()) {
+                armExitGuard();
+            }
+        };
+        document.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
+
+        window.addEventListener('pageshow', () => {
+            if (!exitResetTimer && isMainMenuRoot()) {
+                armExitGuard();
+            }
+        });
+
+        window.addEventListener('popstate', (e) => {
+            // Tasbeeh active hone par Part 4 ka Tasbeeh Guard priority lega
+            if (window.tasbeehSessionActive) return;
+
+            // Agar koi popup/modal/menu khula ho to pehle usay band karein aur guard wapas lagayein
+            if (closeTopOpenModal()) {
+                if (exitResetTimer) {
+                    clearTimeout(exitResetTimer);
+                    exitResetTimer = null;
+                }
+                hideExitToast();
+                if (isMainMenuRoot()) {
+                    armExitGuard();
+                }
+                return;
+            }
+
+            // Agar user Main Menu ke guard state se peeche base state par aaya hai -> 1st Back tap!
+            if (isMainMenuRoot() && e.state && e.state.awraadExitBase) {
+                showExitToast('App band karne ke liye dobara Back dabayein');
+
+                if (exitResetTimer) clearTimeout(exitResetTimer);
+                // 2 second ke andar 2nd Back tap hoga to base state se seedha app close ho jayega.
+                // Agar 2 second mein tap nahi kiya to toast hat kar guard dobara arm ho jayega.
+                exitResetTimer = setTimeout(() => {
+                    exitResetTimer = null;
+                    hideExitToast();
+                    if (!window.tasbeehSessionActive && isMainMenuRoot()) {
+                        armExitGuard();
+                    }
+                }, EXIT_WINDOW_MS);
+            }
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initBackGuardSystem);
+    } else {
+        initBackGuardSystem();
     }
 })();
