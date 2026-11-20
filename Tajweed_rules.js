@@ -1253,7 +1253,6 @@
         const isIndex = window.location.pathname.toLowerCase().endsWith('index.html') || window.location.pathname.endsWith('/');
         const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
         const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
-        const subMenuPath = isIndex ? '#menu-shijara' : './index.html#menu-shijara';
         const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
 
         const navbarHTML = `
@@ -1263,7 +1262,6 @@
                     <button class="nav-btn kebab-btn" title="Menu">⋮</button>
                     <div class="dropdown-content">
                         <a href="${indexPath}" class="menu-item"><span>Main Menu</span> <span class="menu-icon">🏠</span></a>
-                        <a href="${subMenuPath}" class="menu-item"><span>Sub Menu</span> <span class="menu-icon">📂</span></a>
 
                         <!-- Shajara Submenu -->
                         <button type="button" class="submenu-toggle" data-target="submenu-shajara">
