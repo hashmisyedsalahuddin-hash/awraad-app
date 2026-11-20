@@ -1263,15 +1263,15 @@
                     <div class="dropdown-content">
                         <a href="${indexPath}" class="menu-item"><span>Main Menu</span> <span class="menu-icon">🏠</span></a>
 
-                        <!-- Shajara Submenu -->
+                        <!-- Shajara e Shareef Submenu -->
                         <button type="button" class="submenu-toggle" data-target="submenu-shajara">
-                            <span>Shajara</span> <span class="submenu-arrow">▾</span>
+                            <span>Shajara e Shareef</span> <span class="submenu-arrow">▾</span>
                         </button>
                         <div id="submenu-shajara" class="dropdown-submenu">
-                            <a href="${shajaraBase}#qadriya" class="menu-item"><span>Qadriya</span></a>
-                            <a href="${shajaraBase}#chishtiyya" class="menu-item"><span>Chishtiya</span></a>
-                            <a href="${shajaraBase}#akbariya" class="menu-item"><span>Akbariya</span></a>
-                            <a href="${shajaraBase}#asnaad" class="menu-item"><span>Asnad e Dala'il</span></a>
+                            <a href="${shajaraBase}#qadriya" class="menu-item"><span>Silsila e Qadriya</span></a>
+                            <a href="${shajaraBase}#chishtiyya" class="menu-item"><span>Silsila e Chishtiya</span></a>
+                            <a href="${shajaraBase}#akbariya" class="menu-item"><span>Silsila e Akbariya</span></a>
+                            <a href="${shajaraBase}#asnaad" class="menu-item"><span>Asnad e Dalail-ul-Khairat</span></a>
                         </div>
 
                         <!-- Awraad o Wazaef Submenu -->
@@ -1486,7 +1486,7 @@
             }
         });
 
-        // Submenu accordion toggle (Shajara & Awraad o Wazaef)
+        // Submenu accordion toggle (Shajara e Shareef & Awraad o Wazaef)
         const submenuToggles = document.querySelectorAll('.dropdown-content .submenu-toggle');
         submenuToggles.forEach(function(toggleBtn) {
             toggleBtn.addEventListener('click', function(e) {
