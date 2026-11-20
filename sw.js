@@ -1,5 +1,5 @@
-const CACHE_NAME = 'awraad-live-v127';
-const CORE_ASSETS = ['./', './index.html', './manifest.json'];
+const CACHE_NAME = 'awraad-live-v128';
+const CORE_ASSETS = ['./', './index.html', './manifest.json', './theme-preload.js'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
