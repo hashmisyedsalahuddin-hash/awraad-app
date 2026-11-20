@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Extract Project Bundle
         run: |
@@ -32,7 +32,7 @@ jobs:
           fi
 
       - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
 
@@ -200,6 +200,7 @@ jobs:
 
             if (fs.existsSync("capacitor.config.json")) {
               const cfg = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
+              delete cfg.bundledWebRuntime;
               cfg.server = {
                 ...(cfg.server || {}),
                 url: url,
@@ -211,6 +212,7 @@ jobs:
               console.log("Updated capacitor.config.json with live URL:", url);
             } else if (fs.existsSync("capacitor.config.ts")) {
               let ts = fs.readFileSync("capacitor.config.ts", "utf8");
+              ts = ts.replace(/^\s*bundledWebRuntime\s*:\s*(true|false)\s*,?\s*\r?\n/gm, "");
               const serverBlock = "  server: {\n    url: \"" + url + "\",\n    cleartext: false,\n    errorPath: \"index.html\",\n    allowNavigation: [\"" + host + "\"]\n  },\n";
               if (ts.includes("server:")) {
                 ts = ts.replace(/server\s*:\s*\{[\s\S]*?\},?/, serverBlock.trim() + ",");
@@ -280,7 +282,7 @@ jobs:
           EOF
 
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '21'
@@ -299,22 +301,17 @@ jobs:
           publish_dir: ./www
           keep_files: false
 
-      - name: Clear Old Latest Release & Tag (Force Fresh APK)
+      - name: Clear Old Release & Publish Permanent Android APK to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/latest" 2>/dev/null || true
+          gh release delete latest --yes --cleanup-tag >/dev/null 2>&1 || true
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/latest" >/dev/null 2>&1 || true
           sleep 2
 
-      - name: Publish Permanent Android APK to GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: Awraad e Alaviya Nooriya (Latest APK)
-          body: |
-            **Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
-            Is APK ko sirf ek baar install karna hai. Aage ke sabhi web updates GitHub se automatically aate rahenge.
-          make_latest: true
-          files: |
-            Awraad-e-Alaviya-Nooriya.apk
+          gh release create latest "Awraad-e-Alaviya-Nooriya.apk" \
+            --target "${{ github.sha }}" \
+            --title "Awraad e Alaviya Nooriya (Latest APK)" \
+            --notes "**Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
+          Is APK ko sirf ek baar install karna hai. Aage ke sabhi web updates GitHub se automatically aate rahenge." \
+            --latest
