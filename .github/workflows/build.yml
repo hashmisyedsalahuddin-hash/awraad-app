@@ -96,14 +96,19 @@ jobs:
           (function() {
             try {
               var root = document.documentElement;
+              var head = document.head || root;
               var isDark = localStorage.getItem('theme') === 'dark';
               var savedBg = localStorage.getItem('app_custom_bg');
               var savedText = localStorage.getItem('app_custom_text');
               var savedSize = localStorage.getItem('app_font_size');
+              var savedContentFont = localStorage.getItem('app_content_font');
+              var savedAppFont = localStorage.getItem('app_ui_font');
               var tajweedOff = localStorage.getItem('app_tajweed_colors') === 'false';
 
               if (isDark) root.classList.add('dark-mode');
               if (tajweedOff) root.classList.add('tajweed-colors-off');
+
+              var lockCss = '';
 
               if (savedBg && /^#[0-9a-fA-F]{6}$/.test(savedBg)) {
                 var r = parseInt(savedBg.substring(1, 3), 16);
@@ -178,8 +183,31 @@ jobs:
                 root.style.setProperty('--auto-table-head-text', t.tableHeadText);
                 root.classList.add('custom-bg-active');
                 if (isDarkBg) root.classList.add('custom-bg-dark');
+
+                lockCss =
+                  '@media screen{' +
+                  'html,body,.continuous-frame,.continuous-inner{background:' + savedBg + ' !important;background-color:' + savedBg + ' !important;}' +
+                  '.app-navbar{background-color:' + t.navBg + ' !important;border-bottom-color:' + t.border + ' !important;}' +
+                  '.nav-card,.sub-nav-card,.daily-malfooz-container,.malfooz-card,.shijra-table,.name-card,.timer-card{background-color:' + t.cardBg + ' !important;border-color:' + t.border + ' !important;}' +
+                  '}';
               } else if (isDark) {
                 root.style.backgroundColor = '#121212';
+                lockCss =
+                  '@media screen{' +
+                  'html,body{background:#121212 !important;background-color:#121212 !important;color:#f5f6fa !important;}' +
+                  '.continuous-frame,.continuous-inner{background:#1e1e1e !important;background-color:#1e1e1e !important;}' +
+                  '.app-navbar{background-color:#2a2a2a !important;}' +
+                  '}';
+              }
+
+              if (lockCss && head) {
+                var st = document.getElementById('awraad-preload-lock');
+                if (!st) {
+                  st = document.createElement('style');
+                  st.id = 'awraad-preload-lock';
+                  head.appendChild(st);
+                }
+                st.textContent = lockCss;
               }
 
               if (savedText) {
@@ -190,54 +218,28 @@ jobs:
                 root.style.setProperty('--user-font-size', savedSize + 'px');
                 root.classList.add('custom-size-active');
               }
+              if (savedContentFont) {
+                root.style.setProperty('--user-content-font', savedContentFont);
+                root.classList.add('custom-content-font-active');
+              }
+              if (savedAppFont) {
+                root.style.setProperty('--user-app-font', savedAppFont);
+                root.classList.add('custom-app-font-active');
+              }
+
+              if (head && !document.getElementById('awraad-amiri-font-link')) {
+                var fl = document.createElement('link');
+                fl.id = 'awraad-amiri-font-link';
+                fl.rel = 'stylesheet';
+                fl.href = 'https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap';
+                head.appendChild(fl);
+              }
             } catch (e) {}
           })();
           EOF
           fi
 
-          # 3. Auto-Updating Fast Service Worker (Har build par fresh cache + 0ms page switching)
-          cat << 'EOF' > www/sw.js
-          const CACHE_NAME = 'awraad-live-v__BUILD_NUM__';
-          const CORE_ASSETS = ['./', './index.html', './manifest.json', './theme-preload.js'];
-
-          self.addEventListener('install', (event) => {
-            event.waitUntil(
-              caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
-            );
-            self.skipWaiting();
-          });
-
-          self.addEventListener('activate', (event) => {
-            event.waitUntil(
-              caches.keys().then((keys) =>
-                Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-              )
-            );
-            self.clients.claim();
-          });
-
-          // Instant Cache-First (Stale-While-Revalidate): 0ms mein page khulega aur background mein update hoga
-          self.addEventListener('fetch', (event) => {
-            if (event.request.method !== 'GET') return;
-            event.respondWith(
-              caches.match(event.request).then((cached) => {
-                const networkUpdate = fetch(event.request)
-                  .then((response) => {
-                    if (response && response.status === 200) {
-                      const copy = response.clone();
-                      caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-                    }
-                    return response;
-                  })
-                  .catch(() => cached);
-                return cached || networkUpdate;
-              })
-            );
-          });
-          EOF
-          sed -i "s/__BUILD_NUM__/${{ github.run_number }}/g" www/sw.js
-
-          # 4. External PWA Registration + Auto-Refresh Script (iPhone & Android Live APK dono ke liye)
+          # 3. External PWA Registration + Auto-Refresh Script (iPhone & Android Live APK dono ke liye)
           cat << 'EOF' > www/pwa-init.js
           if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
             const hadController = Boolean(navigator.serviceWorker.controller);
@@ -256,54 +258,116 @@ jobs:
           }
           EOF
 
-          # 5. Sabhi HTML files mein theme-preload.js + iPhone Full-Screen & PWA tags inject karein
+          # 4. Auto-Updating Fast Service Worker (Har build par sabhi HTML/CSS/JS pre-cache + 0ms page switching)
+          BUILD_NUM="${{ github.run_number }}" node -e '
+            const fs = require("fs");
+            const path = require("path");
+            function walk(dir, base = "") {
+              let out = [];
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const rel = base ? base + "/" + entry.name : entry.name;
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) out = out.concat(walk(full, rel));
+                else if (/\.(html|css|js|json)$/i.test(entry.name) && entry.name !== "sw.js") {
+                  out.push("./" + rel);
+                }
+              }
+              return out;
+            }
+            const allAssets = Array.from(new Set(["./", ...walk("www")]));
+            const swCode = `const CACHE_NAME = "awraad-live-v${process.env.BUILD_NUM}";
+const CORE_ASSETS = ${JSON.stringify(allAssets, null, 2)};
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(CORE_ASSETS.map((url) => cache.add(url).catch(() => {})))
+    )
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") return;
+  event.respondWith(
+    caches.match(event.request).then((cached) => {
+      const networkUpdate = fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => cached);
+      return cached || networkUpdate;
+    })
+  );
+});
+`;
+            fs.writeFileSync("www/sw.js", swCode, "utf8");
+          '
+
+          # 5. Sabhi HTML files (subfolders samet) mein <head> ke SABSE TOP par theme-preload.js + PWA tags inject karein
           node -e '
             const fs = require("fs");
             const path = require("path");
-            const wwwDir = "www";
-            const files = fs.readdirSync(wwwDir).filter(f => f.toLowerCase().endsWith(".html"));
 
-            const iosMeta = [
-              "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
-              "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
-              "  <meta name=\"apple-mobile-web-app-title\" content=\"Awraad\">",
-              "  <meta name=\"theme-color\" content=\"#0c3b2e\">",
-              "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"./apple-touch-icon.png\">",
-              "  <link rel=\"manifest\" href=\"./manifest.json\">",
-              "  <script src=\"./pwa-init.js\" defer></script>"
-            ].join("\n");
+            function getAllHtmlFiles(dir, depth = 0) {
+              let results = [];
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                  results = results.concat(getAllHtmlFiles(full, depth + 1));
+                } else if (entry.name.toLowerCase().endsWith(".html")) {
+                  results.push({ fullPath: full, prefix: depth === 0 ? "./" : "../".repeat(depth) });
+                }
+              }
+              return results;
+            }
 
-            for (const file of files) {
-              const fullPath = path.join(wwwDir, file);
+            for (const { fullPath, prefix } of getAllHtmlFiles("www")) {
               let html = fs.readFileSync(fullPath, "utf8");
-              let changed = false;
+              const iosMeta = [
+                "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
+                "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
+                "  <meta name=\"apple-mobile-web-app-title\" content=\"Awraad\">",
+                "  <meta name=\"theme-color\" content=\"#0c3b2e\">",
+                "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"" + prefix + "apple-touch-icon.png\">",
+                "  <link rel=\"manifest\" href=\"" + prefix + "manifest.json\">",
+                "  <script src=\"" + prefix + "pwa-init.js\" defer></script>"
+              ].join("\n");
 
               if (!html.includes("viewport-fit=cover")) {
-                const next = html.replace(/content="([^"]*width=device-width[^"]*)"/i, "content=\"$1, viewport-fit=cover\"");
-                if (next !== html) {
-                  html = next;
-                  changed = true;
-                }
+                html = html.replace(/content="([^"]*width=device-width[^"]*)"/i, "content=\"$1, viewport-fit=cover\"");
               }
-              if (!html.includes("theme-preload.js")) {
-                if (/<\/head>/i.test(html)) {
-                  html = html.replace(/<\/head>/i, "  <script src=\"./theme-preload.js\"></script>\n</head>");
-                } else {
-                  html = "  <script src=\"./theme-preload.js\"></script>\n" + html;
-                }
-                changed = true;
+
+              // Purane theme-preload.js tag ko remove karke <head> ke BILKUL TOP par lagayein (CSS se pehle)
+              html = html.replace(/[ \t]*<script[^>]+theme-preload\.js[^>]*><\/script>\r?\n?/gi, "");
+              const preloadTag = "  <script src=\"" + prefix + "theme-preload.js\"></script>";
+              if (/<head\b[^>]*>/i.test(html)) {
+                html = html.replace(/(<head\b[^>]*>)/i, "$1\n" + preloadTag);
+              } else {
+                html = preloadTag + "\n" + html;
               }
+
               if (!html.includes("apple-mobile-web-app-capable")) {
                 if (/<\/head>/i.test(html)) {
                   html = html.replace(/<\/head>/i, iosMeta + "\n</head>");
                 } else {
                   html = iosMeta + "\n" + html;
                 }
-                changed = true;
               }
-              if (changed) {
-                fs.writeFileSync(fullPath, html, "utf8");
-              }
+              fs.writeFileSync(fullPath, html, "utf8");
             }
           '
 
