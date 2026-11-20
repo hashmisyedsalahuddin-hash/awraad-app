@@ -1,4 +1,3 @@
-
 // =========================================================
 // PART 2. GLOBAL SCREEN HEADER (AUTO-INJECT AT VERY TOP)
 // =========================================================
@@ -1252,8 +1251,10 @@
         document.querySelectorAll('.app-navbar').forEach(el => el.remove());
 
         const isIndex = window.location.pathname.toLowerCase().endsWith('index.html') || window.location.pathname.endsWith('/');
+        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
         const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
         const subMenuPath = isIndex ? '#menu-shijara' : './index.html#menu-shijara';
+        const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
 
         const navbarHTML = `
         <div id="injected-app-navbar" class="app-navbar print-none" dir="ltr">
@@ -1263,6 +1264,29 @@
                     <div class="dropdown-content">
                         <a href="${indexPath}" class="menu-item"><span>Main Menu</span> <span class="menu-icon">🏠</span></a>
                         <a href="${subMenuPath}" class="menu-item"><span>Sub Menu</span> <span class="menu-icon">📂</span></a>
+
+                        <!-- Shajara Submenu -->
+                        <button type="button" class="submenu-toggle" data-target="submenu-shajara">
+                            <span>Shajara</span> <span class="submenu-arrow">▾</span>
+                        </button>
+                        <div id="submenu-shajara" class="dropdown-submenu">
+                            <a href="${shajaraBase}#qadriya" class="menu-item"><span>Qadriya</span></a>
+                            <a href="${shajaraBase}#chishtiyya" class="menu-item"><span>Chishtiya</span></a>
+                            <a href="${shajaraBase}#akbariya" class="menu-item"><span>Akbariya</span></a>
+                            <a href="${shajaraBase}#asnaad" class="menu-item"><span>Asnad e Dala'il</span></a>
+                        </div>
+
+                        <!-- Awraad o Wazaef Submenu -->
+                        <button type="button" class="submenu-toggle" data-target="submenu-awraad">
+                            <span>Awraad o Wazaef</span> <span class="submenu-arrow">▾</span>
+                        </button>
+                        <div id="submenu-awraad" class="dropdown-submenu">
+                            <a href="${shajaraBase}#rozana" class="menu-item"><span>Rozana</span></a>
+                            <a href="${shajaraBase}#fajr-maghrib" class="menu-item"><span>Fajr / Maghrib</span></a>
+                            <a href="${shajaraBase}#har-namaz" class="menu-item"><span>Har Namaaz</span></a>
+                            <a href="${shajaraBase}#haftawari" class="menu-item"><span>Haftwaar</span></a>
+                        </div>
+
                         <a href="#" id="openTasbeehBtn" class="menu-item"><span>Tasbeeh Counter</span> <span class="menu-icon">📿</span></a>
                         <a href="#" id="openBrightnessBtn" class="menu-item"><span>Brightness</span> <span class="menu-icon">🌞</span></a>
                     </div>
@@ -1446,21 +1470,46 @@
         const kebabBtn = document.querySelector('.kebab-btn');
         const dropdownContent = document.querySelector('.dropdown-content');
 
+        function closeAllSubmenus() {
+            document.querySelectorAll('.dropdown-submenu.open').forEach(sub => sub.classList.remove('open'));
+            document.querySelectorAll('.submenu-toggle.active').forEach(btn => btn.classList.remove('active'));
+        }
+
         kebabBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            dropdownContent.classList.toggle('show');
+            const isOpen = dropdownContent.classList.toggle('show');
+            if (!isOpen) closeAllSubmenus();
         });
         
         document.addEventListener('click', function(e) {
             if (!e.target.closest('.dropdown')) {
                 dropdownContent.classList.remove('show');
+                closeAllSubmenus();
             }
+        });
+
+        // Submenu accordion toggle (Shajara & Awraad o Wazaef)
+        const submenuToggles = document.querySelectorAll('.dropdown-content .submenu-toggle');
+        submenuToggles.forEach(function(toggleBtn) {
+            toggleBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const targetSubmenu = document.getElementById(toggleBtn.getAttribute('data-target'));
+                if (!targetSubmenu) return;
+
+                const isCurrentlyOpen = targetSubmenu.classList.contains('open');
+                closeAllSubmenus();
+                if (!isCurrentlyOpen) {
+                    targetSubmenu.classList.add('open');
+                    toggleBtn.classList.add('active');
+                }
+            });
         });
 
         const menuItems = document.querySelectorAll('.dropdown-content .menu-item');
         menuItems.forEach(function(item) {
             item.addEventListener('click', function() {
                 dropdownContent.classList.remove('show');
+                closeAllSubmenus();
             });
         });
 
