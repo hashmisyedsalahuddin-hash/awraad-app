@@ -24,7 +24,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y imagemagick
 
-          # Purani heavy native splash files delete karein (Recent Splash Screen JS/CSS se chalegi)
+          # Purani heavy native splash files delete karein
           rm -f assets/full_splash.png assets/splash.png assets/splash-dark.png
 
           if [ -f "assets/original_icon.png" ]; then
@@ -42,10 +42,8 @@ jobs:
 
       - name: Prepare 2-in-1 Web App (iPhone PWA + Android Live Sync)
         run: |
-          # GitHub Pages par sabhi files properly load hone ke liye
           touch www/.nojekyll
 
-          # 1. iPhone, PWA & Recent Splash Screen Icons (Solid #0c3b2e background, no black edges)
           SOURCE_ICON=""
           if [ -f "assets/original_icon.png" ]; then
             SOURCE_ICON="assets/original_icon.png"
@@ -60,7 +58,6 @@ jobs:
             cp www/icon-512.png www/icon.png
           fi
 
-          # 2. Web App Manifest
           if [ ! -f "www/manifest.json" ]; then
             cat << 'EOF' > www/manifest.json
           {
@@ -91,7 +88,7 @@ jobs:
           EOF
           fi
 
-          # 2b. Zero-Flash theme-preload.js fallback (agar zip mein missing ho)
+          # Zero-Flash theme-preload.js fallback (11s cover safety for 10s splash)
           if [ ! -s "www/theme-preload.js" ]; then
             cat << 'EOF' > www/theme-preload.js
           (function() {
@@ -107,163 +104,14 @@ jobs:
                     sp.textContent = '@media screen{html.awraad-splash-pending::before{content:"";position:fixed;inset:0;background:#f6f8f4 !important;z-index:2147483646;pointer-events:auto;}}';
                     head.appendChild(sp);
                   }
-                  setTimeout(function() { root.classList.remove('awraad-splash-pending'); }, 5800);
+                  setTimeout(function() { root.classList.remove('awraad-splash-pending'); }, 11000);
                 }
               } catch (e) {}
-
-              var isDark = localStorage.getItem('theme') === 'dark';
-              var savedBg = localStorage.getItem('app_custom_bg');
-              var savedText = localStorage.getItem('app_custom_text');
-              var savedArabicSize = localStorage.getItem('app_arabic_font_size') || localStorage.getItem('app_font_size');
-              var savedUrduSize = localStorage.getItem('app_urdu_font_size');
-              var savedArabicFont = localStorage.getItem('app_arabic_font') || localStorage.getItem('app_content_font');
-              var savedUrduFont = localStorage.getItem('app_urdu_font');
-              var savedAppFont = localStorage.getItem('app_ui_font');
-              var tajweedOff = localStorage.getItem('app_tajweed_colors') === 'false';
-
-              if (isDark) root.classList.add('dark-mode');
-              if (tajweedOff) root.classList.add('tajweed-colors-off');
-
-              var lockCss = '';
-
-              if (savedBg && /^#[0-9a-fA-F]{6}$/.test(savedBg)) {
-                var r = parseInt(savedBg.substring(1, 3), 16);
-                var g = parseInt(savedBg.substring(3, 5), 16);
-                var b = parseInt(savedBg.substring(5, 7), 16);
-                var r1 = r / 255, g1 = g / 255, b1 = b / 255;
-                var max = Math.max(r1, g1, b1), min = Math.min(r1, g1, b1);
-                var h = 0, s = 0, l = (max + min) / 2;
-                if (max !== min) {
-                  var d = max - min;
-                  s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-                  if (max === r1) h = (g1 - b1) / d + (g1 < b1 ? 6 : 0);
-                  else if (max === g1) h = (b1 - r1) / d + 2;
-                  else h = (r1 - g1) / d + 4;
-                  h *= 60;
-                }
-                h = Math.round(h); s = Math.round(s * 100); l = Math.round(l * 100);
-                var toLin = function(c) { var v = c / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-                var lum = 0.2126 * toLin(r) + 0.7152 * toLin(g) + 0.0722 * toLin(b);
-                var isDarkBg = lum < 0.28;
-                var isNeutral = s < 10;
-
-                var t;
-                if (!isDarkBg) {
-                  var cardL = l > 94 ? l - 4 : Math.min(l + 6, 98);
-                  var navL = Math.max(l - 5, 76);
-                  var borderL = Math.max(l - 34, 28);
-                  t = {
-                    text: isNeutral ? '#111111' : 'hsl(' + h + ',' + Math.min(s, 45) + '%,14%)',
-                    cardBg: isNeutral ? 'hsl(0,0%,' + cardL + '%)' : 'hsl(' + h + ',' + Math.min(s, 42) + '%,' + cardL + '%)',
-                    cardText: isNeutral ? '#1a365d' : 'hsl(' + h + ',' + Math.min(s, 65) + '%,18%)',
-                    cardSubtext: isNeutral ? '#555555' : 'hsl(' + h + ',' + Math.min(s, 38) + '%,34%)',
-                    cardHoverBg: isNeutral ? '#1a365d' : 'hsl(' + h + ',' + Math.min(s + 10, 68) + '%,30%)',
-                    cardHoverText: '#ffffff',
-                    border: isNeutral ? '#9a7b2c' : 'hsl(' + h + ',' + Math.min(s + 10, 65) + '%,' + borderL + '%)',
-                    ruledBorder: isNeutral ? 'rgba(120,130,145,0.45)' : 'hsla(' + h + ',' + Math.min(s, 45) + '%,' + borderL + '%,0.45)',
-                    navBg: isNeutral ? 'hsl(0,0%,' + navL + '%)' : 'hsl(' + h + ',' + Math.min(s, 35) + '%,' + navL + '%)',
-                    tableHeadBg: isNeutral ? '#1a365d' : 'hsl(' + h + ',' + Math.min(s + 5, 60) + '%,26%)',
-                    tableHeadText: '#ffffff'
-                  };
-                } else {
-                  var cardL2 = Math.min(l + 9, 34);
-                  var navL2 = Math.max(l - 4, 8);
-                  var borderL2 = Math.min(l + 32, 74);
-                  t = {
-                    text: isNeutral ? '#f5f6fa' : 'hsl(' + h + ',' + Math.min(s, 25) + '%,95%)',
-                    cardBg: isNeutral ? 'hsl(0,0%,' + cardL2 + '%)' : 'hsl(' + h + ',' + Math.min(s, 38) + '%,' + cardL2 + '%)',
-                    cardText: isNeutral ? '#ffffff' : 'hsl(' + h + ',' + Math.min(s, 32) + '%,96%)',
-                    cardSubtext: isNeutral ? '#c8ccd4' : 'hsl(' + h + ',' + Math.min(s, 30) + '%,78%)',
-                    cardHoverBg: isNeutral ? '#c59b27' : 'hsl(' + h + ',' + Math.min(s + 12, 70) + '%,' + Math.min(l + 26, 68) + '%)',
-                    cardHoverText: '#111111',
-                    border: isNeutral ? '#c59b27' : 'hsl(' + h + ',' + Math.min(s + 15, 70) + '%,' + borderL2 + '%)',
-                    ruledBorder: isNeutral ? 'rgba(220,225,235,0.30)' : 'hsla(' + h + ',' + Math.min(s, 45) + '%,' + borderL2 + '%,0.38)',
-                    navBg: isNeutral ? 'hsl(0,0%,' + navL2 + '%)' : 'hsl(' + h + ',' + Math.min(s, 35) + '%,' + navL2 + '%)',
-                    tableHeadBg: isNeutral ? '#2d3748' : 'hsl(' + h + ',' + Math.min(s + 8, 55) + '%,' + Math.min(l + 16, 40) + '%)',
-                    tableHeadText: '#ffffff'
-                  };
-                }
-
-                root.style.backgroundColor = savedBg;
-                root.style.setProperty('--user-bg-color', savedBg);
-                root.style.setProperty('--auto-text', t.text);
-                root.style.setProperty('--auto-card-bg', t.cardBg);
-                root.style.setProperty('--auto-card-text', t.cardText);
-                root.style.setProperty('--auto-card-subtext', t.cardSubtext);
-                root.style.setProperty('--auto-card-hover-bg', t.cardHoverBg);
-                root.style.setProperty('--auto-card-hover-text', t.cardHoverText);
-                root.style.setProperty('--auto-border', t.border);
-                root.style.setProperty('--auto-ruled-border', t.ruledBorder);
-                root.style.setProperty('--auto-nav-bg', t.navBg);
-                root.style.setProperty('--auto-table-head-bg', t.tableHeadBg);
-                root.style.setProperty('--auto-table-head-text', t.tableHeadText);
-                root.classList.add('custom-bg-active');
-                if (isDarkBg) root.classList.add('custom-bg-dark');
-
-                lockCss =
-                  '@media screen{' +
-                  'html,body,.continuous-frame,.continuous-inner{background:' + savedBg + ' !important;background-color:' + savedBg + ' !important;}' +
-                  '.app-navbar{background-color:' + t.navBg + ' !important;border-bottom-color:' + t.border + ' !important;}' +
-                  '.nav-card,.sub-nav-card,.daily-malfooz-container,.malfooz-card,.shijra-table,.name-card,.timer-card{background-color:' + t.cardBg + ' !important;border-color:' + t.border + ' !important;}' +
-                  '}';
-              } else if (isDark) {
-                root.style.backgroundColor = '#121212';
-                lockCss =
-                  '@media screen{' +
-                  'html,body{background:#121212 !important;background-color:#121212 !important;color:#f5f6fa !important;}' +
-                  '.continuous-frame,.continuous-inner{background:#1e1e1e !important;background-color:#1e1e1e !important;}' +
-                  '.app-navbar{background-color:#2a2a2a !important;}' +
-                  '}';
-              }
-
-              if (lockCss && head) {
-                var st = document.getElementById('awraad-preload-lock');
-                if (!st) {
-                  st = document.createElement('style');
-                  st.id = 'awraad-preload-lock';
-                  head.appendChild(st);
-                }
-                st.textContent = lockCss;
-              }
-
-              if (savedText) {
-                root.style.setProperty('--user-text-color', savedText);
-                root.classList.add('custom-text-active');
-              }
-              if (savedArabicSize) {
-                root.style.setProperty('--user-arabic-size', savedArabicSize + 'px');
-                root.classList.add('custom-arabic-size-active');
-              }
-              if (savedUrduSize) {
-                root.style.setProperty('--user-urdu-size', savedUrduSize + 'px');
-                root.classList.add('custom-urdu-size-active');
-              }
-              if (savedArabicFont) {
-                root.style.setProperty('--user-arabic-font', savedArabicFont);
-                root.classList.add('custom-arabic-font-active');
-              }
-              if (savedUrduFont) {
-                root.style.setProperty('--user-urdu-font', savedUrduFont);
-                root.classList.add('custom-urdu-font-active');
-              }
-              if (savedAppFont) {
-                root.style.setProperty('--user-app-font', savedAppFont);
-                root.classList.add('custom-app-font-active');
-              }
-
-              if (head && !document.getElementById('awraad-amiri-font-link')) {
-                var fl = document.createElement('link');
-                fl.id = 'awraad-amiri-font-link';
-                fl.rel = 'stylesheet';
-                fl.href = 'https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,700;1,700&display=swap';
-                head.appendChild(fl);
-              }
             } catch (e) {}
           })();
           EOF
           fi
 
-          # 3. External PWA Registration + Auto-Refresh Script (iPhone & Android Live APK dono ke liye)
           cat << 'EOF' > www/pwa-init.js
           if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
             const hadController = Boolean(navigator.serviceWorker.controller);
@@ -282,7 +130,6 @@ jobs:
           }
           EOF
 
-          # 4. Auto-Updating Fast Service Worker (Network-First for events-config.js + Cache-First for App & Fonts)
           BUILD_NUM="${{ github.run_number }}" node -e '
             const fs = require("fs");
             const path = require("path");
@@ -325,7 +172,6 @@ jobs:
               "  if (event.request.method !== \"GET\") return;",
               "  const url = new URL(event.request.url);",
               "",
-              "  // Network-First for events-config.js so Meet links & new events always load fresh",
               "  if (url.pathname.endsWith(\"/events-config.js\") || url.pathname.endsWith(\"events-config.js\")) {",
               "    event.respondWith(",
               "      fetch(event.request)",
@@ -341,7 +187,6 @@ jobs:
               "    return;",
               "  }",
               "",
-              "  // Instant Cache-First (Stale-While-Revalidate) for pages, CSS, JS, Fonts & Shajara",
               "  event.respondWith(",
               "    caches.match(event.request).then((cached) => {",
               "      const networkUpdate = fetch(event.request)",
@@ -361,7 +206,6 @@ jobs:
             fs.writeFileSync("www/sw.js", swLines.join("\n") + "\n", "utf8");
           '
 
-          # 5. Sabhi HTML files (subfolders samet) mein <head> ke SABSE TOP par theme-preload.js + PWA tags inject karein
           node -e '
             const fs = require("fs");
             const path = require("path");
@@ -395,7 +239,6 @@ jobs:
                 html = html.replace(/content="([^"]*width=device-width[^"]*)"/i, "content=\"$1, viewport-fit=cover\"");
               }
 
-              // Purane theme-preload.js tag ko remove karke <head> ke BILKUL TOP par lagayein (CSS se pehle)
               html = html.replace(/[ \t]*<script[^>]+theme-preload\.js[^>]*><\/script>\r?\n?/gi, "");
               const preloadTag = "  <script src=\"" + prefix + "theme-preload.js\"></script>";
               if (/<head\b[^>]*>/i.test(html)) {
@@ -437,6 +280,8 @@ jobs:
             if (fs.existsSync("capacitor.config.json")) {
               const cfg = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
               delete cfg.bundledWebRuntime;
+              cfg.backgroundColor = "#f6f8f4";
+              cfg.android = { ...(cfg.android || {}), backgroundColor: "#f6f8f4" };
               cfg.server = {
                 ...(cfg.server || {}),
                 url: url,
@@ -445,22 +290,10 @@ jobs:
                 allowNavigation: [host]
               };
               fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
-              console.log("Updated capacitor.config.json with live URL:", url);
-            } else if (fs.existsSync("capacitor.config.ts")) {
-              let ts = fs.readFileSync("capacitor.config.ts", "utf8");
-              ts = ts.replace(/^\s*bundledWebRuntime\s*:\s*(true|false)\s*,?\s*\r?\n/gm, "");
-              const serverBlock = "  server: {\n    url: \"" + url + "\",\n    cleartext: false,\n    errorPath: \"index.html\",\n    allowNavigation: [\"" + host + "\"]\n  },\n";
-              if (ts.includes("server:")) {
-                ts = ts.replace(/server\s*:\s*\{[\s\S]*?\},?/, serverBlock.trim() + ",");
-              } else {
-                ts = ts.replace(/,?\s*\n\s*\};/, ",\n" + serverBlock + "};");
-              }
-              fs.writeFileSync("capacitor.config.ts", ts, "utf8");
-              console.log("Updated capacitor.config.ts with live URL:", url);
             }
           '
 
-      - name: Generate Native Android Project & Strip Duplicate Splashes
+      - name: Generate Native Android Project & Hide Android 12+ Default Icon Splash
         run: |
           [ -d "android" ] || npx cap add android
 
@@ -472,15 +305,22 @@ jobs:
           # Har build par Android versionCode automatically badhega
           sed -i "s/versionCode [0-9]\+/versionCode ${{ github.run_number }}/g" android/app/build.gradle
 
-          # 1. Tamam duplicate native splash folders aur PNGs delete karein (40+ MB bach jayega)
-          rm -rf android/app/src/main/res/values-v31
-          rm -rf android/app/src/main/res/values-night-v31
+          # 1. Tamam duplicate heavy native splash folders aur PNGs delete karein
           rm -rf android/app/src/main/res/drawable-port-*
           rm -rf android/app/src/main/res/drawable-land-*
           find android/app/src/main/res -type f -iname "*splash*.png" -delete
 
-          # 2. Zero-KB XML Launch Background (Recent Splash Screen #f6f8f4 se seamless blend)
+          # 2. Zero-KB transparent XML icon + #f6f8f4 background (Samsung/Android 12+ black icon splash hata dega)
           mkdir -p android/app/src/main/res/drawable
+          cat << 'EOF' > android/app/src/main/res/drawable/splash_transparent.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android"
+              android:shape="rectangle">
+              <solid android:color="@android:color/transparent" />
+              <size android:width="1dp" android:height="1dp" />
+          </shape>
+          EOF
+
           cat << 'EOF' > android/app/src/main/res/drawable/launch_splash.xml
           <?xml version="1.0" encoding="utf-8"?>
           <shape xmlns:android="http://schemas.android.com/apk/res/android"
@@ -489,7 +329,8 @@ jobs:
           </shape>
           EOF
 
-          # 3. Seamless Launch Theme (Seedha Recent Splash Screen par open hoga)
+          # 3. Pre-Android 12 Launch Theme (Light & Dark Mode dono mein #f6f8f4)
+          mkdir -p android/app/src/main/res/values android/app/src/main/res/values-night
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -503,7 +344,7 @@ jobs:
                   <item name="windowNoTitle">true</item>
                   <item name="android:background">@null</item>
               </style>
-              <style name="AppTheme.NoActionBarLaunch" parent="Theme.AppCompat.NoActionBar">
+              <style name="AppTheme.NoActionBarLaunch" parent="Theme.AppCompat.Light.NoActionBar">
                   <item name="android:windowBackground">@drawable/launch_splash</item>
                   <item name="android:windowFullscreen">true</item>
                   <item name="android:statusBarColor">#f6f8f4</item>
@@ -511,6 +352,28 @@ jobs:
               </style>
           </resources>
           EOF
+          cp android/app/src/main/res/values/styles.xml android/app/src/main/res/values-night/styles.xml
+
+          # 4. Android 12+ (API 31+) Override (Light & Dark Mode): Black screen aur center icon dono hat jayenge
+          mkdir -p android/app/src/main/res/values-v31 android/app/src/main/res/values-night-v31
+          cat << 'EOF' > android/app/src/main/res/values-v31/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme.NoActionBarLaunch" parent="Theme.AppCompat.Light.NoActionBar">
+                  <item name="android:windowBackground">@drawable/launch_splash</item>
+                  <item name="android:windowSplashScreenBackground">#f6f8f4</item>
+                  <item name="android:windowSplashScreenIconBackgroundColor">#f6f8f4</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_transparent</item>
+                  <item name="android:windowSplashScreenAnimationDuration">0</item>
+                  <item name="android:windowFullscreen">true</item>
+                  <item name="android:statusBarColor">#f6f8f4</item>
+                  <item name="android:navigationBarColor">#f6f8f4</item>
+                  <item name="android:windowLightStatusBar">true</item>
+                  <item name="android:windowLightNavigationBar">true</item>
+              </style>
+          </resources>
+          EOF
+          cp android/app/src/main/res/values-v31/styles.xml android/app/src/main/res/values-night-v31/styles.xml
 
       - name: Add Android Notification Permissions (Urs & Fatiha Alerts)
         run: |
@@ -531,7 +394,6 @@ jobs:
               }
             }
             fs.writeFileSync(p, xml, "utf8");
-            console.log("Notification permissions added to AndroidManifest.xml!");
           '
 
       - name: Setup Java 21
@@ -573,5 +435,5 @@ jobs:
             --target "${{ github.sha }}" \
             --title "Awraad e Alaviya Nooriya (Latest APK)" \
             --notes "**Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
-          Lightweight build with Recent Launch Splash Screen. Aage ke sabhi web updates GitHub se automatically aate rahenge." \
+          Lightweight build — launches directly into 10-second Powered By Silsila e Alaviya Nooriya splash screen." \
             --latest
