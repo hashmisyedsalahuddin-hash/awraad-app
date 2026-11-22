@@ -100,8 +100,10 @@ jobs:
               var isDark = localStorage.getItem('theme') === 'dark';
               var savedBg = localStorage.getItem('app_custom_bg');
               var savedText = localStorage.getItem('app_custom_text');
-              var savedSize = localStorage.getItem('app_font_size');
-              var savedContentFont = localStorage.getItem('app_content_font');
+              var savedArabicSize = localStorage.getItem('app_arabic_font_size') || localStorage.getItem('app_font_size');
+              var savedUrduSize = localStorage.getItem('app_urdu_font_size');
+              var savedArabicFont = localStorage.getItem('app_arabic_font') || localStorage.getItem('app_content_font');
+              var savedUrduFont = localStorage.getItem('app_urdu_font');
               var savedAppFont = localStorage.getItem('app_ui_font');
               var tajweedOff = localStorage.getItem('app_tajweed_colors') === 'false';
 
@@ -214,13 +216,21 @@ jobs:
                 root.style.setProperty('--user-text-color', savedText);
                 root.classList.add('custom-text-active');
               }
-              if (savedSize) {
-                root.style.setProperty('--user-font-size', savedSize + 'px');
-                root.classList.add('custom-size-active');
+              if (savedArabicSize) {
+                root.style.setProperty('--user-arabic-size', savedArabicSize + 'px');
+                root.classList.add('custom-arabic-size-active');
               }
-              if (savedContentFont) {
-                root.style.setProperty('--user-content-font', savedContentFont);
-                root.classList.add('custom-content-font-active');
+              if (savedUrduSize) {
+                root.style.setProperty('--user-urdu-size', savedUrduSize + 'px');
+                root.classList.add('custom-urdu-size-active');
+              }
+              if (savedArabicFont) {
+                root.style.setProperty('--user-arabic-font', savedArabicFont);
+                root.classList.add('custom-arabic-font-active');
+              }
+              if (savedUrduFont) {
+                root.style.setProperty('--user-urdu-font', savedUrduFont);
+                root.classList.add('custom-urdu-font-active');
               }
               if (savedAppFont) {
                 root.style.setProperty('--user-app-font', savedAppFont);
@@ -258,7 +268,7 @@ jobs:
           }
           EOF
 
-          # 4. Auto-Updating Fast Service Worker (Har build par sabhi HTML/CSS/JS pre-cache + 0ms page switching)
+          # 4. Auto-Updating Fast Service Worker (Network-First for events-config.js + Cache-First for all HTML/CSS/JS)
           BUILD_NUM="${{ github.run_number }}" node -e '
             const fs = require("fs");
             const path = require("path");
@@ -299,6 +309,25 @@ jobs:
               "",
               "self.addEventListener(\"fetch\", (event) => {",
               "  if (event.request.method !== \"GET\") return;",
+              "  const url = new URL(event.request.url);",
+              "",
+              "  // Network-First for events-config.js so Meet links & new events always load fresh",
+              "  if (url.pathname.endsWith(\"/events-config.js\") || url.pathname.endsWith(\"events-config.js\")) {",
+              "    event.respondWith(",
+              "      fetch(event.request)",
+              "        .then((response) => {",
+              "          if (response && response.status === 200) {",
+              "            const copy = response.clone();",
+              "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
+              "          }",
+              "          return response;",
+              "        })",
+              "        .catch(() => caches.match(event.request))",
+              "    );",
+              "    return;",
+              "  }",
+              "",
+              "  // Instant Cache-First (Stale-While-Revalidate) for pages, CSS, JS & Shajara",
               "  event.respondWith(",
               "    caches.match(event.request).then((cached) => {",
               "      const networkUpdate = fetch(event.request)",
