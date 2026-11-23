@@ -458,3 +458,4 @@ jobs:
             --notes "**Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
           Lightweight build — launches directly into 10-second Powered By Silsila e Alaviya Nooriya splash screen." \
             --latest
+
