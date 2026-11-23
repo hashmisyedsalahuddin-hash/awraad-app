@@ -10,7 +10,28 @@ permissions:
   contents: write
 
 jobs:
+  check-bundle:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+
+      - name: Check awraad-project.zip
+        id: check
+        run: |
+          if [ -f "awraad-project.zip" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "✅ awraad-project.zip found. Starting build..."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ awraad-project.zip not found (deleted). Skipping build cleanly."
+          fi
+
   build-and-deploy:
+    needs: check-bundle
+    if: needs.check-bundle.outputs.exists == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
