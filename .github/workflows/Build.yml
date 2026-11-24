@@ -410,6 +410,50 @@ jobs:
           EOF
           cp android/app/src/main/res/values-v31/styles.xml android/app/src/main/res/values-night-v31/styles.xml
 
+      - name: Generate Android TV Banner & Leanback Manifest Support
+        run: |
+          SRC_TV_ICON=""
+          if [ -f "assets/original_icon.png" ]; then
+            SRC_TV_ICON="assets/original_icon.png"
+          elif [ -f "assets/icon.png" ]; then
+            SRC_TV_ICON="assets/icon.png"
+          fi
+
+          if [ -n "$SRC_TV_ICON" ]; then
+            mkdir -p android/app/src/main/res/drawable
+            convert "$SRC_TV_ICON" -resize 180x180 -background "#0c3b2e" -gravity center -extent 320x180 -alpha remove -alpha off android/app/src/main/res/drawable/tv_banner.png
+          fi
+
+          cat << 'TV_MAN_EOF' > /tmp/patch_tv_manifest.js
+          const fs = require("fs");
+          const p = "android/app/src/main/AndroidManifest.xml";
+          if (!fs.existsSync(p)) process.exit(0);
+          let xml = fs.readFileSync(p, "utf8");
+
+          if (!xml.includes("android.software.leanback")) {
+            xml = xml.replace(
+              "<manifest",
+              '<manifest xmlns:tools="http://schemas.android.com/tools"'
+            );
+            xml = xml.replace(
+              "<application",
+              '    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <application'
+            );
+          }
+
+          if (fs.existsSync("android/app/src/main/res/drawable/tv_banner.png") && !xml.includes("android:banner=")) {
+            xml = xml.replace(
+              /<application([^>]*)>/,
+              '<application$1 android:banner="@drawable/tv_banner">'
+            );
+          }
+
+          fs.writeFileSync(p, xml, "utf8");
+          TV_MAN_EOF
+          node /tmp/patch_tv_manifest.js
+
       - name: Add Android Notification Permissions (Urs & Fatiha Alerts)
         run: |
           cat << 'PERM_EOF' > /tmp/add_perms.js
