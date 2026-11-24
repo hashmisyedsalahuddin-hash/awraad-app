@@ -238,6 +238,17 @@ jobs:
             const fs = require("fs");
             const path = require("path");
 
+            function applyZoomLockViewport(html) {
+              const lockContent = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
+              if (/<meta\b[^>]*name=["']viewport["'][^>]*>/i.test(html)) {
+                return html.replace(/<meta\b[^>]*name=["']viewport["'][^>]*>/i, `<meta name="viewport" content="${lockContent}">`);
+              }
+              const vpTag = `  <meta name="viewport" content="${lockContent}">`;
+              return /<head\b[^>]*>/i.test(html)
+                ? html.replace(/(<head\b[^>]*>)/i, `$1\n${vpTag}`)
+                : `${vpTag}\n${html}`;
+            }
+
             function getAllHtmlFiles(dir, depth = 0) {
               let results = [];
               for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -253,6 +264,8 @@ jobs:
 
             for (const { fullPath, prefix } of getAllHtmlFiles("www")) {
               let html = fs.readFileSync(fullPath, "utf8");
+              html = applyZoomLockViewport(html);
+
               const iosMeta = [
                 "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
                 "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
@@ -262,10 +275,6 @@ jobs:
                 "  <link rel=\"manifest\" href=\"" + prefix + "manifest.json\">",
                 "  <script src=\"" + prefix + "pwa-init.js\" defer></script>"
               ].join("\n");
-
-              if (!html.includes("viewport-fit=cover")) {
-                html = html.replace(/content="([^"]*width=device-width[^"]*)"/i, "content=\"$1, viewport-fit=cover\"");
-              }
 
               html = html.replace(/[ \t]*<script[^>]+theme-preload\.js[^>]*><\/script>\r?\n?/gi, "");
               const preloadTag = "  <script src=\"" + prefix + "theme-preload.js\"></script>";
