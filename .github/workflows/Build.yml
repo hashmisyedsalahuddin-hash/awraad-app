@@ -155,145 +155,148 @@ jobs:
           }
           EOF
 
-          BUILD_NUM="${{ github.run_number }}" node -e '
-            const fs = require("fs");
-            const path = require("path");
-            function walk(dir, base = "") {
-              let out = [];
-              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                const rel = base ? base + "/" + entry.name : entry.name;
-                const full = path.join(dir, entry.name);
-                if (entry.isDirectory()) out = out.concat(walk(full, rel));
-                else if (/\.(html|css|js|json|woff2|ttf)$/i.test(entry.name) && entry.name !== "sw.js") {
-                  out.push("./" + rel);
-                }
+          cat << 'SW_GEN_EOF' > /tmp/gen_sw.js
+          const fs = require("fs");
+          const path = require("path");
+          function walk(dir, base = "") {
+            let out = [];
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const rel = base ? base + "/" + entry.name : entry.name;
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) out = out.concat(walk(full, rel));
+              else if (/\.(html|css|js|json|woff2|ttf)$/i.test(entry.name) && entry.name !== "sw.js") {
+                out.push("./" + rel);
               }
-              return out;
             }
-            const allAssets = Array.from(new Set(["./", ...walk("www")]));
-            const swLines = [
-              "const CACHE_NAME = \"awraad-live-v" + process.env.BUILD_NUM + "\";",
-              "const CORE_ASSETS = " + JSON.stringify(allAssets, null, 2) + ";",
-              "",
-              "self.addEventListener(\"install\", (event) => {",
-              "  event.waitUntil(",
-              "    caches.open(CACHE_NAME).then((cache) =>",
-              "      Promise.all(CORE_ASSETS.map((url) => cache.add(url).catch(() => {})))",
-              "    )",
-              "  );",
-              "  self.skipWaiting();",
-              "});",
-              "",
-              "self.addEventListener(\"activate\", (event) => {",
-              "  event.waitUntil(",
-              "    caches.keys().then((keys) =>",
-              "      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))",
-              "    )",
-              "  );",
-              "  self.clients.claim();",
-              "});",
-              "",
-              "self.addEventListener(\"fetch\", (event) => {",
-              "  if (event.request.method !== \"GET\") return;",
-              "  const url = new URL(event.request.url);",
-              "",
-              "  if (url.origin !== self.location.origin) return;",
-              "  if (/googletagmanager|google-analytics|analytics\\.google/i.test(url.hostname + url.pathname)) return;",
-              "",
-              "  if (url.pathname.endsWith(\"/events-config.js\") || url.pathname.endsWith(\"events-config.js\")) {",
-              "    event.respondWith(",
-              "      fetch(event.request)",
-              "        .then((response) => {",
-              "          if (response && response.status === 200) {",
-              "            const copy = response.clone();",
-              "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
-              "          }",
-              "          return response;",
-              "        })",
-              "        .catch(() => caches.match(event.request))",
-              "    );",
-              "    return;",
-              "  }",
-              "",
-              "  event.respondWith(",
-              "    caches.match(event.request).then((cached) => {",
-              "      const networkUpdate = fetch(event.request)",
-              "        .then((response) => {",
-              "          if (response && response.status === 200) {",
-              "            const copy = response.clone();",
-              "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
-              "          }",
-              "          return response;",
-              "        })",
-              "        .catch(() => cached);",
-              "      return cached || networkUpdate;",
-              "    })",
-              "  );",
-              "});"
-            ];
-            fs.writeFileSync("www/sw.js", swLines.join("\n") + "\n", "utf8");
-          '
+            return out;
+          }
+          const allAssets = Array.from(new Set(["./", ...walk("www")]));
+          const buildNum = process.env.BUILD_NUM || "1";
+          const swLines = [
+            "const CACHE_NAME = \"awraad-live-v" + buildNum + "\";",
+            "const CORE_ASSETS = " + JSON.stringify(allAssets, null, 2) + ";",
+            "",
+            "self.addEventListener(\"install\", (event) => {",
+            "  event.waitUntil(",
+            "    caches.open(CACHE_NAME).then((cache) =>",
+            "      Promise.all(CORE_ASSETS.map((url) => cache.add(url).catch(() => {})))",
+            "    )",
+            "  );",
+            "  self.skipWaiting();",
+            "});",
+            "",
+            "self.addEventListener(\"activate\", (event) => {",
+            "  event.waitUntil(",
+            "    caches.keys().then((keys) =>",
+            "      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))",
+            "    )",
+            "  );",
+            "  self.clients.claim();",
+            "});",
+            "",
+            "self.addEventListener(\"fetch\", (event) => {",
+            "  if (event.request.method !== \"GET\") return;",
+            "  const url = new URL(event.request.url);",
+            "",
+            "  if (url.origin !== self.location.origin) return;",
+            "  if (/googletagmanager|google-analytics|analytics\\.google/i.test(url.hostname + url.pathname)) return;",
+            "",
+            "  if (url.pathname.endsWith(\"/events-config.js\") || url.pathname.endsWith(\"events-config.js\")) {",
+            "    event.respondWith(",
+            "      fetch(event.request)",
+            "        .then((response) => {",
+            "          if (response && response.status === 200) {",
+            "            const copy = response.clone();",
+            "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
+            "          }",
+            "          return response;",
+            "        })",
+            "        .catch(() => caches.match(event.request))",
+            "    );",
+            "    return;",
+            "  }",
+            "",
+            "  event.respondWith(",
+            "    caches.match(event.request).then((cached) => {",
+            "      const networkUpdate = fetch(event.request)",
+            "        .then((response) => {",
+            "          if (response && response.status === 200) {",
+            "            const copy = response.clone();",
+            "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
+            "          }",
+            "          return response;",
+            "        })",
+            "        .catch(() => cached);",
+            "      return cached || networkUpdate;",
+            "    })",
+            "  );",
+            "});"
+          ];
+          fs.writeFileSync("www/sw.js", swLines.join("\n") + "\n", "utf8");
+          SW_GEN_EOF
+          BUILD_NUM="${{ github.run_number }}" node /tmp/gen_sw.js
 
-          node -e '
-            const fs = require("fs");
-            const path = require("path");
+          cat << 'HTML_INJECT_EOF' > /tmp/inject_html.js
+          const fs = require("fs");
+          const path = require("path");
 
-            function applyZoomLockViewport(html) {
-              const lockContent = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
-              if (/<meta\b[^>]*name=["']viewport["'][^>]*>/i.test(html)) {
-                return html.replace(/<meta\b[^>]*name=["']viewport["'][^>]*>/i, `<meta name="viewport" content="${lockContent}">`);
+          function applyZoomLockViewport(html) {
+            const lockContent = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
+            if (/<meta\b[^>]*name=["']viewport["'][^>]*>/i.test(html)) {
+              return html.replace(/<meta\b[^>]*name=["']viewport["'][^>]*>/i, '<meta name="viewport" content="' + lockContent + '">');
+            }
+            const vpTag = '  <meta name="viewport" content="' + lockContent + '">';
+            return /<head\b[^>]*>/i.test(html)
+              ? html.replace(/(<head\b[^>]*>)/i, "$1\n" + vpTag)
+              : vpTag + "\n" + html;
+          }
+
+          function getAllHtmlFiles(dir, depth = 0) {
+            let results = [];
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                results = results.concat(getAllHtmlFiles(full, depth + 1));
+              } else if (entry.name.toLowerCase().endsWith(".html")) {
+                results.push({ fullPath: full, prefix: depth === 0 ? "./" : "../".repeat(depth) });
               }
-              const vpTag = `  <meta name="viewport" content="${lockContent}">`;
-              return /<head\b[^>]*>/i.test(html)
-                ? html.replace(/(<head\b[^>]*>)/i, `$1\n${vpTag}`)
-                : `${vpTag}\n${html}`;
+            }
+            return results;
+          }
+
+          for (const { fullPath, prefix } of getAllHtmlFiles("www")) {
+            let html = fs.readFileSync(fullPath, "utf8");
+            html = applyZoomLockViewport(html);
+
+            const iosMeta = [
+              "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
+              "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
+              "  <meta name=\"apple-mobile-web-app-title\" content=\"Awraad\">",
+              "  <meta name=\"theme-color\" content=\"#0c3b2e\">",
+              "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"" + prefix + "apple-touch-icon.png\">",
+              "  <link rel=\"manifest\" href=\"" + prefix + "manifest.json\">",
+              "  <script src=\"" + prefix + "pwa-init.js\" defer></script>"
+            ].join("\n");
+
+            html = html.replace(/[ \t]*<script[^>]+theme-preload\.js[^>]*><\/script>\r?\n?/gi, "");
+            const preloadTag = "  <script src=\"" + prefix + "theme-preload.js\"></script>";
+            if (/<head\b[^>]*>/i.test(html)) {
+              html = html.replace(/(<head\b[^>]*>)/i, "$1\n" + preloadTag);
+            } else {
+              html = preloadTag + "\n" + html;
             }
 
-            function getAllHtmlFiles(dir, depth = 0) {
-              let results = [];
-              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                const full = path.join(dir, entry.name);
-                if (entry.isDirectory()) {
-                  results = results.concat(getAllHtmlFiles(full, depth + 1));
-                } else if (entry.name.toLowerCase().endsWith(".html")) {
-                  results.push({ fullPath: full, prefix: depth === 0 ? "./" : "../".repeat(depth) });
-                }
-              }
-              return results;
-            }
-
-            for (const { fullPath, prefix } of getAllHtmlFiles("www")) {
-              let html = fs.readFileSync(fullPath, "utf8");
-              html = applyZoomLockViewport(html);
-
-              const iosMeta = [
-                "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
-                "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
-                "  <meta name=\"apple-mobile-web-app-title\" content=\"Awraad\">",
-                "  <meta name=\"theme-color\" content=\"#0c3b2e\">",
-                "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"" + prefix + "apple-touch-icon.png\">",
-                "  <link rel=\"manifest\" href=\"" + prefix + "manifest.json\">",
-                "  <script src=\"" + prefix + "pwa-init.js\" defer></script>"
-              ].join("\n");
-
-              html = html.replace(/[ \t]*<script[^>]+theme-preload\.js[^>]*><\/script>\r?\n?/gi, "");
-              const preloadTag = "  <script src=\"" + prefix + "theme-preload.js\"></script>";
-              if (/<head\b[^>]*>/i.test(html)) {
-                html = html.replace(/(<head\b[^>]*>)/i, "$1\n" + preloadTag);
+            if (!html.includes("apple-mobile-web-app-capable")) {
+              if (/<\/head>/i.test(html)) {
+                html = html.replace(/<\/head>/i, iosMeta + "\n</head>");
               } else {
-                html = preloadTag + "\n" + html;
+                html = iosMeta + "\n" + html;
               }
-
-              if (!html.includes("apple-mobile-web-app-capable")) {
-                if (/<\/head>/i.test(html)) {
-                  html = html.replace(/<\/head>/i, iosMeta + "\n</head>");
-                } else {
-                  html = iosMeta + "\n" + html;
-                }
-              }
-              fs.writeFileSync(fullPath, html, "utf8");
             }
-          '
+            fs.writeFileSync(fullPath, html, "utf8");
+          }
+          HTML_INJECT_EOF
+          node /tmp/inject_html.js
 
       - name: Connect Android APK to Live GitHub Pages URL (Zero-Reinstall Updates)
         run: |
@@ -309,26 +312,27 @@ jobs:
 
           echo "Live Auto-Update URL: $PAGES_URL"
 
-          PAGES_URL="$PAGES_URL" node -e '
-            const fs = require("fs");
-            const url = process.env.PAGES_URL;
-            const host = new URL(url).hostname;
+          cat << 'CAP_CFG_EOF' > /tmp/update_cap.js
+          const fs = require("fs");
+          const url = process.env.PAGES_URL;
+          const host = new URL(url).hostname;
 
-            if (fs.existsSync("capacitor.config.json")) {
-              const cfg = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
-              delete cfg.bundledWebRuntime;
-              cfg.backgroundColor = "#f6f8f4";
-              cfg.android = { ...(cfg.android || {}), backgroundColor: "#f6f8f4" };
-              cfg.server = {
-                ...(cfg.server || {}),
-                url: url,
-                cleartext: false,
-                errorPath: "index.html",
-                allowNavigation: [host]
-              };
-              fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
-            }
-          '
+          if (fs.existsSync("capacitor.config.json")) {
+            const cfg = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
+            delete cfg.bundledWebRuntime;
+            cfg.backgroundColor = "#f6f8f4";
+            cfg.android = { ...(cfg.android || {}), backgroundColor: "#f6f8f4" };
+            cfg.server = {
+              ...(cfg.server || {}),
+              url: url,
+              cleartext: false,
+              errorPath: "index.html",
+              allowNavigation: [host]
+            };
+            fs.writeFileSync("capacitor.config.json", JSON.stringify(cfg, null, 2));
+          }
+          CAP_CFG_EOF
+          PAGES_URL="$PAGES_URL" node /tmp/update_cap.js
 
       - name: Generate Native Android Project & Hide Android 12+ Default Icon Splash
         run: |
@@ -408,24 +412,25 @@ jobs:
 
       - name: Add Android Notification Permissions (Urs & Fatiha Alerts)
         run: |
-          node -e '
-            const fs = require("fs");
-            const p = "android/app/src/main/AndroidManifest.xml";
-            let xml = fs.readFileSync(p, "utf8");
-            const perms = [
-              "android.permission.POST_NOTIFICATIONS",
-              "android.permission.SCHEDULE_EXACT_ALARM"
-            ];
-            for (const perm of perms) {
-              if (!xml.includes(perm)) {
-                xml = xml.replace(
-                  "<application",
-                  "    <uses-permission android:name=\"" + perm + "\" />\n    <application"
-                );
-              }
+          cat << 'PERM_EOF' > /tmp/add_perms.js
+          const fs = require("fs");
+          const p = "android/app/src/main/AndroidManifest.xml";
+          let xml = fs.readFileSync(p, "utf8");
+          const perms = [
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.SCHEDULE_EXACT_ALARM"
+          ];
+          for (const perm of perms) {
+            if (!xml.includes(perm)) {
+              xml = xml.replace(
+                "<application",
+                "    <uses-permission android:name=\"" + perm + "\" />\n    <application"
+              );
             }
-            fs.writeFileSync(p, xml, "utf8");
-          '
+          }
+          fs.writeFileSync(p, xml, "utf8");
+          PERM_EOF
+          node /tmp/add_perms.js
 
       - name: Setup Java 21
         uses: actions/setup-java@v6
