@@ -430,11 +430,14 @@ jobs:
           if (!fs.existsSync(p)) process.exit(0);
           let xml = fs.readFileSync(p, "utf8");
 
-          if (!xml.includes("android.software.leanback")) {
+          if (!xml.includes('xmlns:tools="http://schemas.android.com/tools"')) {
             xml = xml.replace(
               "<manifest",
               '<manifest xmlns:tools="http://schemas.android.com/tools"'
             );
+          }
+
+          if (!xml.includes("android.software.leanback")) {
             xml = xml.replace(
               "<application",
               '    <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -443,17 +446,28 @@ jobs:
             );
           }
 
-          if (fs.existsSync("android/app/src/main/res/drawable/tv_banner.png") && !xml.includes("android:banner=")) {
+          if (fs.existsSync("android/app/src/main/res/drawable/tv_banner.png")) {
+            if (/android:banner="[^"]*"/.test(xml)) {
+              xml = xml.replace(/android:banner="[^"]*"/, 'android:banner="@drawable/tv_banner"');
+            } else {
+              xml = xml.replace(
+                /<application([^>]*)>/,
+                '<application$1 android:banner="@drawable/tv_banner">'
+              );
+            }
+          }
+
+          if (!xml.includes("android.intent.category.LEANBACK_LAUNCHER")) {
             xml = xml.replace(
-              /<application([^>]*)>/,
-              '<application$1 android:banner="@drawable/tv_banner">'
+              /(<intent-filter[sS]*?<category android:name="android.intent.category.LAUNCHER"s*/>)/,
+              '$1
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />'
             );
           }
 
           fs.writeFileSync(p, xml, "utf8");
           TV_MAN_EOF
           node /tmp/patch_tv_manifest.js
-
       - name: Add Android Notification Permissions (Urs & Fatiha Alerts)
         run: |
           cat << 'PERM_EOF' > /tmp/add_perms.js
