@@ -52,7 +52,7 @@ jobs:
           fi
 
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -417,6 +417,12 @@ jobs:
             }
             fs.writeFileSync(p, xml, "utf8");
           '
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '21'
 
       - name: Compile Android APK
         env:
