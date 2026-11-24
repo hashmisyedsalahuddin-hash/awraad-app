@@ -51,6 +51,12 @@ jobs:
             convert assets/original_icon.png -resize 760x760 -background "#0c3b2e" -gravity center -extent 1024x1024 assets/icon.png
           fi
 
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v5
         with:
@@ -411,12 +417,6 @@ jobs:
             }
             fs.writeFileSync(p, xml, "utf8");
           '
-
-      - name: Setup Java 21
-        uses: actions/setup-node@v5
-        with:
-          distribution: 'zulu'
-          java-version: '21'
 
       - name: Compile Android APK
         env:
