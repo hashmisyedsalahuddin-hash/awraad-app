@@ -38,10 +38,61 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - name: Extract Project Bundle
+      - name: Extract Project Bundle & Restore Core Capacitor Files
         run: |
           unzip -o awraad-project.zip
+
+          if [ ! -f "package.json" ] || [ ! -f "capacitor.config.json" ] || [ ! -d "assets" ]; then
+            echo "ℹ️ Lightweight zip detected. Restoring core Capacitor files from git history..."
+            for commit in $(git log -n 50 --format="%H" -- awraad-project.zip); do
+              git show "${commit}:awraad-project.zip" > /tmp/prev_bundle.zip 2>/dev/null || continue
+              if unzip -l /tmp/prev_bundle.zip 2>/dev/null | grep -q "package.json"; then
+                echo "✅ Core files found in commit $commit"
+                [ -f "package.json" ] || unzip -o /tmp/prev_bundle.zip "package.json" 2>/dev/null || true
+                [ -f "capacitor.config.json" ] || unzip -o /tmp/prev_bundle.zip "capacitor.config.json" 2>/dev/null || true
+                [ -d "assets" ] || unzip -o /tmp/prev_bundle.zip "assets/*" 2>/dev/null || true
+                rm -f /tmp/prev_bundle.zip
+                break
+              fi
+            done
+            rm -f /tmp/prev_bundle.zip
+          fi
+
+          if [ ! -f "package.json" ]; then
+            echo "⚠️ Creating fallback Capacitor 6 package.json..."
+            cat << 'PKG_EOF' > package.json
+          {
+            "name": "awraad-e-alaviya-nooriya",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "@capacitor/android": "^6.0.0",
+              "@capacitor/core": "^6.0.0",
+              "@capacitor/local-notifications": "^6.0.0"
+            },
+            "devDependencies": {
+              "@capacitor/assets": "^3.0.5",
+              "@capacitor/cli": "^6.0.0"
+            }
+          }
+          PKG_EOF
+          fi
+
+          if [ ! -f "capacitor.config.json" ]; then
+            echo "⚠️ Creating fallback capacitor.config.json..."
+            cat << 'CAP_EOF' > capacitor.config.json
+          {
+            "appId": "com.alaviyanooriya.awraad",
+            "appName": "Awraad e Alaviya Nooriya",
+            "webDir": "www"
+          }
+          CAP_EOF
+          fi
+
+          ls -la package.json capacitor.config.json
 
       - name: Ensure Uncropped App Icon & Delete Old Native Splashes
         run: |
@@ -296,7 +347,6 @@ jobs:
               }
             }
 
-            // Force WebView cache-busting on CSS & JS every build
             html = html.replace(
               /(href|src)=["']([^"']*?(?:Tajweed_Style\.css|Tajweed_rules\.js|theme-preload\.js|pwa-init\.js|events-config\.js))(?:\?[^"']*)?["']/gi,
               '$1="$2?v=' + buildNum + '"'
