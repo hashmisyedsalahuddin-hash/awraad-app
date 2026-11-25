@@ -139,6 +139,10 @@ jobs:
           EOF
           fi
 
+          cat << EOF > www/version.json
+          {"build":"${{ github.run_number }}","sha":"${{ github.sha }}","ts":$(date +%s)}
+          EOF
+
           cat << 'EOF' > www/pwa-init.js
           if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
             const hadController = Boolean(navigator.serviceWorker.controller);
@@ -150,8 +154,9 @@ jobs:
               }
             });
             window.addEventListener('load', () => {
-              navigator.serviceWorker.register('./sw.js').then((reg) => {
+              navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
                 reg.update();
+                setInterval(() => { reg.update().catch(() => {}); }, 30000);
               }).catch(() => {});
             });
           }
@@ -166,7 +171,7 @@ jobs:
               const rel = base ? base + "/" + entry.name : entry.name;
               const full = path.join(dir, entry.name);
               if (entry.isDirectory()) out = out.concat(walk(full, rel));
-              else if (/\.(html|css|js|json|woff2|ttf)$/i.test(entry.name) && entry.name !== "sw.js") {
+              else if (/\.(html|css|js|json|woff2|ttf|mp3|m4a|wav|ogg)$/i.test(entry.name) && entry.name !== "sw.js" && entry.name !== "version.json") {
                 out.push("./" + rel);
               }
             }
@@ -203,9 +208,14 @@ jobs:
             "  if (url.origin !== self.location.origin) return;",
             "  if (/googletagmanager|google-analytics|analytics\\.google/i.test(url.hostname + url.pathname)) return;",
             "",
+            "  if (url.pathname.endsWith(\"/version.json\") || url.pathname.endsWith(\"version.json\")) {",
+            "    event.respondWith(fetch(event.request, { cache: \"no-store\" }));",
+            "    return;",
+            "  }",
+            "",
             "  if (url.pathname.endsWith(\"/events-config.js\") || url.pathname.endsWith(\"events-config.js\")) {",
             "    event.respondWith(",
-            "      fetch(event.request)",
+            "      fetch(event.request, { cache: \"no-store\" })",
             "        .then((response) => {",
             "          if (response && response.status === 200) {",
             "            const copy = response.clone();",
@@ -220,7 +230,7 @@ jobs:
             "",
             "  event.respondWith(",
             "    caches.match(event.request).then((cached) => {",
-            "      const networkUpdate = fetch(event.request.url, { cache: 'no-cache' })",
+            "      const networkUpdate = fetch(event.request.url, { cache: 'no-store' })",
             "        .then((response) => {",
             "          if (response && response.status === 200) {",
             "            const copy = response.clone();",
@@ -412,8 +422,6 @@ jobs:
           EOF
           cp android/app/src/main/res/values-v31/styles.xml android/app/src/main/res/values-night-v31/styles.xml
 
-
-
       - name: Generate Android TV Banner & Leanback Manifest Support
         run: |
           if ! command -v convert >/dev/null 2>&1; then
@@ -499,12 +507,6 @@ jobs:
           fs.writeFileSync(p, xml, "utf8");
           PERM_EOF
           node /tmp/add_perms.js
-
-      - name: Setup Java 21
-        uses: actions/setup-java@v6
-        with:
-          distribution: 'temurin'
-          java-version: '21'
 
       - name: Compile Android APK
         env:
