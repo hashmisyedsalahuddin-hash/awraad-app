@@ -220,7 +220,7 @@ jobs:
             "",
             "  event.respondWith(",
             "    caches.match(event.request).then((cached) => {",
-            "      const networkUpdate = fetch(event.request)",
+            "      const networkUpdate = fetch(event.request.url, { cache: 'no-cache' })",
             "        .then((response) => {",
             "          if (response && response.status === 200) {",
             "            const copy = response.clone();",
@@ -229,7 +229,7 @@ jobs:
             "          return response;",
             "        })",
             "        .catch(() => cached);",
-            "      return cached || networkUpdate;",
+            "      return networkUpdate;",
             "    })",
             "  );",
             "});"
