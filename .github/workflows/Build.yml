@@ -156,7 +156,7 @@ jobs:
             window.addEventListener('load', () => {
               navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then((reg) => {
                 reg.update();
-                setInterval(() => { reg.update().catch(() => {}); }, 30000);
+                setInterval(() => { reg.update().catch(() => {}); }, 25000);
               }).catch(() => {});
             });
           }
@@ -186,7 +186,11 @@ jobs:
             "self.addEventListener(\"install\", (event) => {",
             "  event.waitUntil(",
             "    caches.open(CACHE_NAME).then((cache) =>",
-            "      Promise.all(CORE_ASSETS.map((url) => cache.add(url).catch(() => {})))",
+            "      Promise.all(CORE_ASSETS.map((url) =>",
+            "        fetch(url, { cache: \"reload\" })",
+            "          .then((res) => (res && res.status === 200 ? cache.put(url, res) : null))",
+            "          .catch(() => {})",
+            "      ))",
             "    )",
             "  );",
             "  self.skipWaiting();",
@@ -213,34 +217,16 @@ jobs:
             "    return;",
             "  }",
             "",
-            "  if (url.pathname.endsWith(\"/events-config.js\") || url.pathname.endsWith(\"events-config.js\")) {",
-            "    event.respondWith(",
-            "      fetch(event.request, { cache: \"no-store\" })",
-            "        .then((response) => {",
-            "          if (response && response.status === 200) {",
-            "            const copy = response.clone();",
-            "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
-            "          }",
-            "          return response;",
-            "        })",
-            "        .catch(() => caches.match(event.request))",
-            "    );",
-            "    return;",
-            "  }",
-            "",
             "  event.respondWith(",
-            "    caches.match(event.request).then((cached) => {",
-            "      const networkUpdate = fetch(event.request.url, { cache: 'no-store' })",
-            "        .then((response) => {",
-            "          if (response && response.status === 200) {",
-            "            const copy = response.clone();",
-            "            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
-            "          }",
-            "          return response;",
-            "        })",
-            "        .catch(() => cached);",
-            "      return networkUpdate;",
-            "    })",
+            "    fetch(event.request, { cache: \"no-store\" })",
+            "      .then((response) => {",
+            "        if (response && response.status === 200) {",
+            "          const copy = response.clone();",
+            "          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));",
+            "        }",
+            "        return response;",
+            "      })",
+            "      .catch(() => caches.match(event.request, { ignoreSearch: true }))",
             "  );",
             "});"
           ];
@@ -251,6 +237,7 @@ jobs:
           cat << 'HTML_INJECT_EOF' > /tmp/inject_html.js
           const fs = require("fs");
           const path = require("path");
+          const buildNum = process.env.BUILD_NUM || String(Date.now());
 
           function applyZoomLockViewport(html) {
             const lockContent = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
@@ -280,6 +267,9 @@ jobs:
             let html = fs.readFileSync(fullPath, "utf8");
             html = applyZoomLockViewport(html);
 
+            html = html.replace(/[ \t]*<meta\b[^>]*name=["']awraad-build["'][^>]*>\r?\n?/gi, "");
+            const buildMeta = '  <meta name="awraad-build" content="' + buildNum + '">';
+
             const iosMeta = [
               "  <meta name=\"apple-mobile-web-app-capable\" content=\"yes\">",
               "  <meta name=\"apple-mobile-web-app-status-bar-style\" content=\"black-translucent\">",
@@ -287,15 +277,15 @@ jobs:
               "  <meta name=\"theme-color\" content=\"#0c3b2e\">",
               "  <link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"" + prefix + "apple-touch-icon.png\">",
               "  <link rel=\"manifest\" href=\"" + prefix + "manifest.json\">",
-              "  <script src=\"" + prefix + "pwa-init.js\" defer></script>"
+              "  <script src=\"" + prefix + "pwa-init.js?v=" + buildNum + "\" defer></script>"
             ].join("\n");
 
             html = html.replace(/[ \t]*<script[^>]+theme-preload\.js[^>]*><\/script>\r?\n?/gi, "");
-            const preloadTag = "  <script src=\"" + prefix + "theme-preload.js\"></script>";
+            const preloadTag = "  <script src=\"" + prefix + "theme-preload.js?v=" + buildNum + "\"></script>";
             if (/<head\b[^>]*>/i.test(html)) {
-              html = html.replace(/(<head\b[^>]*>)/i, "$1\n" + preloadTag);
+              html = html.replace(/(<head\b[^>]*>)/i, "$1\n" + buildMeta + "\n" + preloadTag);
             } else {
-              html = preloadTag + "\n" + html;
+              html = buildMeta + "\n" + preloadTag + "\n" + html;
             }
 
             if (!html.includes("apple-mobile-web-app-capable")) {
@@ -305,10 +295,17 @@ jobs:
                 html = iosMeta + "\n" + html;
               }
             }
+
+            // Force WebView cache-busting on CSS & JS every build
+            html = html.replace(
+              /(href|src)=["']([^"']*?(?:Tajweed_Style\.css|Tajweed_rules\.js|theme-preload\.js|pwa-init\.js|events-config\.js))(?:\?[^"']*)?["']/gi,
+              '$1="$2?v=' + buildNum + '"'
+            );
+
             fs.writeFileSync(fullPath, html, "utf8");
           }
           HTML_INJECT_EOF
-          node /tmp/inject_html.js
+          BUILD_NUM="${{ github.run_number }}" node /tmp/inject_html.js
 
       - name: Connect Android APK to Live GitHub Pages URL (Zero-Reinstall Updates)
         run: |
