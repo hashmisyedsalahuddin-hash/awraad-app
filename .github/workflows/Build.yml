@@ -7,11 +7,16 @@ on:
   workflow_dispatch:
 
 permissions:
+  pages: write
+  id-token: write
   contents: write
 
 jobs:
   check-bundle:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     outputs:
       exists: ${{ steps.check.outputs.exists }}
     steps:
@@ -518,12 +523,17 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk "../Awraad-e-Alaviya-Nooriya.apk"
           ls -lh "../Awraad-e-Alaviya-Nooriya.apk"
 
-      - name: Deploy 2-in-1 Live Web App to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload 2-in-1 Live Web App Artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./www
-          keep_files: false
+          path: ./www
+
+      - name: Deploy 2-in-1 Live Web App to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
       - name: Clear Old Release & Publish Permanent Android APK to GitHub Releases
         env:
