@@ -1449,6 +1449,8 @@
                         <span>Tasbeeh Counter</span>
                     </span>
                     <div class="tasbeeh-header-actions">
+                        <button type="button" id="tasbeehZoomOutBtn" class="tasbeeh-icon-btn" title="Decrease Size (min 45%)">&minus;</button>
+                        <button type="button" id="tasbeehZoomInBtn" class="tasbeeh-icon-btn" title="Increase Size (max 115%)">+</button>
                         <button type="button" id="minimizeTasbeehBtn" class="tasbeeh-icon-btn" title="Minimize">_</button>
                         <button type="button" id="closeTasbeehBtn" class="tasbeeh-icon-btn close-btn" title="Close">&times;</button>
                     </div>
@@ -1526,12 +1528,18 @@
 
         const MIN_SCALE = 0.45;
         const MAX_SCALE = 1.15;
+        const DEFAULT_SCALE = 0.45;
 
         let count = parseInt(localStorage.getItem('tasbeeh_count')) || 0;
         let target = parseInt(localStorage.getItem('tasbeeh_target')) || 100;
+        if (!localStorage.getItem('tasbeeh_default45_v1')) {
+            localStorage.setItem('tasbeeh_default45_v1', '1');
+            localStorage.setItem('tasbeeh_scale', String(DEFAULT_SCALE));
+            localStorage.removeItem('tasbeeh_pos');
+        }
         let currentScale = parseFloat(localStorage.getItem('tasbeeh_scale'));
         if (isNaN(currentScale) || currentScale < MIN_SCALE || currentScale > MAX_SCALE) {
-            currentScale = 1;
+            currentScale = DEFAULT_SCALE;
         }
         let currentLeft = 0;
         let currentTop = 0;
@@ -1624,9 +1632,10 @@
         }
 
         function updateBackdropMode() {
-            // Chota zoom (< 95%) ya drag hone par transparent floating mode taake Awraad aaraam se padh aur scroll kar sakein
-            const isFloating = currentScale < 0.95 || hasCustomPos;
-            tasbeehModal.classList.toggle('tasbeeh-compact', isFloating);
+            // Tasbeeh is always exempt from Main Screen Scroll Lock so users can scroll Awraad while Tasbeeh is open
+            tasbeehModal.classList.add('tasbeeh-compact');
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            tasbeehModal.classList.toggle('tasbeeh-aot-active', aotOn);
         }
 
         function applyTasbeehTransform(left, top, scale) {
@@ -1664,8 +1673,12 @@
 
                 const baseW = tasbeehContent.offsetWidth || 320;
                 const baseH = tasbeehContent.offsetHeight || 400;
-                const defaultLeft = (window.innerWidth - baseW * currentScale) / 2;
-                const defaultTop = (window.innerHeight - baseH * currentScale) / 2;
+                const defaultLeft = currentScale <= 0.65
+                    ? Math.max(8, window.innerWidth - (baseW * currentScale) - 12)
+                    : (window.innerWidth - baseW * currentScale) / 2;
+                const defaultTop = currentScale <= 0.65
+                    ? 68
+                    : (window.innerHeight - baseH * currentScale) / 2;
 
                 if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
                     hasCustomPos = true;
@@ -1678,6 +1691,97 @@
         }
 
         refreshTasbeehLayoutRef = initTasbeehLayout;
+
+        const zoomOutBtn = document.getElementById('tasbeehZoomOutBtn');
+        const zoomInBtn = document.getElementById('tasbeehZoomInBtn');
+        function stepTasbeehScale(delta) {
+            hasCustomPos = true;
+            const targetScale = Math.min(getMaxAllowedScale(), Math.max(MIN_SCALE, +(currentScale + delta).toFixed(2)));
+            applyTasbeehTransform(currentLeft, currentTop, targetScale);
+            showZoomBadge(currentScale);
+            saveTasbeehGeometry();
+            syncNativeOverlayIfRunning();
+        }
+        if (zoomOutBtn) zoomOutBtn.addEventListener('click', (e) => { e.stopPropagation(); stepTasbeehScale(-0.10); });
+        if (zoomInBtn) zoomInBtn.addEventListener('click', (e) => { e.stopPropagation(); stepTasbeehScale(0.10); });
+
+        function getNativeOverlayPlugin() {
+            try {
+                return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay) || null;
+            } catch (e) { return null; }
+        }
+        function buildOverlayPayload() {
+            let sec = parseInt(customIntervalInput && customIntervalInput.value, 10);
+            if (!sec || sec < 1) sec = 1;
+            return {
+                count: count,
+                target: target,
+                mode: modeSelect ? modeSelect.value : 'manual',
+                intervalSec: sec,
+                scalePct: Math.round(currentScale * 100),
+                soundEnabled: soundEnabled,
+                vibrateEnabled: vibrateEnabled
+            };
+        }
+        function syncNativeOverlayIfRunning() {
+            const plg = getNativeOverlayPlugin();
+            if (!plg || typeof plg.updateOverlay !== 'function') return;
+            if (localStorage.getItem('app_tasbeeh_always_on_top') !== 'true') return;
+            try { plg.updateOverlay(buildOverlayPayload()).catch(() => {}); } catch (e) {}
+        }
+        function pullStateFromNativeOverlay() {
+            const plg = getNativeOverlayPlugin();
+            if (!plg || typeof plg.getState !== 'function') return;
+            plg.getState().then((st) => {
+                if (!st || typeof st.count !== 'number') return;
+                if (st.updatedAt && st.updatedAt > (window.__awraadLastOverlaySyncTs || 0)) {
+                    window.__awraadLastOverlaySyncTs = st.updatedAt;
+                    count = st.count;
+                    if (typeof st.target === 'number' && st.target >= 1) target = st.target;
+                    localStorage.setItem('tasbeeh_count', count);
+                    localStorage.setItem('tasbeeh_target', target);
+                    if (countDisplay) countDisplay.innerText = count;
+                    if (typeof st.scalePct === 'number' && st.scalePct >= 45 && st.scalePct <= 115) {
+                        currentScale = st.scalePct / 100;
+                        localStorage.setItem('tasbeeh_scale', currentScale.toFixed(3));
+                        if (tasbeehModal && tasbeehModal.classList.contains('show')) {
+                            applyTasbeehTransform(currentLeft, currentTop, currentScale);
+                        }
+                    }
+                    updateProgress();
+                }
+            }).catch(() => {});
+        }
+        window.awraadSyncTasbeehAot = function() {
+            updateBackdropMode();
+            const plg = getNativeOverlayPlugin();
+            if (!plg) return;
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            if (!aotOn && typeof plg.hideOverlay === 'function') {
+                try { plg.hideOverlay().catch(() => {}); } catch (e) {}
+            } else if (aotOn && tasbeehModal && tasbeehModal.classList.contains('show')) {
+                syncNativeOverlayIfRunning();
+            }
+        };
+        document.addEventListener('visibilitychange', () => {
+            const plg = getNativeOverlayPlugin();
+            if (!plg) return;
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            const tasbeehActiveVis = (tasbeehModal && tasbeehModal.classList.contains('show')) ||
+                                     (tasbeehMinimized && tasbeehMinimized.style.display !== 'none');
+            if (document.visibilityState === 'hidden') {
+                if (aotOn && tasbeehActiveVis && typeof plg.showOverlay === 'function') {
+                    plg.checkPermission().then((res) => {
+                        if (res && res.granted) plg.showOverlay(buildOverlayPayload()).catch(() => {});
+                    }).catch(() => {});
+                }
+            } else if (document.visibilityState === 'visible') {
+                pullStateFromNativeOverlay();
+                if (typeof plg.hideOverlay === 'function') {
+                    try { plg.hideOverlay().catch(() => {}); } catch (e) {}
+                }
+            }
+        });
 
         // 1. Two-Finger Pinch Zoom-In / Zoom-Out Resizing (anywhere on Tasbeeh Window)
         if (tasbeehContent) {
@@ -1857,11 +1961,13 @@
 
         function resetCount() {
             pauseAuto();
+            stopTasbeehAllah();
             count = 0;
             localStorage.setItem('tasbeeh_count', count);
             beepPlayed = false;
             countDisplay.innerText = count;
             updateProgress();
+            syncNativeOverlayIfRunning();
 
             if (modeSelect.value === 'auto') {
                 startBtn.style.display = 'inline-block';
@@ -1884,6 +1990,11 @@
             e.stopPropagation();
             tasbeehModal.classList.remove('show');
             pauseAuto();
+            stopTasbeehAllah();
+            const plg = getNativeOverlayPlugin();
+            if (plg && typeof plg.hideOverlay === 'function') {
+                try { plg.hideOverlay().catch(() => {}); } catch (err) {}
+            }
         });
 
         tasbeehModal.addEventListener('click', (e) => {
@@ -1903,14 +2014,18 @@
                 customTargetInput.style.display = 'none';
                 target = parseInt(targetSelect.value);
             }
+            if (count < target) beepPlayed = false;
             localStorage.setItem('tasbeeh_target', target);
             updateProgress();
+            syncNativeOverlayIfRunning();
         });
 
         customTargetInput.addEventListener('input', () => {
             target = parseInt(customTargetInput.value) || 1;
+            if (count < target) beepPlayed = false;
             localStorage.setItem('tasbeeh_target', target);
             updateProgress();
+            syncNativeOverlayIfRunning();
         });
 
         modeSelect.addEventListener('change', () => {
@@ -1958,17 +2073,142 @@
             });
         }
 
-        function playBeep() {
-            if (!soundEnabled) return;
+        let tasbeehAllahBuffer = null;
+        let tasbeehAllahDecodePromise = null;
+        let tasbeehAllahSources = [];
+        let tasbeehAllahHtmlAudio = null;
+        let tasbeehAllahHtmlLeft = 0;
+        let tasbeehAllahPlayToken = 0;
+
+        function preloadTasbeehAllah() {
+            if (tasbeehAllahBuffer) return Promise.resolve(tasbeehAllahBuffer);
+            if (tasbeehAllahDecodePromise) return tasbeehAllahDecodePromise;
+            try { unlockAudio(); } catch (e) {}
+            if (!audioCtx || typeof fetch !== 'function') return Promise.resolve(null);
+            tasbeehAllahDecodePromise = fetch('./allah.mp3')
+                .then((res) => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.arrayBuffer();
+                })
+                .then((buf) => new Promise((resolve, reject) => audioCtx.decodeAudioData(buf.slice(0), resolve, reject)))
+                .then((decoded) => {
+                    tasbeehAllahBuffer = decoded;
+                    return decoded;
+                })
+                .catch(() => {
+                    tasbeehAllahDecodePromise = null;
+                    return null;
+                });
+            return tasbeehAllahDecodePromise;
+        }
+
+        function ensureTasbeehHtmlAudio() {
+            if (!tasbeehAllahHtmlAudio) {
+                tasbeehAllahHtmlAudio = new Audio('./allah.mp3');
+                tasbeehAllahHtmlAudio.preload = 'auto';
+                tasbeehAllahHtmlAudio.addEventListener('ended', () => {
+                    const tok = tasbeehAllahHtmlAudio._awraadTok;
+                    if (tok !== tasbeehAllahPlayToken) return;
+                    if (tasbeehAllahHtmlLeft > 0) {
+                        tasbeehAllahHtmlLeft--;
+                        setTimeout(() => {
+                            if (tasbeehAllahHtmlAudio._awraadTok !== tasbeehAllahPlayToken) return;
+                            tasbeehAllahHtmlAudio.currentTime = 0;
+                            const p = tasbeehAllahHtmlAudio.play();
+                            if (p && typeof p.catch === 'function') p.catch(() => {});
+                        }, 220);
+                    }
+                });
+            }
+            return tasbeehAllahHtmlAudio;
+        }
+
+        function stopTasbeehAllah() {
+            tasbeehAllahPlayToken++;
+            tasbeehAllahSources.forEach((src) => {
+                try { src.stop(0); } catch (e) {}
+                try { src.disconnect(); } catch (e) {}
+            });
+            tasbeehAllahSources = [];
+            tasbeehAllahHtmlLeft = 0;
+            if (tasbeehAllahHtmlAudio) {
+                try {
+                    tasbeehAllahHtmlAudio.pause();
+                    tasbeehAllahHtmlAudio.currentTime = 0;
+                } catch (e) {}
+            }
+        }
+
+        function playTasbeehAllahHtml(times, tok) {
             try {
-                unlockAudio();
-                const oscillator = audioCtx.createOscillator();
-                oscillator.type = 'sine';
-                oscillator.frequency.value = 800;
-                oscillator.connect(audioCtx.destination);
-                oscillator.start();
-                setTimeout(() => oscillator.stop(), 800);
-            } catch (error) {}
+                const a = ensureTasbeehHtmlAudio();
+                a._awraadTok = tok;
+                a.muted = false;
+                a.currentTime = 0;
+                tasbeehAllahHtmlLeft = Math.max(0, times - 1);
+                const p = a.play();
+                if (p && typeof p.catch === 'function') p.catch(() => { tasbeehAllahHtmlLeft = 0; });
+            } catch (e) {}
+        }
+
+        // Auto Mode = 3 times, Manual Mode = 1 time (strictly using ./allah.mp3)
+        function playTasbeehAllah(repeatCount) {
+            if (!soundEnabled) return;
+            const times = Math.max(1, parseInt(repeatCount, 10) || 1);
+            stopTasbeehAllah();
+            const tok = tasbeehAllahPlayToken;
+            try { unlockAudio(); } catch (e) {}
+
+            if (audioCtx) {
+                preloadTasbeehAllah().then((buf) => {
+                    if (tok !== tasbeehAllahPlayToken) return;
+                    if (!buf) {
+                        playTasbeehAllahHtml(times, tok);
+                        return;
+                    }
+                    const scheduleAll = () => {
+                        if (tok !== tasbeehAllahPlayToken) return;
+                        const now = audioCtx.currentTime + 0.04;
+                        const gap = 0.25;
+                        const dur = buf.duration || 0;
+                        for (let i = 0; i < times; i++) {
+                            const src = audioCtx.createBufferSource();
+                            src.buffer = buf;
+                            src.connect(audioCtx.destination);
+                            src.start(now + i * (dur + gap));
+                            tasbeehAllahSources.push(src);
+                        }
+                    };
+                    if (audioCtx.state === 'suspended') {
+                        audioCtx.resume().then(scheduleAll).catch(() => playTasbeehAllahHtml(times, tok));
+                    } else {
+                        scheduleAll();
+                    }
+                }).catch(() => playTasbeehAllahHtml(times, tok));
+            } else {
+                playTasbeehAllahHtml(times, tok);
+            }
+        }
+
+        function unlockTasbeehAllahOnGesture() {
+            try { unlockAudio(); } catch (e) {}
+            preloadTasbeehAllah();
+            try {
+                const a = ensureTasbeehHtmlAudio();
+                if (!a._awraadUnlocked) {
+                    const prevMuted = a.muted;
+                    a.muted = true;
+                    const p = a.play();
+                    if (p && typeof p.then === 'function') {
+                        p.then(() => {
+                            a.pause();
+                            a.currentTime = 0;
+                            a.muted = prevMuted;
+                            a._awraadUnlocked = true;
+                        }).catch(() => { a.muted = prevMuted; });
+                    }
+                }
+            } catch (e) {}
         }
 
         function incrementCount(isManualTap) {
@@ -1977,12 +2217,14 @@
                 localStorage.setItem('tasbeeh_count', count);
                 countDisplay.innerText = count;
                 updateProgress();
+                syncNativeOverlayIfRunning();
                 if (count === target) {
+                    const isAutoTrigger = (modeSelect && modeSelect.value === 'auto') && !isManualTap;
                     pauseAuto();
                     triggerHaptic([80, 60, 120, 60, 180]);
                     if (!beepPlayed) {
-                        playBeep();
                         beepPlayed = true;
+                        playTasbeehAllah(isAutoTrigger ? 3 : 1);
                     }
                 } else if (isManualTap) {
                     if (count % 33 === 0) {
@@ -1996,13 +2238,13 @@
 
         mainTapBtn.addEventListener('click', () => {
             if (isPinching || (Date.now() - lastPinchEndTime) < 260) return;
-            unlockAudio();
+            unlockTasbeehAllahOnGesture();
             activateTasbeehGuard();
             if (count < target) incrementCount(true);
         });
 
         function startAuto() {
-            unlockAudio();
+            unlockTasbeehAllahOnGesture();
             if (count >= target) return;
             if (autoTimer) clearInterval(autoTimer);
             let interval = intervalSelect.value === 'custom' ? parseInt(customIntervalInput.value) * 1000 : parseInt(intervalSelect.value);
@@ -2235,12 +2477,14 @@
             }
             drawerBackdrop.classList.add('open');
             sideDrawer.classList.add('open');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         }
 
         function closeDrawer() {
             if (drawerBackdrop) drawerBackdrop.classList.remove('open');
             if (sideDrawer) sideDrawer.classList.remove('open');
             closeAllSubmenus();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         }
 
         window.awraadOpenDrawer = openDrawer;
@@ -3774,6 +4018,24 @@
                             </label>
                             <span class="settings-label-lg">Tajweed Colors</span>
                         </div>
+                        <div class="settings-awake-row">
+                            <label class="awake-toggle">
+                                <input type="checkbox" id="alwaysOnTopCheckbox">
+                                <span class="awake-track" id="alwaysOnTopLabel">OFF</span>
+                            </label>
+                            <span class="settings-label-lg">Always-on-Top Overlay</span>
+                        </div>
+                        <div id="aotPermissionHintRow" class="settings-aot-hint" style="display:none;">
+                            <span id="aotPermissionStatusText">Android system overlay permission</span>
+                            <button type="button" id="aotRequestPermBtn" class="settings-aot-perm-btn">Grant Permission</button>
+                        </div>
+                        <div class="settings-awake-row">
+                            <label class="awake-toggle">
+                                <input type="checkbox" id="scrollBtnToggleCheckbox" checked>
+                                <span class="awake-track" id="scrollBtnToggleLabel">ON</span>
+                            </label>
+                            <span class="settings-label-lg">Optional Scroll Button</span>
+                        </div>
                     </div>
 
                     <hr class="settings-divider">
@@ -3921,6 +4183,13 @@
         const keepAwakeLabel = document.getElementById('keepAwakeLabel');
         const tajweedToggleCheckbox = document.getElementById('tajweedToggleCheckbox');
         const tajweedToggleLabel = document.getElementById('tajweedToggleLabel');
+        const alwaysOnTopCheckbox = document.getElementById('alwaysOnTopCheckbox');
+        const alwaysOnTopLabel = document.getElementById('alwaysOnTopLabel');
+        const aotPermissionHintRow = document.getElementById('aotPermissionHintRow');
+        const aotPermissionStatusText = document.getElementById('aotPermissionStatusText');
+        const aotRequestPermBtn = document.getElementById('aotRequestPermBtn');
+        const scrollBtnToggleCheckbox = document.getElementById('scrollBtnToggleCheckbox');
+        const scrollBtnToggleLabel = document.getElementById('scrollBtnToggleLabel');
         const bgColorRow = document.getElementById('bgColorRow');
         const textColorRow = document.getElementById('textColorRow');
         const resetDefaultColorsBtn = document.getElementById('resetDefaultColorsBtn');
@@ -4078,6 +4347,17 @@
             tajweedToggleCheckbox.checked = tajweedOn;
             tajweedToggleLabel.textContent = tajweedOn ? 'ON' : 'OFF';
 
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            if (alwaysOnTopCheckbox) alwaysOnTopCheckbox.checked = aotOn;
+            if (alwaysOnTopLabel) alwaysOnTopLabel.textContent = aotOn ? 'ON' : 'OFF';
+            if (typeof window.awraadRefreshAotPermissionUI === 'function') {
+                window.awraadRefreshAotPermissionUI();
+            }
+
+            const scrollBtnOn = localStorage.getItem('app_scroll_btn_enabled') !== 'false';
+            if (scrollBtnToggleCheckbox) scrollBtnToggleCheckbox.checked = scrollBtnOn;
+            if (scrollBtnToggleLabel) scrollBtnToggleLabel.textContent = scrollBtnOn ? 'ON' : 'OFF';
+
             previewBox.style.setProperty('--preview-bg', bg);
             previewBox.style.setProperty('--preview-text', text);
             previewBox.style.setProperty('--preview-border', border);
@@ -4115,9 +4395,15 @@
 
         syncSettingsUIRef = syncSettingsUI;
 
-        closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+        closeSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('show');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+        });
         settingsModal.addEventListener('click', (e) => {
-            if (e.target === settingsModal) settingsModal.classList.remove('show');
+            if (e.target === settingsModal) {
+                settingsModal.classList.remove('show');
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+            }
         });
 
         keepAwakeCheckbox.addEventListener('change', () => {
@@ -4134,6 +4420,77 @@
             applySavedDisplaySettings();
             syncSettingsUI();
         });
+
+        function refreshAotPermissionUI() {
+            if (!aotPermissionHintRow) return;
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            const plg = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay;
+            if (!aotOn) {
+                aotPermissionHintRow.style.display = 'none';
+                return;
+            }
+            if (plg && typeof plg.checkPermission === 'function') {
+                aotPermissionHintRow.style.display = 'flex';
+                plg.checkPermission().then((res) => {
+                    if (res && res.granted) {
+                        if (aotPermissionStatusText) aotPermissionStatusText.textContent = '✅ System Overlay Permission Granted (Active over apps)';
+                        if (aotRequestPermBtn) aotRequestPermBtn.style.display = 'none';
+                    } else {
+                        if (aotPermissionStatusText) aotPermissionStatusText.textContent = '⚠️ Allow "Display over other apps" for system overlay';
+                        if (aotRequestPermBtn) aotRequestPermBtn.style.display = 'inline-block';
+                    }
+                }).catch(() => {});
+            } else {
+                aotPermissionHintRow.style.display = 'flex';
+                if (aotPermissionStatusText) aotPermissionStatusText.textContent = '✅ In-app Always-on-Top active (System overlay works in Android APK)';
+                if (aotRequestPermBtn) aotRequestPermBtn.style.display = 'none';
+            }
+        }
+        window.awraadRefreshAotPermissionUI = refreshAotPermissionUI;
+
+        if (alwaysOnTopCheckbox) {
+            alwaysOnTopCheckbox.addEventListener('change', () => {
+                const enabled = alwaysOnTopCheckbox.checked;
+                if (alwaysOnTopLabel) alwaysOnTopLabel.textContent = enabled ? 'ON' : 'OFF';
+                localStorage.setItem('app_tasbeeh_always_on_top', enabled ? 'true' : 'false');
+                document.body.classList.toggle('awraad-aot-enabled', enabled);
+                if (typeof window.awraadSyncTasbeehAot === 'function') window.awraadSyncTasbeehAot();
+                const plg = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay;
+                if (enabled && plg && typeof plg.checkPermission === 'function') {
+                    plg.checkPermission().then((res) => {
+                        if (!res || !res.granted) {
+                            if (typeof plg.requestPermission === 'function') plg.requestPermission().catch(() => {});
+                        }
+                        refreshAotPermissionUI();
+                    }).catch(() => refreshAotPermissionUI());
+                } else {
+                    refreshAotPermissionUI();
+                }
+            });
+        }
+        if (aotRequestPermBtn) {
+            aotRequestPermBtn.addEventListener('click', () => {
+                const plg = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay;
+                if (plg && typeof plg.requestPermission === 'function') {
+                    plg.requestPermission().catch(() => {});
+                }
+            });
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') refreshAotPermissionUI();
+        });
+
+        if (scrollBtnToggleCheckbox) {
+            scrollBtnToggleCheckbox.addEventListener('change', () => {
+                const enabled = scrollBtnToggleCheckbox.checked;
+                if (scrollBtnToggleLabel) scrollBtnToggleLabel.textContent = enabled ? 'ON' : 'OFF';
+                if (typeof window.awraadSetScrollButtonEnabled === 'function') {
+                    window.awraadSetScrollButtonEnabled(enabled);
+                } else {
+                    localStorage.setItem('app_scroll_btn_enabled', enabled ? 'true' : 'false');
+                }
+            });
+        }
 
         resetDefaultColorsBtn.addEventListener('click', () => {
             localStorage.removeItem('app_custom_bg');
@@ -4269,6 +4626,11 @@
                 'app_hijri_after_maghrib',
                 'tasbeeh_pos',
                 'tasbeeh_scale',
+                'tasbeeh_default45_v1',
+                'app_tasbeeh_always_on_top',
+                'app_scroll_btn_enabled',
+                'app_autoscroll_speed_v2',
+                'app_autoscroll_speed',
                 'app_urs_notif_enabled',
                 'app_urs_notif_time'
             ];
@@ -4347,7 +4709,7 @@
             if (syncSettingsUIRef) syncSettingsUIRef();
             const modal = document.getElementById('settingsModal');
             if (modal) modal.classList.add('show');
-            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         });
     }
 
@@ -4975,9 +5337,15 @@
 
         renderPrayerTimesRef = renderPrayerTimes;
 
-        closeBtn.addEventListener('click', () => prayerModal.classList.remove('show'));
+        closeBtn.addEventListener('click', () => {
+            prayerModal.classList.remove('show');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+        });
         prayerModal.addEventListener('click', (e) => {
-            if (e.target === prayerModal) prayerModal.classList.remove('show');
+            if (e.target === prayerModal) {
+                prayerModal.classList.remove('show');
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+            }
         });
 
         // 1. Calculation Method Picker
@@ -5216,7 +5584,7 @@
                 if (renderPrayerTimesRef) renderPrayerTimesRef();
                 const prayerModal = document.getElementById('prayerTimesModal');
                 if (prayerModal) prayerModal.classList.add('show');
-                if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
                 return;
             }
             const openBtn = e.target.closest('#openPrayerTimesBtn');
@@ -5226,7 +5594,7 @@
             if (renderPrayerTimesRef) renderPrayerTimesRef();
             const prayerModal = document.getElementById('prayerTimesModal');
             if (prayerModal) prayerModal.classList.add('show');
-            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
 
             if (typeof window.awraadRequestLocationOnce === 'function') {
                 window.awraadRequestLocationOnce(() => {
@@ -5282,16 +5650,6 @@
     }
 
     function closeTopOpenModal() {
-        const shortcutRail = document.getElementById('awraadShortcutRail');
-        if (shortcutRail && shortcutRail.classList.contains('open')) {
-            if (typeof window.awraadCloseShortcutRail === 'function') window.awraadCloseShortcutRail();
-            return true;
-        }
-        const sideDrawer = document.getElementById('awraadSideDrawer');
-        if (sideDrawer && sideDrawer.classList.contains('open')) {
-            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
-            return true;
-        }
         const selectors = [
             '#navWarningModal.show',
             '#resetAllConfirmModal.show',
@@ -5303,21 +5661,28 @@
             '.settings-modal.show',
             '.events-modal.show',
             '.prayer-modal.show',
-            '#tasbeehModal.show:not(.tasbeeh-compact)',
             '#autoScrollBar.show'
         ];
         for (let i = 0; i < selectors.length; i++) {
             const el = document.querySelector(selectors[i]);
             if (el) {
                 el.classList.remove('show');
-                if (selectors[i].indexOf('tasbeehModal') !== -1 && typeof window.tasbeehPauseAuto === 'function') {
-                    window.tasbeehPauseAuto();
-                }
                 if (selectors[i].indexOf('autoScrollBar') !== -1 && typeof window.awraadStopAutoScroll === 'function') {
                     window.awraadStopAutoScroll();
                 }
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
                 return true;
             }
+        }
+        const shortcutRail = document.getElementById('awraadShortcutRail');
+        if (shortcutRail && shortcutRail.classList.contains('open')) {
+            if (typeof window.awraadCloseShortcutRail === 'function') window.awraadCloseShortcutRail();
+            return true;
+        }
+        const sideDrawer = document.getElementById('awraadSideDrawer');
+        if (sideDrawer && sideDrawer.classList.contains('open')) {
+            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+            return true;
         }
         return false;
     }
@@ -7704,6 +8069,7 @@
         function closeModal() {
             modal.classList.remove('show');
             stopCountdown();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         }
 
         closeBtn.addEventListener('click', closeModal);
@@ -7759,6 +8125,7 @@
             });
             switchEventsTab(initialTab);
             if (modal) modal.classList.add('show');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
             startCountdown();
             if (initialTab === 'calendar') {
                 scheduleAllUrsNotifications(false);
@@ -9163,27 +9530,83 @@
     }
 
     // -----------------------------------------
-    // C. HANDS-FREE AUTO-SCROLL MODE
+    // C. OPTIONAL SCROLL BUTTON & HANDS-FREE AUTO-SCROLL (0.1x TO 10x, DEFAULT 1x)
     // -----------------------------------------
+    const SCROLL_BTN_KEY = 'app_scroll_btn_enabled';
+    const AUTOSCROLL_SPEED_V2_KEY = 'app_autoscroll_speed_v2';
+    const SCROLL_SPEED_STEPS = [0.1, 0.25, 0.5, 0.75, 1, 2, 3, 5, 10];
+    const DEFAULT_SCROLL_SPEED = 1;
+
+    function normalizeScrollSpeed(val) {
+        const n = parseFloat(val);
+        if (isNaN(n)) return DEFAULT_SCROLL_SPEED;
+        let best = SCROLL_SPEED_STEPS[0];
+        let bestDiff = Math.abs(n - best);
+        for (let i = 1; i < SCROLL_SPEED_STEPS.length; i++) {
+            const d = Math.abs(n - SCROLL_SPEED_STEPS[i]);
+            if (d < bestDiff) {
+                bestDiff = d;
+                best = SCROLL_SPEED_STEPS[i];
+            }
+        }
+        return best;
+    }
+
+    function isScrollButtonEnabled() {
+        return localStorage.getItem(SCROLL_BTN_KEY) !== 'false';
+    }
+
     let autoScrollBarBuilt = false;
     let autoScrollRunning = false;
+    let autoScrollPaused = false;
     let autoScrollRaf = null;
     let autoScrollLastTs = 0;
     let autoScrollCarry = 0;
-    let autoScrollSpeed = Math.min(10, Math.max(1, parseInt(localStorage.getItem(AUTOSCROLL_SPEED_KEY) || '3', 10) || 3));
+    let autoScrollSpeed = normalizeScrollSpeed(localStorage.getItem(AUTOSCROLL_SPEED_V2_KEY) || String(DEFAULT_SCROLL_SPEED));
 
-    function syncAutoScrollUI() {
-        const playBtn = document.getElementById('autoScrollPlayPauseBtn');
-        const speedLbl = document.getElementById('autoScrollSpeedLabel');
-        const fabBtn = document.getElementById('fabAutoScrollBtn');
-        const I = window.AWRAAD_SVG;
-        if (playBtn) playBtn.innerHTML = autoScrollRunning ? I.pause : I.play;
-        if (speedLbl) speedLbl.textContent = 'Speed ' + autoScrollSpeed + 'x';
-        if (fabBtn) fabBtn.classList.toggle('fab-active', autoScrollRunning);
+    function setScrollSpeed(newSpeed) {
+        autoScrollSpeed = normalizeScrollSpeed(newSpeed);
+        localStorage.setItem(AUTOSCROLL_SPEED_V2_KEY, String(autoScrollSpeed));
+        localStorage.setItem(AUTOSCROLL_SPEED_KEY, String(autoScrollSpeed));
+        syncAutoScrollUI();
     }
 
-    function stopAutoScroll() {
+    function stepScrollSpeed(delta) {
+        const idx = SCROLL_SPEED_STEPS.indexOf(autoScrollSpeed);
+        const curIdx = idx === -1 ? SCROLL_SPEED_STEPS.indexOf(DEFAULT_SCROLL_SPEED) : idx;
+        const nextIdx = Math.min(SCROLL_SPEED_STEPS.length - 1, Math.max(0, curIdx + delta));
+        setScrollSpeed(SCROLL_SPEED_STEPS[nextIdx]);
+    }
+
+    function syncAutoScrollUI() {
+        const enabled = isScrollButtonEnabled();
+        const playBtn = document.getElementById('autoScrollPlayPauseBtn');
+        const speedSel = document.getElementById('autoScrollSpeedSelect');
+        const fabBtn = document.getElementById('fabAutoScrollBtn');
+        const bar = document.getElementById('autoScrollBar');
+        const I = window.AWRAAD_SVG;
+
+        if (playBtn) {
+            playBtn.innerHTML = autoScrollRunning ? I.pause : I.play;
+            playBtn.title = autoScrollRunning ? 'Pause' : (autoScrollPaused ? 'Resume' : 'Start');
+            playBtn.setAttribute('aria-label', playBtn.title);
+        }
+        if (speedSel && speedSel.value !== String(autoScrollSpeed)) {
+            speedSel.value = String(autoScrollSpeed);
+        }
+        if (fabBtn) {
+            fabBtn.style.display = enabled ? 'inline-flex' : 'none';
+            fabBtn.classList.toggle('visible', enabled);
+            fabBtn.classList.toggle('fab-active', enabled && autoScrollRunning);
+        }
+        if (!enabled && bar) {
+            bar.classList.remove('show');
+        }
+    }
+
+    function stopAutoScroll(markPaused) {
         autoScrollRunning = false;
+        autoScrollPaused = Boolean(markPaused);
         if (autoScrollRaf) {
             cancelAnimationFrame(autoScrollRaf);
             autoScrollRaf = null;
@@ -9192,22 +9615,26 @@
         autoScrollCarry = 0;
         syncAutoScrollUI();
     }
-    window.awraadStopAutoScroll = stopAutoScroll;
+    window.awraadStopAutoScroll = function() { stopAutoScroll(false); };
 
     function autoScrollStep(ts) {
-        if (!autoScrollRunning) return;
+        if (!autoScrollRunning || !isScrollButtonEnabled()) {
+            stopAutoScroll(false);
+            return;
+        }
         if (!autoScrollLastTs) autoScrollLastTs = ts;
         const dtSec = Math.min(0.1, (ts - autoScrollLastTs) / 1000);
         autoScrollLastTs = ts;
 
-        const pxPerSec = 14 + autoScrollSpeed * 9.5;
+        // Proportional speed: 1x = 32 px/sec (0.1x = 3.2 px/sec, 10x = 320 px/sec)
+        const pxPerSec = 32 * autoScrollSpeed;
         autoScrollCarry += pxPerSec * dtSec;
         const stepPx = Math.floor(autoScrollCarry);
         if (stepPx >= 1) {
             autoScrollCarry -= stepPx;
             const maxScroll = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight;
             if (window.scrollY >= maxScroll - 2) {
-                stopAutoScroll();
+                stopAutoScroll(false);
                 showQuickToast('Page mukammal ho gaya');
                 return;
             }
@@ -9217,52 +9644,75 @@
     }
 
     function startAutoScroll() {
+        if (!isScrollButtonEnabled()) {
+            showQuickToast('Optional Scroll Button OFF hai — Settings mein ON karein');
+            return;
+        }
         if (autoScrollRunning) return;
         autoScrollRunning = true;
+        autoScrollPaused = false;
         autoScrollLastTs = 0;
         autoScrollCarry = 0;
         syncAutoScrollUI();
         autoScrollRaf = requestAnimationFrame(autoScrollStep);
     }
 
+    window.awraadSetScrollButtonEnabled = function(enabled) {
+        const on = Boolean(enabled);
+        localStorage.setItem(SCROLL_BTN_KEY, on ? 'true' : 'false');
+        if (!on) stopAutoScroll(false);
+        syncAutoScrollUI();
+    };
+
     function openAutoScrollBar(autoStart) {
+        if (!isScrollButtonEnabled()) {
+            showQuickToast('Optional Scroll Button OFF hai — Settings mein ON karein');
+            return;
+        }
         if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
         if (!autoScrollBarBuilt && !document.getElementById('autoScrollBar')) {
             autoScrollBarBuilt = true;
             const I = window.AWRAAD_SVG;
+            const optsHtml = SCROLL_SPEED_STEPS.map((s) =>
+                `<option value="${s}"${s === autoScrollSpeed ? ' selected' : ''}>${s}x</option>`
+            ).join('');
             document.body.insertAdjacentHTML('beforeend', `
                 <div id="autoScrollBar" class="autoscroll-bar print-none" role="region" aria-label="Auto Scroll Controls">
-                    <button type="button" id="autoScrollPlayPauseBtn" class="autoscroll-btn play-primary" title="Play / Pause">${I.play}</button>
+                    <button type="button" id="autoScrollPlayPauseBtn" class="autoscroll-btn play-primary" title="Start">${I.play}</button>
                     <button type="button" id="autoScrollSlowerBtn" class="autoscroll-btn" title="Slower">&minus;</button>
-                    <span id="autoScrollSpeedLabel" class="autoscroll-speed-label">Speed 3x</span>
+                    <select id="autoScrollSpeedSelect" class="autoscroll-speed-select" aria-label="Scroll Speed">${optsHtml}</select>
                     <button type="button" id="autoScrollFasterBtn" class="autoscroll-btn" title="Faster">+</button>
                     <button type="button" id="autoScrollCloseBtn" class="autoscroll-btn" title="Close">${I.close}</button>
                 </div>
             `);
 
-            document.getElementById('autoScrollPlayPauseBtn').addEventListener('click', () => {
-                if (autoScrollRunning) stopAutoScroll();
+            document.getElementById('autoScrollPlayPauseBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (autoScrollRunning) stopAutoScroll(true);
                 else startAutoScroll();
             });
-            document.getElementById('autoScrollSlowerBtn').addEventListener('click', () => {
-                autoScrollSpeed = Math.max(1, autoScrollSpeed - 1);
-                localStorage.setItem(AUTOSCROLL_SPEED_KEY, String(autoScrollSpeed));
-                syncAutoScrollUI();
+            document.getElementById('autoScrollSlowerBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                stepScrollSpeed(-1);
             });
-            document.getElementById('autoScrollFasterBtn').addEventListener('click', () => {
-                autoScrollSpeed = Math.min(10, autoScrollSpeed + 1);
-                localStorage.setItem(AUTOSCROLL_SPEED_KEY, String(autoScrollSpeed));
-                syncAutoScrollUI();
+            document.getElementById('autoScrollFasterBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                stepScrollSpeed(1);
             });
-            document.getElementById('autoScrollCloseBtn').addEventListener('click', () => {
-                stopAutoScroll();
+            document.getElementById('autoScrollSpeedSelect').addEventListener('change', (e) => {
+                e.stopPropagation();
+                setScrollSpeed(e.target.value);
+            });
+            document.getElementById('autoScrollCloseBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                stopAutoScroll(false);
                 const bar = document.getElementById('autoScrollBar');
                 if (bar) bar.classList.remove('show');
             });
 
             window.addEventListener('touchstart', (e) => {
-                if (autoScrollRunning && !e.target.closest('#autoScrollBar')) {
-                    stopAutoScroll();
+                if (autoScrollRunning && !e.target.closest('#autoScrollBar, #fabAutoScrollBtn, #tasbeehModal, #tasbeehMinimized')) {
+                    stopAutoScroll(true);
                 }
             }, { passive: true });
         }
@@ -9540,15 +9990,18 @@
             });
         }
         if (fabAutoScroll) {
-            fabAutoScroll.addEventListener('click', () => {
+            fabAutoScroll.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!isScrollButtonEnabled()) return;
                 const bar = document.getElementById('autoScrollBar');
                 if (bar && bar.classList.contains('show')) {
-                    if (autoScrollRunning) stopAutoScroll();
+                    if (autoScrollRunning) stopAutoScroll(true);
                     else startAutoScroll();
                 } else {
                     openAutoScrollBar(true);
                 }
             });
+            syncAutoScrollUI();
         }
 
         let rafTicking = false;
@@ -10466,7 +10919,121 @@
         });
     }
 })();
+// ==========================================
+// PART 20: UNIFIED MOBILE MAIN-SCREEN SCROLL LOCK ENGINE (TASBEEH EXEMPT)
+// ==========================================
+(function() {
+    let isLocked = false;
+    let lockedScrollY = 0;
+    let touchStartY = 0;
 
-// ==========================================
-// PART 20: SMART TV UNIFIED REMOTE NAVIGATION SYSTEM (TIMER + PAGE SCROLL + MENU BAR + TOP-RIGHT CONTROLS + ALL EXISTING FIXES)
-// ==========================================
+    // Pop-ups & Menus that MUST lock Main Screen scrolling (Tasbeeh is strictly EXEMPT)
+    const LOCK_TARGETS = [
+        '#awraadSideDrawer.open',
+        '#awraadShortcutRail.open',
+        '#eventsModal.show',
+        '#prayerTimesModal.show',
+        '#settingsModal.show',
+        '.pt-submodal.show',
+        '.palette-modal.show',
+        '.hijri-stepper-modal.show',
+        '#resetAllConfirmModal.show',
+        '#bookmarksModal.show',
+        '#quickSearchModal.show',
+        '#navWarningModal.show'
+    ];
+
+    // Inner containers allowed to scroll smoothly while Main Screen is locked
+    const SCROLLABLE_INNER_SELECTOR =
+        '#awraadSideDrawer .drawer-body, ' +
+        '#awraadShortcutRail, ' +
+        '#eventsModal .events-body, ' +
+        '#prayerTimesModal .prayer-card, ' +
+        '#settingsModal .settings-card, ' +
+        '.pt-submodal .pt-checklist, ' +
+        '.palette-modal .palette-shades, ' +
+        '.palette-modal .palette-primaries, ' +
+        '.ux-modal .ux-modal-body';
+
+    function shouldLockMainScreen() {
+        for (let i = 0; i < LOCK_TARGETS.length; i++) {
+            if (document.querySelector(LOCK_TARGETS[i])) return true;
+        }
+        return false;
+    }
+
+    function applyLock() {
+        if (isLocked) return;
+        lockedScrollY = Math.max(0, Math.round(window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0));
+        isLocked = true;
+        document.documentElement.classList.add('awraad-menu-scroll-lock');
+        document.body.classList.add('awraad-menu-scroll-lock');
+        document.body.style.top = (-lockedScrollY) + 'px';
+    }
+
+    function releaseLock() {
+        if (!isLocked) return;
+        isLocked = false;
+        document.documentElement.classList.remove('awraad-menu-scroll-lock');
+        document.body.classList.remove('awraad-menu-scroll-lock');
+        document.body.style.top = '';
+        window.scrollTo(0, lockedScrollY);
+    }
+
+    function syncScrollLock() {
+        if (shouldLockMainScreen()) applyLock();
+        else releaseLock();
+    }
+
+    window.awraadSyncScrollLock = syncScrollLock;
+
+    // Prevent touch/swipe gestures inside Menu Bar, Calendar, Events, Prayer Times, Settings from leaking to Main Screen
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches.length === 1) {
+            touchStartY = e.touches[0].clientY;
+        }
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!isLocked) return;
+        if (!e.touches || e.touches.length !== 1) return;
+        const tgt = e.target;
+        // Tasbeeh interactions are always exempt
+        if (tgt && tgt.closest && tgt.closest('#tasbeehModal, #tasbeehMinimized')) return;
+
+        const scrollBox = tgt && tgt.closest ? tgt.closest(SCROLLABLE_INNER_SELECTOR) : null;
+        if (!scrollBox) {
+            if (e.cancelable) e.preventDefault();
+            return;
+        }
+        const maxScroll = scrollBox.scrollHeight - scrollBox.clientHeight;
+        if (maxScroll <= 1) {
+            if (e.cancelable) e.preventDefault();
+            return;
+        }
+        const dy = e.touches[0].clientY - touchStartY;
+        const atTop = scrollBox.scrollTop <= 0;
+        const atBottom = scrollBox.scrollTop >= maxScroll - 1;
+        if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+            if (e.cancelable) e.preventDefault();
+        }
+    }, { passive: false, capture: true });
+
+    // Apply persisted Always-on-Top body class immediately on boot
+    function bootUnifiedMobileState() {
+        const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+        document.body.classList.toggle('awraad-aot-enabled', aotOn);
+        syncScrollLock();
+
+        if (typeof MutationObserver !== 'undefined') {
+            const mo = new MutationObserver(() => syncScrollLock());
+            mo.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootUnifiedMobileState);
+    } else {
+        bootUnifiedMobileState();
+    }
+})();
