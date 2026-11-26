@@ -541,7 +541,8 @@ jobs:
           let xml = fs.readFileSync(p, "utf8");
           const perms = [
             "android.permission.POST_NOTIFICATIONS",
-            "android.permission.SCHEDULE_EXACT_ALARM"
+            "android.permission.SCHEDULE_EXACT_ALARM",
+          "android.permission.SYSTEM_ALERT_WINDOW"
           ];
           for (const perm of perms) {
             if (!xml.includes(perm)) {
