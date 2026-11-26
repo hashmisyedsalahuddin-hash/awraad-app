@@ -936,6 +936,7 @@ jobs:
 
                   int miniSz = dp(Math.max(24f, 25f * s));
                   int miniMargin = dp(3);
+                  Button[] minis = new Button[] { minusBtn, plusBtn, closeBtn };
                   for (Button b : minis) {
                       LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(miniSz, miniSz);
                       lp.setMargins(miniMargin, 0, 0, 0);
