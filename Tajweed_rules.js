@@ -2042,7 +2042,7 @@
 
         const pathLower = window.location.pathname.toLowerCase();
         const isIndex = pathLower.endsWith('index.html') || pathLower.endsWith('/') || pathLower === '';
-        const isShajara = pathLower.endsWith('shajara_e_alaviyya.html');
+        const isShajara = pathLower.endsWith('Shajara_e_Alaviyya.html');
         const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
         const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
         const I = window.AWRAAD_SVG;
@@ -6910,7 +6910,7 @@
     }
 
     function getShajaraLink(hash) {
-        const isShajara = window.location.pathname.toLowerCase().endsWith('shajara_e_alaviyya.html');
+        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
         const targetHash = hash || '#qadriya';
         return isShajara ? targetHash : ('./Shajara_e_Alaviyya.html' + targetHash);
     }
@@ -7868,7 +7868,7 @@
         { title: 'Dua Bad e Dalail-ul-Khairat', titleUr: 'دعاء بعد دلائل الخیرات', href: './Dua_Bada_Dalail-ul-Khairaat.html', tag: 'Dua' },
         { title: 'Tareeqa Faatiha', titleUr: 'طریقۂ فاتحہ', href: './Tareeqa_Faatiha.html', tag: 'Fatiha' },
         { title: 'Asma-ul-Husna', titleUr: 'أسماءُ اللّٰہِ الْحُسْنٰی', href: './Asma_ul_Husna.html', tag: 'Asma' },
-        { title: 'Asma-un-Nabi', titleUr: 'أسماءُ النَّبِیِّ ﷺ', href: './Asma_un_Nabi.html', tag: 'Asma' },
+        { title: 'Asma-un-Nabi', titleUr: 'أسماءُ النَّبِیِّ ﷺ', href: './Asma_Un_Nabi.html', tag: 'Asma' },
         { title: 'Dua Al Aqeeb Awraad Alaviyya', titleUr: 'دعاء عقیب اورادِ علویہ', href: './Dua_Yuqrau_Aqeeb_Alaviyya.html', tag: 'Dua' }
     ];
 
@@ -10049,7 +10049,7 @@
     }
 
     function getSubmenuGroups() {
-        const isShajara = window.location.pathname.toLowerCase().endsWith('shajara_e_alaviyya.html');
+        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
         const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
         return {
             shajara: {
