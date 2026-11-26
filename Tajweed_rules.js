@@ -10470,3 +10470,548 @@
 // ==========================================
 // PART 20: SMART TV UNIFIED REMOTE NAVIGATION SYSTEM (TIMER + PAGE SCROLL + MENU BAR + TOP-RIGHT CONTROLS + ALL EXISTING FIXES)
 // ==========================================
+// === AWRAAD_MOBILE_PRAYER_SETTINGS_LOCK ===
+(function() {
+  var savedScrollY = 0;
+  var lockedByModal = false;
+
+  function isPrayerOrSettingsEl(el) {
+    if (!el || !el.id) return '';
+    var id = String(el.id).toLowerCase();
+    if (/calendar|event|live/i.test(id)) return '';
+    if (/prayer|namaaz|namaz|salah/i.test(id)) return 'prayer';
+    if (/setting/i.test(id)) return 'settings';
+    return '';
+  }
+
+  function isAnyPrayerOrSettingsOpen() {
+    var nodes = document.querySelectorAll('[id]');
+    for (var i = 0; i < nodes.length; i++) {
+      var kind = isPrayerOrSettingsEl(nodes[i]);
+      if (!kind) continue;
+      var el = nodes[i];
+      var cls = el.classList;
+      if (cls && (cls.contains('show') || cls.contains('open') || cls.contains('active') || cls.contains('visible'))) {
+        return true;
+      }
+      var st = window.getComputedStyle(el);
+      if (st && st.display !== 'none' && st.visibility !== 'hidden' && parseFloat(st.opacity || '1') > 0.05) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function lockBgScroll() {
+    if (lockedByModal) return;
+    savedScrollY = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+    lockedByModal = true;
+    document.documentElement.style.overscrollBehavior = 'none';
+    document.body.style.overscrollBehavior = 'none';
+    document.body.classList.add('awraad-modal-bg-locked');
+  }
+
+  function unlockBgScroll() {
+    if (!lockedByModal) return;
+    if (isAnyPrayerOrSettingsOpen()) return;
+    lockedByModal = false;
+    document.documentElement.style.overscrollBehavior = '';
+    document.body.style.overscrollBehavior = '';
+    document.body.classList.remove('awraad-modal-bg-locked');
+    document.body.classList.remove('awraad-keep-menu-open');
+    if (savedScrollY > 0) {
+      window.scrollTo(0, savedScrollY);
+    }
+  }
+
+  function reopenMenuIfClosed() {
+    document.body.classList.add('awraad-keep-menu-open');
+    var drawer = document.getElementById('navDrawer') || document.getElementById('sideDrawer') || document.getElementById('drawer') || document.querySelector('.nav-drawer, .side-drawer, .drawer');
+    var backdrop = document.getElementById('drawerBackdrop') || document.querySelector('.drawer-backdrop, .nav-backdrop');
+    if (drawer && !drawer.classList.contains('open') && !drawer.classList.contains('show')) {
+      drawer.classList.add('open');
+      if (backdrop) backdrop.classList.add('show', 'open');
+    }
+  }
+
+  // Prevent wheel/touchmove from scrolling background while Prayer/Settings is open (except inside scrollable modal body or open menu)
+  document.addEventListener('touchmove', function(e) {
+    if (!lockedByModal) return;
+    var t = e.target;
+    var inDrawer = t && t.closest && t.closest('#navDrawer, #sideDrawer, #drawer, .nav-drawer, .side-drawer, .drawer');
+    if (inDrawer) {
+      e.stopPropagation();
+      return;
+    }
+    var modalBox = t && t.closest && t.closest('[id*="prayer" i], [id*="setting" i], .modal-content, .modal-body, .popup-content');
+    if (!modalBox || isPrayerOrSettingsEl(modalBox) === '' && !modalBox.closest('[id*="prayer" i], [id*="setting" i]')) {
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    // At top/bottom edge of modal scroll container, stop background scroll
+    if (modalBox.scrollHeight <= modalBox.clientHeight) {
+      if (e.cancelable) e.preventDefault();
+    }
+  }, { passive: false, capture: true });
+
+  document.addEventListener('click', function(e) {
+    var tgt = e.target && e.target.closest ? e.target.closest('button, a, [role="button"], [id*="prayer" i], [id*="setting" i]') : null;
+    if (!tgt) return;
+    var idOrClass = ((tgt.id || '') + ' ' + (tgt.className || '')).toLowerCase();
+    // Strictly ignore Calendar & Events triggers
+    if (/calendar|event|live/i.test(idOrClass)) return;
+    if (/prayer|namaaz|namaz|setting/i.test(idOrClass)) {
+      var wasDrawerOpen = !!(document.querySelector('.nav-drawer.open, .side-drawer.open, .drawer.open, #navDrawer.open, #sideDrawer.open, #drawer.open'));
+      lockBgScroll();
+      setTimeout(function() {
+        if (wasDrawerOpen) reopenMenuIfClosed();
+        lockBgScroll();
+      }, 30);
+      setTimeout(function() {
+        if (wasDrawerOpen) reopenMenuIfClosed();
+        unlockBgScroll();
+      }, 450);
+    } else if (/close|dismiss|backdrop/i.test(idOrClass) || tgt.getAttribute('aria-label') === 'Close') {
+      setTimeout(unlockBgScroll, 40);
+    }
+  }, true);
+
+  if (typeof MutationObserver !== 'undefined') {
+    var mo = new MutationObserver(function() {
+      if (isAnyPrayerOrSettingsOpen()) lockBgScroll();
+      else unlockBgScroll();
+    });
+    mo.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['class', 'style'] });
+  }
+})();
+// === AWRAAD_MOBILE_TASBEEH_45_DEFAULT ===
+(function() {
+  var MIN_SCALE = 0.45, MAX_SCALE = 1.15, DEF_SCALE = 0.45;
+  var SCALE_KEY = 'awraad_mobile_tasbeeh_scale';
+
+  function clampScale(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) return DEF_SCALE;
+    if (n > 2 && n <= 200) n = n / 100;
+    return Math.min(MAX_SCALE, Math.max(MIN_SCALE, n));
+  }
+
+  function applyTasbeehScale(val, persist) {
+    var s = clampScale(val);
+    if (persist) {
+      try { localStorage.setItem(SCALE_KEY, String(s)); } catch (e) {}
+    }
+    var modal = document.getElementById('tasbeehModal');
+    if (!modal) return;
+    var box = modal.querySelector('.tasbeeh-box, .tasbeeh-card, .tasbeeh-dialog, .modal-content') || modal;
+    box.style.transformOrigin = 'top center';
+    box.style.transform = 'scale(' + s + ')';
+    box.setAttribute('data-awraad-scale', String(s));
+    var rangeEl = modal.querySelector('input[type="range"][id*="tasbeeh" i], input[type="range"][id*="scale" i], input[type="range"][id*="size" i]');
+    if (rangeEl) {
+      rangeEl.min = String(MIN_SCALE * 100);
+      rangeEl.max = String(MAX_SCALE * 100);
+      var curPct = Math.round(s * 100);
+      if (document.activeElement !== rangeEl) rangeEl.value = String(curPct);
+    }
+    var lbl = modal.querySelector('[id*="tasbeehScale" i], [id*="tasbeehSize" i], .tasbeeh-scale-label');
+    if (lbl && /%/.test(lbl.textContent || '')) {
+      lbl.textContent = Math.round(s * 100) + '%';
+    }
+  }
+
+  // On open, if no custom scale saved, default to 45% so Awraad remains readable alongside Tasbeeh
+  function initTasbeehDefault45() {
+    var saved = null;
+    try { saved = localStorage.getItem(SCALE_KEY); } catch (e) {}
+    var target = saved !== null ? clampScale(saved) : DEF_SCALE;
+    applyTasbeehScale(target, false);
+  }
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('#openTasbeehBtn, [id*="tasbeeh" i][id*="open" i], [data-open*="tasbeeh" i]') : null;
+    if (btn) {
+      setTimeout(initTasbeehDefault45, 30);
+      setTimeout(initTasbeehDefault45, 160);
+    }
+  }, true);
+
+  document.addEventListener('input', function(e) {
+    var el = e.target;
+    if (!el || el.type !== 'range') return;
+    var inT = el.closest && el.closest('#tasbeehModal, [id*="tasbeeh" i]');
+    if (inT || /tasbeeh.*(scale|size)/i.test(el.id || '')) {
+      applyTasbeehScale(el.value, true);
+    }
+  }, true);
+
+  window.awraadSetTasbeehScale = function(val) { applyTasbeehScale(val, true); };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTasbeehDefault45);
+  } else {
+    initTasbeehDefault45();
+  }
+})();
+// === AWRAAD_MOBILE_ALLAH_MP3_COMPLETION ===
+(function() {
+  var allahAudio = null;
+  var activeToken = null;
+  var playTimer = null;
+  var lastCompletedCycleKey = '';
+
+  function getAudio() {
+    if (!allahAudio) {
+      allahAudio = new Audio('./allah.mp3');
+      allahAudio.preload = 'auto';
+    }
+    return allahAudio;
+  }
+
+  function stopPlayback() {
+    activeToken = null;
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+    if (allahAudio) {
+      try {
+        allahAudio.pause();
+        allahAudio.currentTime = 0;
+        allahAudio.onended = null;
+      } catch (e) {}
+    }
+  }
+
+  function isAutoTasbeehActive() {
+    var autoBtn = document.querySelector('#tasbeehAutoBtn.active, [id*="tasbeeh" i][id*="auto" i].active, [data-mode="auto"].active, input[type="checkbox"][id*="tasbeeh" i][id*="auto" i]:checked');
+    if (autoBtn) return true;
+    var modal = document.getElementById('tasbeehModal');
+    if (modal) {
+      var activePill = modal.querySelector('.active, .selected, [aria-pressed="true"]');
+      if (activePill && /auto/i.test(activePill.textContent || '')) return true;
+    }
+    return false;
+  }
+
+  function playTimes(count) {
+    stopPlayback();
+    var token = { id: Date.now() + ':' + Math.random() };
+    activeToken = token;
+    var remaining = Math.max(1, count);
+    var audio = getAudio();
+
+    function runOnce() {
+      if (activeToken !== token) return;
+      if (remaining <= 0) { stopPlayback(); return; }
+      remaining -= 1;
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.onended = function() {
+          if (activeToken !== token) return;
+          if (remaining > 0) {
+            playTimer = setTimeout(runOnce, 250);
+          } else {
+            stopPlayback();
+          }
+        };
+        var p = audio.play();
+        if (p && typeof p.catch === 'function') p.catch(function() {});
+      } catch (e) {}
+    }
+    runOnce();
+  }
+
+  // Trigger once per target completion when counter reaches/crosses target
+  function checkTasbeehTargetCompletion() {
+    var modal = document.getElementById('tasbeehModal');
+    if (!modal) return;
+    var cntEl = modal.querySelector('#tasbeehCount, [id*="tasbeehCount" i], .tasbeeh-count, [class*="tasbeeh-count" i]');
+    var tgtEl = modal.querySelector('#tasbeehTarget, [id*="tasbeehTarget" i], input[id*="target" i], .tasbeeh-target');
+    if (!cntEl || !tgtEl) return;
+
+    var cur = parseInt((cntEl.value !== undefined && cntEl.tagName === 'INPUT' ? cntEl.value : cntEl.textContent || '0').replace(/[^0-9]/g, ''), 10);
+    var tgt = parseInt((tgtEl.value !== undefined && tgtEl.tagName === 'INPUT' ? tgtEl.value : tgtEl.textContent || '0').replace(/[^0-9]/g, ''), 10);
+    if (isNaN(cur) || isNaN(tgt) || tgt <= 0) return;
+
+    if (cur === 0) {
+      lastCompletedCycleKey = '';
+      return;
+    }
+
+    if (cur >= tgt) {
+      var cycleNum = Math.floor(cur / tgt);
+      var key = tgt + '#' + cycleNum;
+      if (lastCompletedCycleKey === key) return;
+      lastCompletedCycleKey = key;
+      var times = isAutoTasbeehActive() ? 3 : 1;
+      playTimes(times);
+    }
+  }
+
+  document.addEventListener('click', function(e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#tasbeehResetBtn, [id*="tasbeeh" i][id*="reset" i]')) {
+      lastCompletedCycleKey = '';
+      stopPlayback();
+      return;
+    }
+    if (t.closest('#tasbeehModal, [id*="tasbeeh" i]')) {
+      setTimeout(checkTasbeehTargetCompletion, 25);
+    }
+  }, true);
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === ' ' || e.key === 'Enter') {
+      var modal = document.getElementById('tasbeehModal');
+      if (modal && (modal.classList.contains('show') || modal.classList.contains('open'))) {
+        setTimeout(checkTasbeehTargetCompletion, 25);
+      }
+    }
+  }, true);
+
+  window.awraadPlayTasbeehCompletion = function(isAuto) {
+    playTimes(isAuto ? 3 : 1);
+  };
+})();
+// === AWRAAD_MOBILE_ALWAYS_ON_TOP_OVERLAY ===
+(function() {
+  var AOT_KEY = 'awraad_mobile_always_on_top';
+  var POS_KEY = 'awraad_mobile_aot_pos';
+
+  function loadAotPref() {
+    try { return localStorage.getItem(AOT_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function saveAotPref(enabled) {
+    try { localStorage.setItem(AOT_KEY, enabled ? '1' : '0'); } catch (e) {}
+  }
+
+  function applyAotState(enabled) {
+    document.body.classList.toggle('awraad-aot-enabled', !!enabled);
+    var cb = document.getElementById('awraadAlwaysOnTopToggle');
+    if (cb && cb.checked !== !!enabled) cb.checked = !!enabled;
+    if (enabled) attachDragToTasbeeh();
+  }
+
+  function attachDragToTasbeeh() {
+    var modal = document.getElementById('tasbeehModal');
+    if (!modal || modal.getAttribute('data-aot-drag') === '1') return;
+    modal.setAttribute('data-aot-drag', '1');
+    var dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
+
+    try {
+      var savedPos = JSON.parse(localStorage.getItem(POS_KEY) || 'null');
+      if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
+        modal.style.left = savedPos.left + 'px';
+        modal.style.top = savedPos.top + 'px';
+        modal.style.transform = 'none';
+      }
+    } catch (e) {}
+
+    modal.addEventListener('touchstart', function(e) {
+      if (!loadAotPref()) return;
+      if (e.target && e.target.closest && e.target.closest('button, input, select, textarea, a, label')) return;
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      var rect = modal.getBoundingClientRect();
+      dragging = true;
+      sx = t.clientX; sy = t.clientY;
+      ox = rect.left; oy = rect.top;
+      modal.style.transform = 'none';
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e) {
+      if (!dragging || !loadAotPref()) return;
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      var nl = Math.max(4, Math.min(window.innerWidth - 80, ox + (t.clientX - sx)));
+      var nt = Math.max(4, Math.min(window.innerHeight - 60, oy + (t.clientY - sy)));
+      modal.style.left = nl + 'px';
+      modal.style.top = nt + 'px';
+    }, { passive: true });
+
+    document.addEventListener('touchend', function() {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        var r = modal.getBoundingClientRect();
+        localStorage.setItem(POS_KEY, JSON.stringify({ left: Math.round(r.left), top: Math.round(r.top) }));
+      } catch (e) {}
+    }, { passive: true });
+  }
+
+  function injectSettingsToggle() {
+    if (document.getElementById('awraadAlwaysOnTopToggle')) return;
+    var host = document.querySelector('#settingsModal .modal-body, #settingsModal .modal-content, #settingsModal');
+    if (!host) return;
+    var row = document.createElement('div');
+    row.className = 'awraad-aot-row';
+    row.innerHTML = '<span><strong>Always-on-Top Tasbeeh Overlay</strong><br><small>Keep Tasbeeh above Awraad & screens</small></span>' +
+      '<input type="checkbox" id="awraadAlwaysOnTopToggle" aria-label="Always-on-Top Tasbeeh Overlay">';
+    var cb = row.querySelector('input');
+    cb.checked = loadAotPref();
+    cb.addEventListener('change', function() {
+      saveAotPref(cb.checked);
+      applyAotState(cb.checked);
+    });
+    host.appendChild(row);
+  }
+
+  document.addEventListener('click', function(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[id*="setting" i]') : null;
+    if (btn && !/calendar|event|live/i.test(btn.id || '')) {
+      setTimeout(injectSettingsToggle, 40);
+    }
+  }, true);
+
+  window.awraadSetAlwaysOnTop = function(flag) {
+    saveAotPref(!!flag);
+    applyAotState(!!flag);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+      injectSettingsToggle();
+      applyAotState(loadAotPref());
+    });
+  } else {
+    injectSettingsToggle();
+    applyAotState(loadAotPref());
+  }
+})();
+// === AWRAAD_MOBILE_SCROLL_SPEED_0_1_TO_10X ===
+(function() {
+  var MIN_SPD = 0.1, MAX_SPD = 10.0, DEF_SPD = 1.0;
+  var SPD_KEY = 'awraad_mobile_scroll_speed';
+  var rafId = null, lastTs = 0, fracAcc = 0;
+
+  function clampSpeed(v) {
+    var n = parseFloat(v);
+    if (isNaN(n)) return DEF_SPD;
+    return Math.min(MAX_SPD, Math.max(MIN_SPD, Math.round(n * 10) / 10));
+  }
+
+  function getSavedSpeed() {
+    try {
+      var raw = localStorage.getItem(SPD_KEY);
+      return raw === null ? DEF_SPD : clampSpeed(raw);
+    } catch (e) { return DEF_SPD; }
+  }
+
+  var currentSpeed = getSavedSpeed();
+
+  function syncSpeedUI(spd) {
+    var s = clampSpeed(spd);
+    currentSpeed = s;
+    var lbl = document.getElementById('awraadScrollSpeedValue');
+    if (lbl) lbl.textContent = s.toFixed(1).replace(/.0$/, '') + 'x';
+    var rng = document.getElementById('awraadScrollSpeedRange');
+    if (rng && document.activeElement !== rng) rng.value = String(s);
+    // Sync any existing speed range/select if present inside scroll bar (excluding Calendar/Events)
+    var bar = document.getElementById('autoScrollBar') || document.querySelector('[id*="autoScroll" i]');
+    if (bar) {
+      var innerRange = bar.querySelector('input[type="range"]');
+      if (innerRange) {
+        innerRange.min = String(MIN_SPD);
+        innerRange.max = String(MAX_SPD);
+        innerRange.step = '0.1';
+        if (document.activeElement !== innerRange) innerRange.value = String(s);
+      }
+    }
+  }
+
+  function getActiveScrollTarget() {
+    // Respect Calendar & Events: do not hijack those pop-ups
+    var activeModal = document.querySelector('.modal.show, .modal.open, .popup.show, .popup.open');
+    if (activeModal) {
+      var idc = ((activeModal.id || '') + ' ' + (activeModal.className || '')).toLowerCase();
+      if (/calendar|event|live/i.test(idc)) return null;
+      var body = activeModal.querySelector('.modal-body, .popup-content') || activeModal;
+      if (body.scrollHeight > body.clientHeight + 8) return body;
+    }
+    return null;
+  }
+
+  function stepFrame(ts) {
+    if (!document.body.classList.contains('awraad-autoscroll-active')) {
+      rafId = null; lastTs = 0; return;
+    }
+    if (!lastTs) lastTs = ts;
+    var dtSec = Math.min(0.25, Math.max(0, (ts - lastTs) / 1000));
+    lastTs = ts;
+    // Base speed at 1x = 28 px/sec -> at 0.1x = 2.8 px/sec, at 10x = 280 px/sec
+    fracAcc += currentSpeed * 28 * dtSec;
+    var px = Math.floor(fracAcc);
+    if (px >= 1) {
+      fracAcc -= px;
+      var target = getActiveScrollTarget();
+      if (target) target.scrollTop += px;
+      else window.scrollBy(0, px);
+    }
+    rafId = requestAnimationFrame(stepFrame);
+  }
+
+  function startCustomLoop() {
+    document.body.classList.add('awraad-autoscroll-active');
+    ensureSpeedPill();
+    syncSpeedUI(currentSpeed);
+    if (!rafId) {
+      lastTs = 0;
+      rafId = requestAnimationFrame(stepFrame);
+    }
+  }
+
+  function stopCustomLoop() {
+    document.body.classList.remove('awraad-autoscroll-active');
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    lastTs = 0; fracAcc = 0;
+  }
+
+  function ensureSpeedPill() {
+    if (document.getElementById('awraadScrollSpeedPill')) return;
+    var pill = document.createElement('div');
+    pill.id = 'awraadScrollSpeedPill';
+    pill.className = 'awraad-speed-pill';
+    pill.innerHTML = '<span>Speed:</span>' +
+      '<input id="awraadScrollSpeedRange" type="range" min="0.1" max="10" step="0.1" value="' + currentSpeed + '">' +
+      '<strong id="awraadScrollSpeedValue">' + currentSpeed.toFixed(1).replace(/.0$/, '') + 'x</strong>';
+    var rng = pill.querySelector('input');
+    rng.addEventListener('input', function() {
+      window.awraadSetScrollSpeed(rng.value);
+    });
+    document.body.appendChild(pill);
+  }
+
+  document.addEventListener('click', function(e) {
+    var t = e.target && e.target.closest ? e.target.closest('button, a, [role="button"]') : null;
+    if (!t) return;
+    var idc = ((t.id || '') + ' ' + (t.className || '')).toLowerCase();
+    if (/calendar|event|live/i.test(idc)) return;
+    if (/autoscroll.*play|startautoscroll|scrollplay/i.test(idc) || (t.closest('#autoScrollBar, [id*="autoScroll" i]') && /play|start/i.test(t.textContent || ''))) {
+      startCustomLoop();
+    } else if (/autoscroll.*pause|stopautoscroll|scrollpause|scrollclose/i.test(idc) || (t.closest('#autoScrollBar, [id*="autoScroll" i]') && /pause|stop|close/i.test(t.textContent || ''))) {
+      stopCustomLoop();
+    }
+  }, true);
+
+  document.addEventListener('input', function(e) {
+    var el = e.target;
+    if (!el || el.type !== 'range' || el.id === 'awraadScrollSpeedRange') return;
+    if (/speed/i.test(el.id || '') || (el.closest && el.closest('#autoScrollBar, [id*="autoScroll" i]'))) {
+      window.awraadSetScrollSpeed(el.value);
+    }
+  }, true);
+
+  window.awraadSetScrollSpeed = function(val) {
+    var s = clampSpeed(val);
+    try { localStorage.setItem(SPD_KEY, String(s)); } catch (e) {}
+    syncSpeedUI(s);
+  };
+  window.awraadGetScrollSpeed = function() { return currentSpeed; };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { ensureSpeedPill(); syncSpeedUI(currentSpeed); });
+  } else {
+    ensureSpeedPill();
+    syncSpeedUI(currentSpeed);
+  }
+})();

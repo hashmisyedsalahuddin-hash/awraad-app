@@ -5824,3 +5824,82 @@ body {
     overflow-anchor: none !important;
 }
 /* === END AWRAAD BOTTOM STICKY LOCK === */
+/* === AWRAAD MOBILE PRAYER & SETTINGS SCROLL LOCK (CALENDAR/EVENTS UNTOUCHED) === */
+#prayerModal.show,
+#prayerTimesModal.show,
+#prayerTimesPopup.show,
+[id*="prayer" i][class*="modal" i].show,
+[id*="prayer" i][class*="popup" i].show,
+#settingsModal.show,
+#settingsPopup.show,
+[id*="settings" i][class*="modal" i].show,
+[id*="settings" i][class*="popup" i].show {
+  overscroll-behavior: contain;
+}
+#prayerModal.show ~ *,
+#prayerTimesModal.show ~ *,
+#settingsModal.show ~ * {
+  overscroll-behavior: none;
+}
+body.awraad-keep-menu-open #drawerBackdrop,
+body.awraad-keep-menu-open .drawer-backdrop,
+body.awraad-keep-menu-open .nav-backdrop {
+  pointer-events: auto;
+}
+/* === END AWRAAD MOBILE PRAYER & SETTINGS SCROLL LOCK ===
+/* === AWRAAD MOBILE ALWAYS-ON-TOP TASBEEH OVERLAY === */
+body.awraad-aot-enabled #tasbeehModal.show,
+body.awraad-aot-enabled #tasbeehModal.open,
+body.awraad-aot-enabled [id*="tasbeeh" i][class*="modal" i].show,
+body.awraad-aot-enabled [id*="tasbeeh" i][class*="modal" i].open {
+  position: fixed !important;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483000 !important;
+  pointer-events: none;
+  background: transparent !important;
+}
+body.awraad-aot-enabled #tasbeehModal.show > *,
+body.awraad-aot-enabled #tasbeehModal.open > *,
+body.awraad-aot-enabled [id*="tasbeeh" i][class*="modal" i].show > *,
+body.awraad-aot-enabled [id*="tasbeeh" i][class*="modal" i].open > * {
+  pointer-events: auto;
+  resize: both;
+  overflow: auto;
+  max-width: 96vw;
+}
+.awraad-aot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+}
+/* === END AWRAAD MOBILE ALWAYS-ON-TOP TASBEEH OVERLAY ===
+/* === AWRAAD MOBILE SCROLL SPEED CONTROL (0.1x - 10x, DEFAULT 1x) === */
+.awraad-speed-pill {
+  position: fixed;
+  right: 12px;
+  bottom: 76px;
+  z-index: 2147482500;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(16, 24, 38, 0.92);
+  color: #f8fafc;
+  border: 1px solid rgba(212, 175, 55, 0.55);
+  font-size: 12px;
+}
+body.awraad-autoscroll-active .awraad-speed-pill {
+  display: inline-flex;
+}
+.awraad-speed-pill input[type="range"] {
+  width: 92px;
+}
+/* === END AWRAAD MOBILE SCROLL SPEED CONTROL ===
