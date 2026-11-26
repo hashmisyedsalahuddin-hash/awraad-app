@@ -13547,3 +13547,321 @@
         setTimeout(prepareOpenModals, 400);
     }
 })();
+
+
+// === AWRAAAD BATCH1 INTEGRATIONS START ===
+(function () {
+  if (window.__awraadBatch1Initialized) return;
+  window.__awraadBatch1Initialized = true;
+
+  const SPEEDS = [3, 2, 1, 0.75, 0.5, 0.1];
+  let currentSpeed = 1;
+  let tvAutoScrollTimer = null;
+  let tvAutoScrollActive = false;
+  let subFrac = 0;
+
+  function playSharedAllahCompletionSound() {
+    try {
+      if (typeof htmlAudio !== 'undefined' && htmlAudio) {
+        htmlAudio.pause();
+        htmlAudio.currentTime = 0;
+        const p = htmlAudio.play();
+        if (p && typeof p.catch === 'function') p.catch(() => {});
+        return;
+      }
+      const candidates = (typeof AUDIO_CANDIDATES !== 'undefined' && Array.isArray(AUDIO_CANDIDATES) && AUDIO_CANDIDATES.length)
+        ? AUDIO_CANDIDATES
+        : ['./allah.mp3', './timer-durood.mp3'];
+      const audioEl = new Audio(candidates[0]);
+      const p = audioEl.play();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (_) {}
+  }
+
+  function hookTasbeehCompletion() {
+    const tasbeehScope = document.querySelector('#tasbeehModal, #tasbeehMinimized, [data-tasbeeh], .tasbeeh-container') || document.body;
+    if (!tasbeehScope || tasbeehScope.__allahHooked) return;
+    tasbeehScope.__allahHooked = true;
+
+    let lastTriggeredKey = '';
+    const checkCompletion = () => {
+      const countEl = tasbeehScope.querySelector('[id*="tasbeehCount"], [class*="tasbeeh-count"], .tasbeeh-current, #tasbeeh-count');
+      const targetEl = tasbeehScope.querySelector('[id*="tasbeehTarget"], [class*="tasbeeh-target"], .tasbeeh-target, #tasbeeh-target');
+      if (!countEl || !targetEl) return;
+      const cur = parseInt((countEl.textContent || '').replace(/[^0-9]/g, ''), 10);
+      const tgt = parseInt((targetEl.textContent || '').replace(/[^0-9]/g, ''), 10);
+      if (!Number.isFinite(cur) || !Number.isFinite(tgt) || tgt <= 0) return;
+      const key = tgt + ':' + cur;
+      if (cur > 0 && cur % tgt === 0 && key !== lastTriggeredKey) {
+        lastTriggeredKey = key;
+        playSharedAllahCompletionSound();
+      } else if (cur % tgt !== 0) {
+        lastTriggeredKey = '';
+      }
+    };
+
+    const obs = new MutationObserver(checkCompletion);
+    obs.observe(tasbeehScope, { childList: true, characterData: true, subtree: true });
+    tasbeehScope.addEventListener('click', () => setTimeout(checkCompletion, 20), true);
+  }
+
+  function formatRemaining(ms) {
+    const totalMin = Math.max(1, Math.ceil(ms / 60000));
+    const hrs = Math.floor(totalMin / 60);
+    const mins = totalMin % 60;
+    if (hrs > 0) return hrs + ' hr, ' + mins + ' min';
+    return mins + ' min';
+  }
+
+  function parseMinutesToday(val, baseDate) {
+    if (!val || typeof val !== 'string') return null;
+    const m = val.trim().match(/^(d{1,2}):(d{2})(?:s*(AM|PM))?$/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    const mer = (m[3] || '').toUpperCase();
+    if (mer === 'PM' && h < 12) h += 12;
+    if (mer === 'AM' && h === 12) h = 0;
+    const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), h, min, 0, 0);
+    return d.getTime();
+  }
+
+  function getPrayerTimingsMs(now) {
+    const src = window.prayerTimes || window.PRAYER_TIMES || window.dailyPrayerTimes || null;
+    if (src && typeof src === 'object') {
+      const fajr = parseMinutesToday(src.fajr || src.Fajr, now);
+      const sunrise = parseMinutesToday(src.sunrise || src.Sunrise || src.shuruq, now);
+      const zuhr = parseMinutesToday(src.zuhr || src.Zuhr || src.dhuhr || src.Dhuhr, now);
+      const asr = parseMinutesToday(src.asr || src.Asr, now);
+      const maghrib = parseMinutesToday(src.maghrib || src.Maghrib, now);
+      const isha = parseMinutesToday(src.isha || src.Isha, now);
+      if (fajr && sunrise && zuhr && asr && maghrib && isha) {
+        return { fajr, sunrise, zuhr, asr, maghrib, isha };
+      }
+    }
+    const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+    const at = (hh, mm) => new Date(y, m, d, hh, mm, 0, 0).getTime();
+    return {
+      fajr: at(5, 15),
+      sunrise: at(6, 35),
+      zuhr: at(12, 20),
+      asr: at(16, 15),
+      maghrib: at(17, 45),
+      isha: at(19, 15)
+    };
+  }
+
+  function computeNamaazPhase(now) {
+    const t = now.getTime();
+    const p = getPrayerTimingsMs(now);
+    const dayMs = 86400000;
+    const minMs = 60000;
+
+    const fajr0 = p.fajr;
+    const sun0 = p.sunrise;
+    const sunForbEnd = sun0 + 20 * minMs;
+    const zuhrForbStart = p.zuhr - 20 * minMs;
+    const zuhr0 = p.zuhr;
+    const asr0 = p.asr;
+    const magForbStart = p.maghrib - 20 * minMs;
+    const mag0 = p.maghrib;
+    const isha0 = p.isha;
+    const nextFajr = fajr0 + dayMs;
+    const prevIsha = isha0 - dayMs;
+
+    if (t >= fajr0 && t < sun0) {
+      return { namaaz: 'Fajr', rem: formatRemaining(sun0 - t) };
+    }
+    if (t >= sun0 && t < sunForbEnd) {
+      return { namaaz: 'Forbidden Time', rem: formatRemaining(sunForbEnd - t) };
+    }
+    if (t >= sunForbEnd && t < zuhrForbStart) {
+      return { namaaz: 'Ishraq o Chasht', rem: formatRemaining(zuhrForbStart - t) };
+    }
+    if (t >= zuhrForbStart && t < zuhr0) {
+      return { namaaz: 'Forbidden Time', rem: formatRemaining(zuhr0 - t) };
+    }
+    if (t >= zuhr0 && t < asr0) {
+      return { namaaz: 'Zuhr', rem: formatRemaining(asr0 - t) };
+    }
+    if (t >= asr0 && t < magForbStart) {
+      return { namaaz: 'Asr', rem: formatRemaining(magForbStart - t) };
+    }
+    if (t >= magForbStart && t < mag0) {
+      return { namaaz: 'Forbidden Time', rem: formatRemaining(mag0 - t) };
+    }
+    if (t >= mag0 && t < isha0) {
+      return { namaaz: 'Maghrib', rem: formatRemaining(isha0 - t) };
+    }
+    if (t >= isha0 && t < nextFajr) {
+      return { namaaz: 'Isha', rem: formatRemaining(nextFajr - t) };
+    }
+    return { namaaz: 'Isha', rem: formatRemaining(fajr0 - t) };
+  }
+
+  function updateNextNamaazWidget() {
+    const info = computeNamaazPhase(new Date());
+    const candidates = document.querySelectorAll('[id*="nextNamaaz"], [id*="next-namaaz"], [class*="next-namaaz"], [data-next-namaaz]');
+    candidates.forEach((el) => {
+      if (!el) return;
+      const line1 = 'Namaaz: ' + info.namaaz;
+      const line2 = 'Remaining Time: ' + info.rem;
+      if (el.children.length >= 2) {
+        el.children[0].textContent = line1;
+        el.children[1].textContent = line2;
+      } else {
+        el.innerHTML = '';
+        const d1 = document.createElement('div');
+        d1.textContent = line1;
+        const d2 = document.createElement('div');
+        d2.textContent = line2;
+        el.appendChild(d1);
+        el.appendChild(d2);
+      }
+    });
+  }
+
+  function getScrollTarget() {
+    return document.querySelector('.shijra-section.tv-active-section')
+      || document.querySelector('.continuous-frame')
+      || document.scrollingElement
+      || document.documentElement;
+  }
+
+  function stopTvScroll() {
+    tvAutoScrollActive = false;
+    if (tvAutoScrollTimer) {
+      clearInterval(tvAutoScrollTimer);
+      tvAutoScrollTimer = null;
+    }
+    syncTvScrollUi();
+  }
+
+  function startTvScroll() {
+    stopTvScroll();
+    tvAutoScrollActive = true;
+    subFrac = 0;
+    syncTvScrollUi();
+
+    tvAutoScrollTimer = setInterval(() => {
+      if (!tvAutoScrollActive) return;
+      const target = getScrollTarget();
+      if (!target) return;
+      const pxPerTick = currentSpeed * 0.9 + subFrac;
+      const step = Math.floor(pxPerTick);
+      subFrac = pxPerTick - step;
+
+      const maxScroll = Math.max(0, target.scrollHeight - target.clientHeight);
+      if (maxScroll > 0 && target.scrollTop >= maxScroll - 1) {
+        stopTvScroll();
+        return;
+      }
+      if (step > 0) {
+        if (target === document.documentElement || target === document.scrollingElement) {
+          window.scrollBy(0, step);
+        } else {
+          target.scrollTop = Math.min(maxScroll, target.scrollTop + step);
+        }
+      }
+    }, 30);
+  }
+
+  function syncTvScrollUi() {
+    const dock = document.getElementById('awraadTvScrollDock');
+    if (!dock) return;
+    const playBtn = dock.querySelector('.awraad-tv-scroll-btn');
+    if (playBtn) {
+      playBtn.textContent = tvAutoScrollActive ? 'Pause' : 'Play';
+      playBtn.classList.toggle('is-playing', tvAutoScrollActive);
+      playBtn.setAttribute('aria-pressed', String(tvAutoScrollActive));
+    }
+    dock.querySelectorAll('.awraad-tv-speed-btn').forEach((btn) => {
+      const val = parseFloat(btn.getAttribute('data-speed') || '1');
+      const active = Math.abs(val - currentSpeed) < 0.001;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  function ensureTvScrollDock() {
+    if (!document.body || !document.body.classList.contains('awraad-tv')) return;
+    if (document.getElementById('awraadTvScrollDock')) {
+      syncTvScrollUi();
+      return;
+    }
+    const dock = document.createElement('div');
+    dock.id = 'awraadTvScrollDock';
+    dock.className = 'awraad-tv-scroll-dock';
+    dock.setAttribute('role', 'group');
+    dock.setAttribute('aria-label', 'TV Scroll Controls');
+
+    const playBtn = document.createElement('button');
+    playBtn.type = 'button';
+    playBtn.className = 'awraad-tv-scroll-btn';
+    playBtn.textContent = 'Play';
+    playBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (tvAutoScrollActive) stopTvScroll();
+      else startTvScroll();
+      playBtn.focus({ preventScroll: true });
+    });
+    dock.appendChild(playBtn);
+
+    SPEEDS.forEach((sp) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'awraad-tv-speed-btn';
+      b.setAttribute('data-speed', String(sp));
+      b.textContent = sp + 'x';
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        currentSpeed = sp;
+        syncTvScrollUi();
+        b.focus({ preventScroll: true });
+      });
+      dock.appendChild(b);
+    });
+
+    document.body.appendChild(dock);
+    syncTvScrollUi();
+  }
+
+  function bindTvDockArrowNav() {
+    document.addEventListener('keydown', (e) => {
+      if (!document.body || !document.body.classList.contains('awraad-tv')) return;
+      const dock = document.getElementById('awraadTvScrollDock');
+      if (!dock) return;
+      const active = document.activeElement;
+      if (!active || !dock.contains(active)) return;
+      const items = Array.from(dock.querySelectorAll('button'));
+      const idx = items.indexOf(active);
+      if (idx === -1) return;
+      if (e.key === 'ArrowRight' || e.keyCode === 39) {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = items[(idx + 1) % items.length];
+        if (next) next.focus({ preventScroll: true });
+      } else if (e.key === 'ArrowLeft' || e.keyCode === 37) {
+        e.preventDefault();
+        e.stopPropagation();
+        const prev = items[(idx - 1 + items.length) % items.length];
+        if (prev) prev.focus({ preventScroll: true });
+      }
+    }, true);
+  }
+
+  function initBatch1() {
+    hookTasbeehCompletion();
+    updateNextNamaazWidget();
+    ensureTvScrollDock();
+    bindTvDockArrowNav();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBatch1, { once: true });
+  } else {
+    initBatch1();
+  }
+  setInterval(updateNextNamaazWidget, 60000);
+})();
+// === AWRAAAD BATCH1 INTEGRATIONS END ===

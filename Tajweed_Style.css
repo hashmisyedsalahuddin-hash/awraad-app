@@ -7107,3 +7107,45 @@ body.awraad-tv .pt-submodal > div {
   box-sizing: border-box !important;
 }
 /* === END AWRAAD TV SUPPORT === */
+
+
+/* === AWRAAAD BATCH1 TV SCROLL & PRAYER STATUS START === */
+body.awraad-tv .awraad-tv-scroll-dock {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 99950;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: rgba(16, 24, 32, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+body.awraad-tv .awraad-tv-scroll-btn,
+body.awraad-tv .awraad-tv-speed-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f7fa;
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+body.awraad-tv .awraad-tv-speed-btn.is-active,
+body.awraad-tv .awraad-tv-scroll-btn.is-playing {
+  background: #1f8a5b;
+  border-color: #46c78d;
+  color: #ffffff;
+}
+body.awraad-tv .awraad-tv-scroll-btn:focus,
+body.awraad-tv .awraad-tv-speed-btn:focus {
+  outline: 3px solid #ffd166;
+  outline-offset: 2px;
+}
+/* === AWRAAAD BATCH1 TV SCROLL & PRAYER STATUS END === */
