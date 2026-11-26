@@ -8,8 +8,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: "awraad-build-deploy"
@@ -42,9 +40,6 @@ jobs:
     needs: check-bundle
     if: needs.check-bundle.outputs.bundle_ready == 'true'
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -173,17 +168,17 @@ jobs:
           test -n "$APK_SRC"
           cp "$APK_SRC" "${{ github.workspace }}/Awraad-e-Alaviya-Nooriya-Build-${{ github.run_number }}.apk"
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload iPhone Web App (PWA) Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: app_work/www
-
-      - name: Deploy iPhone Web App to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy iPhone Web App to gh-pages Branch
+        working-directory: app_work/www
+        run: |
+          rm -rf .git
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B gh-pages
+          git add -A
+          git commit -m "Deploy iPhone Web App - Build #${{ github.run_number }}"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
 
       - name: Clean Old Releases & Publish Latest APK
         env:
@@ -196,4 +191,4 @@ jobs:
           APK_FILE="Awraad-e-Alaviya-Nooriya-Build-${{ github.run_number }}.apk"
           gh release create "v1.0.${{ github.run_number }}" "$APK_FILE" \
             --title "Awraad e Alaviya Nooriya - Build #${{ github.run_number }}" \
-            --notes "Auto-built APK #${{ github.run_number }} + iPhone PWA updated via GitHub Pages."
+            --notes "Auto-built APK #${{ github.run_number }} + iPhone PWA deployed to gh-pages."
