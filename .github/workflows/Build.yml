@@ -1145,19 +1145,56 @@ jobs:
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          EXPECTED_FP=""
           if [ -n "$KEYSTORE_B64" ]; then
             mkdir -p ~/.android
-            printf "%s" "$KEYSTORE_B64" | tr -d '\r\n ' | base64 -d > ~/.android/debug.keystore
-            echo "✅ Permanent signing keystore loaded from ANDROID_KEYSTORE_BASE64"
-            keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey 2>/dev/null | grep -i "SHA-256" || true
+            printf "%s" "$KEYSTORE_B64" | tr -d '\r\n ' | base64 -d > /tmp/perm-debug.p12
+            rm -f android/app/permanent-debug.jks
+            keytool -importkeystore \
+              -srckeystore /tmp/perm-debug.p12 -srcstoretype PKCS12 -srcstorepass android \
+              -destkeystore android/app/permanent-debug.jks -deststoretype JKS \
+              -deststorepass android -destkeypass android -noprompt
+            cp -f android/app/permanent-debug.jks ~/.android/debug.keystore
+            EXPECTED_FP=$(keytool -list -keystore android/app/permanent-debug.jks -storepass android -alias androiddebugkey | grep -oE '([0-9A-F]{2}:){31}[0-9A-F]{2}' | head -n1)
+            echo "✅ Permanent signing keystore locked (SHA-256: $EXPECTED_FP)"
+
+            if ! grep -q "permanent-debug.jks" android/app/build.gradle; then
+              cat << 'GRADLE_SIGN_EOF' >> android/app/build.gradle
+
+          android {
+              signingConfigs {
+                  debug {
+                      storeFile file('permanent-debug.jks')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+              buildTypes {
+                  debug {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          GRADLE_SIGN_EOF
+            fi
           else
             echo "⚠️ ANDROID_KEYSTORE_BASE64 secret not set — using ephemeral debug keystore"
           fi
+
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
           cp app/build/outputs/apk/debug/app-debug.apk "../Awraad-e-Alaviya-Nooriya.apk"
           ls -lh "../Awraad-e-Alaviya-Nooriya.apk"
+
+          ACTUAL_FP=$(keytool -printcert -jarfile "../Awraad-e-Alaviya-Nooriya.apk" | grep -A1 "SHA256:" | grep -oE '([0-9A-F]{2}:){31}[0-9A-F]{2}' | head -n1)
+          echo "🔐 Built APK SHA-256: $ACTUAL_FP"
+          if [ -n "$EXPECTED_FP" ] && [ "$ACTUAL_FP" != "$EXPECTED_FP" ]; then
+            echo "❌ ABORT: APK signature mismatch! Expected $EXPECTED_FP but got $ACTUAL_FP"
+            exit 1
+          fi
+          echo "✅ APK SIGNATURE VERIFIED MATCH"
 
       - name: Deploy 2-in-1 Live Web App to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
