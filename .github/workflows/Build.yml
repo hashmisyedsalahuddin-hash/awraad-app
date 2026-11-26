@@ -85,7 +85,7 @@ jobs:
             echo "⚠️ Creating fallback capacitor.config.json..."
             cat << 'CAP_EOF' > capacitor.config.json
           {
-            "appId": "com.alaviyanooriya.awraad",
+            "appId": "com.awraad.nooriya",
             "appName": "Awraad e Alaviya Nooriya",
             "webDir": "www"
           }
@@ -530,11 +530,17 @@ jobs:
           }
           fs.writeFileSync(manifestPath, xml, "utf8");
 
-          // 2. Write Native Android Package Files (TasbeehOverlayService, TasbeehOverlayPlugin, MainActivity)
-          const pkgDir = "android/app/src/main/java/com/alaviyanooriya/awraad";
+          // 2. Read real appId from capacitor.config.json (e.g. com.awraad.nooriya) & write Native Android Package Files
+          let appId = "com.awraad.nooriya";
+          try {
+            const capCfg = JSON.parse(fs.readFileSync("capacitor.config.json", "utf8"));
+            if (capCfg && capCfg.appId) appId = String(capCfg.appId).trim();
+          } catch (e) {}
+          const pkgDir = path.join("android/app/src/main/java", ...appId.split("."));
           fs.mkdirSync(pkgDir, { recursive: true });
+          console.log("ℹ️ Wiring TasbeehOverlay into exact package:", appId);
 
-          const serviceJava = `package com.alaviyanooriya.awraad;
+          const serviceJava = `package ${appId};
 
           import android.app.Notification;
           import android.app.NotificationChannel;
@@ -1011,7 +1017,7 @@ jobs:
           }
           `;
 
-          const pluginJava = `package com.alaviyanooriya.awraad;
+          const pluginJava = `package ${appId};
 
           import android.content.Context;
           import android.content.Intent;
@@ -1114,7 +1120,7 @@ jobs:
           }
           `;
 
-          const mainActivityJava = `package com.alaviyanooriya.awraad;
+          const mainActivityJava = `package ${appId};
 
           import android.os.Bundle;
           import com.getcapacitor.BridgeActivity;
@@ -1141,7 +1147,11 @@ jobs:
         run: |
           if [ -n "$KEYSTORE_B64" ]; then
             mkdir -p ~/.android
-            echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
+            printf "%s" "$KEYSTORE_B64" | tr -d '\r\n ' | base64 -d > ~/.android/debug.keystore
+            echo "✅ Permanent signing keystore loaded from ANDROID_KEYSTORE_BASE64"
+            keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey 2>/dev/null | grep -i "SHA-256" || true
+          else
+            echo "⚠️ ANDROID_KEYSTORE_BASE64 secret not set — using ephemeral debug keystore"
           fi
           cd android
           chmod +x gradlew
