@@ -698,7 +698,75 @@ jobs:
 
               private void buildOverlayView() {
                   windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-                  rootView = new LinearLayout(this);
+                  rootView = new LinearLayout(this) {
+                      private int dInitX, dInitY;
+                      private float dTouchX, dTouchY;
+                      private boolean dragging = false;
+                      private final int dragSlop = dp(6);
+                      @Override
+                      public boolean onInterceptTouchEvent(MotionEvent ev) {
+                          if (params == null) return false;
+                          switch (ev.getActionMasked()) {
+                              case MotionEvent.ACTION_DOWN:
+                                  dInitX = params.x;
+                                  dInitY = params.y;
+                                  dTouchX = ev.getRawX();
+                                  dTouchY = ev.getRawY();
+                                  dragging = false;
+                                  return false;
+                              case MotionEvent.ACTION_MOVE:
+                                  if (Math.abs(ev.getRawX() - dTouchX) > dragSlop || Math.abs(ev.getRawY() - dTouchY) > dragSlop) {
+                                      dragging = true;
+                                      return true;
+                                  }
+                                  return false;
+                              case MotionEvent.ACTION_UP:
+                              case MotionEvent.ACTION_CANCEL:
+                                  dragging = false;
+                                  return false;
+                          }
+                          return false;
+                      }
+                      @Override
+                      public boolean onTouchEvent(MotionEvent ev) {
+                          if (params == null) return false;
+                          switch (ev.getActionMasked()) {
+                              case MotionEvent.ACTION_DOWN:
+                                  dInitX = params.x;
+                                  dInitY = params.y;
+                                  dTouchX = ev.getRawX();
+                                  dTouchY = ev.getRawY();
+                                  dragging = false;
+                                  return true;
+                              case MotionEvent.ACTION_MOVE:
+                                  if (!dragging && (Math.abs(ev.getRawX() - dTouchX) > dragSlop || Math.abs(ev.getRawY() - dTouchY) > dragSlop)) {
+                                      dragging = true;
+                                  }
+                                  if (dragging) {
+                                      android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+                                      int vw = getWidth() > 0 ? getWidth() : params.width;
+                                      int vh = getHeight() > 0 ? getHeight() : dp(200);
+                                      int maxX = Math.max(0, dm.widthPixels - Math.max(vw, dp(80)));
+                                      int maxY = Math.max(0, dm.heightPixels - Math.max(vh, dp(80)));
+                                      params.x = Math.max(0, Math.min(maxX, dInitX + Math.round(ev.getRawX() - dTouchX)));
+                                      params.y = Math.max(0, Math.min(maxY, dInitY + Math.round(ev.getRawY() - dTouchY)));
+                                      try { windowManager.updateViewLayout(this, params); } catch (Exception ignored) {}
+                                  }
+                                  return true;
+                              case MotionEvent.ACTION_UP:
+                              case MotionEvent.ACTION_CANCEL:
+                                  if (dragging) {
+                                      dragging = false;
+                                      getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                          .putInt("pos_x", params.x)
+                                          .putInt("pos_y", params.y)
+                                          .apply();
+                                  }
+                                  return true;
+                          }
+                          return super.onTouchEvent(ev);
+                      }
+                  };
                   rootView.setOrientation(LinearLayout.VERTICAL);
                   rootView.setGravity(Gravity.CENTER_HORIZONTAL);
                   rootView.setBackground(roundedBg(Color.parseColor("#F50C3B2E"), Color.parseColor("#C59B27"), 14));
@@ -758,39 +826,11 @@ jobs:
                       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                       PixelFormat.TRANSLUCENT
                   );
-                  params.gravity = Gravity.TOP | Gravity.START;
+                  params.gravity = Gravity.TOP | Gravity.LEFT;
                   params.x = sp.getInt("pos_x", dp(16));
                   params.y = sp.getInt("pos_y", dp(90));
 
-                  header.setOnTouchListener(new View.OnTouchListener() {
-                      private int initX, initY;
-                      private float touchX, touchY;
-                      @Override
-                      public boolean onTouch(View v, MotionEvent ev) {
-                          switch (ev.getAction()) {
-                              case MotionEvent.ACTION_DOWN:
-                                  initX = params.x;
-                                  initY = params.y;
-                                  touchX = ev.getRawX();
-                                  touchY = ev.getRawY();
-                                  return true;
-                              case MotionEvent.ACTION_MOVE:
-                                  params.x = Math.max(0, initX + Math.round(ev.getRawX() - touchX));
-                                  params.y = Math.max(0, initY + Math.round(ev.getRawY() - touchY));
-                                  if (windowManager != null && rootView != null) {
-                                      windowManager.updateViewLayout(rootView, params);
-                                  }
-                                  return true;
-                              case MotionEvent.ACTION_UP:
-                                  getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                                      .putInt("pos_x", params.x)
-                                      .putInt("pos_y", params.y)
-                                      .apply();
-                                  return true;
-                          }
-                          return false;
-                      }
-                  });
+                  // Drag handled globally on rootView
 
                   minusBtn.setOnClickListener(v -> {
                       scalePct = Math.max(45, scalePct - 10);
@@ -858,45 +898,94 @@ jobs:
 
               private void applyScaleLayout() {
                   if (rootView == null) return;
-                  float s = scalePct / 100f;
-                  int pad = dp(10 * s + 4);
+                  android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+                  int clampedPct = Math.max(45, Math.min(115, scalePct));
+                  float frac = (clampedPct - 45f) / 70f;
+                  float widthRatio = 0.46f + frac * 0.44f;
+                  int boxWidth = Math.max(dp(180), Math.min((int)(dm.widthPixels * 0.92f), Math.round(dm.widthPixels * widthRatio)));
+                  float s = boxWidth / (float) dp(180);
+
+                  int pad = dp(9f * s);
                   rootView.setPadding(pad, pad, pad, pad);
 
-                  titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(10f, 14f * s));
-                  countView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(18f, 34f * s));
-                  countView.setPadding(0, dp(4 * s), 0, dp(4 * s));
+                  if (titleView != null && titleView.getParent() instanceof LinearLayout) {
+                      LinearLayout hdr = (LinearLayout) titleView.getParent();
+                      LinearLayout.LayoutParams hdrLp = new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      );
+                      hdrLp.setMargins(0, 0, 0, dp(4f * s));
+                      hdr.setLayoutParams(hdrLp);
+                      hdr.setGravity(Gravity.CENTER_VERTICAL);
+                      titleView.setSingleLine(true);
+                      titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                      titleView.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                      titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(11f, 12f * s));
+                  }
 
-                  int miniSz = dp(Math.max(22f, 28f * s));
+                  if (countView != null) {
+                      countView.setSingleLine(true);
+                      countView.setGravity(Gravity.CENTER);
+                      countView.setLayoutParams(new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ));
+                      countView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(24f, 26f * s));
+                      countView.setPadding(0, dp(4f * s), 0, dp(6f * s));
+                  }
+
+                  int miniSz = dp(Math.max(24f, 25f * s));
                   int miniMargin = dp(3);
-                  Button[] minis = new Button[] { minusBtn, plusBtn, closeBtn };
                   for (Button b : minis) {
                       LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(miniSz, miniSz);
                       lp.setMargins(miniMargin, 0, 0, 0);
                       b.setLayoutParams(lp);
-                      b.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(10f, 13f * s));
+                      b.setPadding(0, 0, 0, 0);
+                      b.setGravity(Gravity.CENTER);
+                      b.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(12f, 13f * s));
                   }
 
-                  int tapSz = dp(Math.max(52f, 84f * s));
+                  int tapSz = dp(Math.max(74f, 76f * s));
                   LinearLayout.LayoutParams tapLp = new LinearLayout.LayoutParams(tapSz, tapSz);
-                  tapLp.setMargins(0, dp(4 * s), 0, dp(6 * s));
+                  tapLp.gravity = Gravity.CENTER_HORIZONTAL;
+                  tapLp.setMargins(0, dp(4f * s), 0, dp(8f * s));
                   tapBtn.setLayoutParams(tapLp);
-                  tapBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(12f, 18f * s));
+                  tapBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(15f, 16f * s));
+                  if (tapBtn.getBackground() instanceof android.graphics.drawable.GradientDrawable) {
+                      ((android.graphics.drawable.GradientDrawable) tapBtn.getBackground()).setCornerRadius(tapSz / 2f);
+                  }
 
-                  int actPadH = dp(Math.max(6f, 10f * s));
-                  int actPadV = dp(Math.max(3f, 5f * s));
-                  LinearLayout.LayoutParams aLp1 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                  aLp1.setMargins(0, 0, dp(4), 0);
+                  if (autoToggleBtn != null && autoToggleBtn.getParent() instanceof LinearLayout) {
+                      LinearLayout actRow = (LinearLayout) autoToggleBtn.getParent();
+                      actRow.setLayoutParams(new LinearLayout.LayoutParams(
+                          LinearLayout.LayoutParams.MATCH_PARENT,
+                          LinearLayout.LayoutParams.WRAP_CONTENT
+                      ));
+                  }
+                  int actPadH = dp(Math.max(6f, 8f * s));
+                  int actPadV = dp(Math.max(5f, 6f * s));
+                  LinearLayout.LayoutParams aLp1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+                  aLp1.setMargins(0, 0, dp(6), 0);
                   autoToggleBtn.setLayoutParams(aLp1);
                   autoToggleBtn.setPadding(actPadH, actPadV, actPadH, actPadV);
-                  autoToggleBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(9.5f, 12f * s));
+                  autoToggleBtn.setSingleLine(true);
+                  autoToggleBtn.setGravity(Gravity.CENTER);
+                  autoToggleBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(11.5f, 12.5f * s));
 
-                  LinearLayout.LayoutParams aLp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                  LinearLayout.LayoutParams aLp2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
                   resetBtn.setLayoutParams(aLp2);
                   resetBtn.setPadding(actPadH, actPadV, actPadH, actPadV);
-                  resetBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(9.5f, 12f * s));
+                  resetBtn.setSingleLine(true);
+                  resetBtn.setGravity(Gravity.CENTER);
+                  resetBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(11.5f, 12.5f * s));
 
-                  if (windowManager != null && rootView.isAttachedToWindow()) {
-                      windowManager.updateViewLayout(rootView, params);
+                  if (params != null && windowManager != null) {
+                      params.width = boxWidth;
+                      params.height = WindowManager.LayoutParams.WRAP_CONTENT;
+                      int maxX = Math.max(0, dm.widthPixels - boxWidth);
+                      if (params.x > maxX) params.x = maxX;
+                      rootView.requestLayout();
+                      try { windowManager.updateViewLayout(rootView, params); } catch (Exception ignored) {}
                   }
               }
 
