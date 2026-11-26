@@ -542,480 +542,591 @@ jobs:
 
           const serviceJava = `package ${appId};
 
-          import android.app.Notification;
-          import android.app.NotificationChannel;
-          import android.app.NotificationManager;
-          import android.app.PendingIntent;
-          import android.app.Service;
-          import android.content.Context;
-          import android.content.Intent;
-          import android.content.SharedPreferences;
-          import android.content.res.AssetFileDescriptor;
-          import android.graphics.Color;
-          import android.graphics.PixelFormat;
-          import android.graphics.Typeface;
-          import android.graphics.drawable.GradientDrawable;
-          import android.media.MediaPlayer;
-          import android.os.Build;
-          import android.os.Handler;
-          import android.os.IBinder;
-          import android.os.Looper;
-          import android.os.VibrationEffect;
-          import android.os.Vibrator;
-          import android.provider.Settings;
-          import android.util.TypedValue;
-          import android.view.Gravity;
-          import android.view.MotionEvent;
-          import android.view.View;
-          import android.view.WindowManager;
-          import android.widget.Button;
-          import android.widget.LinearLayout;
-          import android.widget.TextView;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.res.AssetFileDescriptor;
+import android.graphics.Color;
+import android.graphics.PixelFormat;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.media.MediaPlayer;
+import android.os.Build;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.provider.Settings;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
-          public class TasbeehOverlayService extends Service {
-              public static final String PREFS = "awraad_tasbeeh_overlay_prefs";
-              private static final String CHANNEL_ID = "awraad_tasbeeh_overlay_ch";
-              private static final int NOTIF_ID = 44019;
-              private static final int FGS_TYPE_SPECIAL_USE = 1073741824; // 0x40000000
+public class TasbeehOverlayService extends Service {
+    public static final String PREFS = "awraad_tasbeeh_overlay_prefs";
+    private static final String CHANNEL_ID = "awraad_tasbeeh_overlay_ch";
+    private static final int NOTIF_ID = 44019;
+    private static final int FGS_TYPE_SPECIAL_USE = 1073741824; // 0x40000000
 
-              private WindowManager windowManager;
-              private LinearLayout rootView;
-              private WindowManager.LayoutParams params;
-              private TextView titleView;
-              private TextView countView;
-              private Button tapBtn;
-              private Button autoToggleBtn;
-              private Button resetBtn;
-              private Button minusBtn;
-              private Button plusBtn;
-              private Button closeBtn;
+    // Matches V2 #tasbeehContentBox base design: width ~320dp, padding ~18dp, height ~400dp
+    private static final float BASE_CARD_WIDTH_DP = 320f;
+    private static final float BASE_CARD_PAD_DP = 18f;
 
-              private int count = 0;
-              private int target = 100;
-              private String mode = "manual";
-              private int intervalSec = 1;
-              private int scalePct = 45;
-              private boolean soundEnabled = true;
-              private boolean vibrateEnabled = true;
-              private boolean completionPlayed = false;
-              private boolean autoRunning = false;
+    private WindowManager windowManager;
+    private FrameLayout outerHostView;
+    private LinearLayout cardView;
+    private WindowManager.LayoutParams params;
 
-              private final Handler handler = new Handler(Looper.getMainLooper());
-              private MediaPlayer mediaPlayer;
-              private int allahPlaysLeft = 0;
+    private TextView titleView;
+    private TextView countView;
+    private View progressTrack;
+    private View progressFill;
+    private Button tapBtn;
+    private Button autoToggleBtn;
+    private Button resetBtn;
+    private Button minusBtn;
+    private Button plusBtn;
+    private Button closeBtn;
 
-              private final Runnable autoTick = new Runnable() {
-                  @Override
-                  public void run() {
-                      if (!autoRunning) return;
-                      incrementCounter(false);
-                      if (autoRunning) {
-                          handler.postDelayed(this, Math.max(1000L, intervalSec * 1000L));
-                      }
-                  }
-              };
+    private int count = 0;
+    private int target = 100;
+    private String mode = "manual";
+    private int intervalSec = 1;
+    private int scalePct = 45;
+    private boolean soundEnabled = true;
+    private boolean vibrateEnabled = true;
+    private boolean completionPlayed = false;
+    private boolean autoRunning = false;
 
-              @Override
-              public IBinder onBind(Intent intent) {
-                  return null;
-              }
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private MediaPlayer mediaPlayer;
+    private int allahPlaysLeft = 0;
 
-              @Override
-              public int onStartCommand(Intent intent, int flags, int startId) {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                      stopSelf();
-                      return START_NOT_STICKY;
-                  }
-                  if (intent != null) {
-                      count = intent.getIntExtra("count", count);
-                      target = Math.max(1, intent.getIntExtra("target", target));
-                      String m = intent.getStringExtra("mode");
-                      if (m != null) mode = m;
-                      intervalSec = Math.max(1, intent.getIntExtra("intervalSec", intervalSec));
-                      scalePct = Math.min(115, Math.max(45, intent.getIntExtra("scalePct", scalePct)));
-                      soundEnabled = intent.getBooleanExtra("soundEnabled", soundEnabled);
-                      vibrateEnabled = intent.getBooleanExtra("vibrateEnabled", vibrateEnabled);
-                      if (count < target) completionPlayed = false;
-                  }
-                  startAsForeground();
-                  if (rootView == null) {
-                      buildOverlayView();
-                  }
-                  applyScaleLayout();
-                  refreshLabels();
-                  persistState();
-                  return START_STICKY;
-              }
+    private final Runnable autoTick = new Runnable() {
+        @Override
+        public void run() {
+            if (!autoRunning) return;
+            incrementCounter(false);
+            if (autoRunning) {
+                handler.postDelayed(this, Math.max(1000L, intervalSec * 1000L));
+            }
+        }
+    };
 
-              private void startAsForeground() {
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      NotificationChannel ch = new NotificationChannel(
-                          CHANNEL_ID,
-                          "Tasbeeh Always-on-Top Overlay",
-                          NotificationManager.IMPORTANCE_LOW
-                      );
-                      NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                      if (nm != null) nm.createNotificationChannel(ch);
-                  }
-                  Intent openApp = new Intent(this, MainActivity.class);
-                  openApp.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                  int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                      ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
-                      : PendingIntent.FLAG_UPDATE_CURRENT;
-                  PendingIntent pi = PendingIntent.getActivity(this, 0, openApp, piFlags);
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
 
-                  Notification.Builder nb = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                      ? new Notification.Builder(this, CHANNEL_ID)
-                      : new Notification.Builder(this);
-                  Notification notif = nb
-                      .setContentTitle("Tasbeeh Counter Overlay")
-                      .setContentText("Count: " + count + " / " + target + " — Tap to return to Awraad")
-                      .setSmallIcon(getApplicationInfo().icon != 0 ? getApplicationInfo().icon : android.R.drawable.ic_dialog_info)
-                      .setContentIntent(pi)
-                      .setOngoing(true)
-                      .build();
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        if (intent != null) {
+            count = intent.getIntExtra("count", count);
+            target = Math.max(1, intent.getIntExtra("target", target));
+            String m = intent.getStringExtra("mode");
+            if (m != null) mode = m;
+            intervalSec = Math.max(1, intent.getIntExtra("intervalSec", intervalSec));
+            scalePct = Math.min(115, Math.max(45, intent.getIntExtra("scalePct", scalePct)));
+            soundEnabled = intent.getBooleanExtra("soundEnabled", soundEnabled);
+            vibrateEnabled = intent.getBooleanExtra("vibrateEnabled", vibrateEnabled);
+            if (count < target) completionPlayed = false;
+        }
+        startAsForeground();
+        if (outerHostView == null) {
+            buildOverlayView();
+        }
+        applyScaleLayout();
+        refreshLabels();
+        persistState();
+        return START_STICKY;
+    }
 
-                  if (Build.VERSION.SDK_INT >= 34) {
-                      startForeground(NOTIF_ID, notif, FGS_TYPE_SPECIAL_USE);
-                  } else {
-                      startForeground(NOTIF_ID, notif);
-                  }
-              }
+    private void startAsForeground() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                CHANNEL_ID,
+                "Tasbeeh Always-on-Top Overlay",
+                NotificationManager.IMPORTANCE_LOW
+            );
+            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) nm.createNotificationChannel(ch);
+        }
+        Intent openApp = new Intent(this, MainActivity.class);
+        openApp.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+            : PendingIntent.FLAG_UPDATE_CURRENT;
+        PendingIntent pi = PendingIntent.getActivity(this, 0, openApp, piFlags);
 
-              private int dp(float v) {
-                  return Math.round(TypedValue.applyDimension(
-                      TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()
-                  ));
-              }
+        Notification.Builder nb = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Notification.Builder(this, CHANNEL_ID)
+            : new Notification.Builder(this);
+        Notification notif = nb
+            .setContentTitle("Tasbeeh Counter Overlay")
+            .setContentText("Count: " + count + " / " + target + " — Tap to return to Awraad")
+            .setSmallIcon(getApplicationInfo().icon != 0 ? getApplicationInfo().icon : android.R.drawable.ic_dialog_info)
+            .setContentIntent(pi)
+            .setOngoing(true)
+            .build();
 
-              private GradientDrawable roundedBg(int fillColor, int strokeColor, int radiusDp) {
-                  GradientDrawable gd = new GradientDrawable();
-                  gd.setColor(fillColor);
-                  gd.setStroke(dp(1.5f), strokeColor);
-                  gd.setCornerRadius(dp(radiusDp));
-                  return gd;
-              }
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(NOTIF_ID, notif, FGS_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(NOTIF_ID, notif);
+        }
+    }
 
-              private void buildOverlayView() {
-                  windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-                  rootView = new LinearLayout(this);
-                  rootView.setOrientation(LinearLayout.VERTICAL);
-                  rootView.setGravity(Gravity.CENTER_HORIZONTAL);
-                  rootView.setBackground(roundedBg(Color.parseColor("#F50C3B2E"), Color.parseColor("#C59B27"), 14));
+    private int dp(float v) {
+        return Math.round(TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()
+        ));
+    }
 
-                  // Header / Drag Bar
-                  LinearLayout header = new LinearLayout(this);
-                  header.setOrientation(LinearLayout.HORIZONTAL);
-                  header.setGravity(Gravity.CENTER_VERTICAL);
+    private GradientDrawable roundedBg(int fillColor, int strokeColor, int radiusDp) {
+        GradientDrawable gd = new GradientDrawable();
+        gd.setColor(fillColor);
+        gd.setStroke(dp(2f), strokeColor);
+        gd.setCornerRadius(dp(radiusDp));
+        return gd;
+    }
 
-                  titleView = new TextView(this);
-                  titleView.setText("Tasbeeh");
-                  titleView.setTextColor(Color.parseColor("#F6E099"));
-                  titleView.setTypeface(Typeface.DEFAULT_BOLD);
-                  LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-                  header.addView(titleView, titleLp);
+    private void buildOverlayView() {
+        windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        outerHostView = new FrameLayout(this);
 
-                  minusBtn = makeMiniBtn("-");
-                  plusBtn = makeMiniBtn("+");
-                  closeBtn = makeMiniBtn("x");
-                  header.addView(minusBtn);
-                  header.addView(plusBtn);
-                  header.addView(closeBtn);
-                  rootView.addView(header);
+        cardView = new LinearLayout(this);
+        cardView.setOrientation(LinearLayout.VERTICAL);
+        cardView.setGravity(Gravity.CENTER_HORIZONTAL);
+        cardView.setBackground(roundedBg(Color.parseColor("#FDF5E6"), Color.parseColor("#C59B27"), 12));
+        cardView.setPivotX(0f);
+        cardView.setPivotY(0f);
 
-                  countView = new TextView(this);
-                  countView.setTextColor(Color.WHITE);
-                  countView.setTypeface(Typeface.DEFAULT_BOLD);
-                  countView.setGravity(Gravity.CENTER);
-                  rootView.addView(countView);
+        // Header / Drag Bar (matches V2 .tasbeeh-drag-handle)
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setBackgroundColor(Color.parseColor("#29C59B27"));
+        header.setPadding(dp(10f), dp(8f), dp(10f), dp(8f));
 
-                  tapBtn = new Button(this);
-                  tapBtn.setText("TAP");
-                  tapBtn.setTextColor(Color.WHITE);
-                  tapBtn.setTypeface(Typeface.DEFAULT_BOLD);
-                  tapBtn.setBackground(roundedBg(Color.parseColor("#1E7E34"), Color.parseColor("#F6E099"), 999));
-                  rootView.addView(tapBtn);
+        titleView = new TextView(this);
+        titleView.setText("Tasbeeh");
+        titleView.setTextColor(Color.parseColor("#8C6D23"));
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setMaxLines(1);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        header.addView(titleView, titleLp);
 
-                  LinearLayout footer = new LinearLayout(this);
-                  footer.setOrientation(LinearLayout.HORIZONTAL);
-                  footer.setGravity(Gravity.CENTER);
+        minusBtn = makeHeaderBtn("-", Color.parseColor("#1A365D"));
+        plusBtn = makeHeaderBtn("+", Color.parseColor("#1A365D"));
+        closeBtn = makeHeaderBtn("x", Color.parseColor("#C0392B"));
+        header.addView(minusBtn);
+        header.addView(plusBtn);
+        header.addView(closeBtn);
+        cardView.addView(header, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
 
-                  autoToggleBtn = makeActionBtn("Auto", "#1A365D");
-                  resetBtn = makeActionBtn("Reset", "#C0392B");
-                  footer.addView(autoToggleBtn);
-                  footer.addView(resetBtn);
-                  rootView.addView(footer);
+        // Count Display (matches V2 .tasbeeh-count-display)
+        countView = new TextView(this);
+        countView.setTextColor(Color.parseColor("#1A365D"));
+        countView.setTypeface(Typeface.DEFAULT_BOLD);
+        countView.setGravity(Gravity.CENTER);
+        countView.setMaxLines(1);
+        cardView.addView(countView, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
 
-                  int layoutType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                      ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                      : WindowManager.LayoutParams.TYPE_PHONE;
+        // Progress Bar (matches V2 .tasbeeh-progress-bg & .tasbeeh-progress-bar)
+        FrameLayout progWrap = new FrameLayout(this);
+        GradientDrawable progBgDraw = new GradientDrawable();
+        progBgDraw.setColor(Color.parseColor("#E0D8C9"));
+        progBgDraw.setCornerRadius(dp(4f));
+        progWrap.setBackground(progBgDraw);
 
-                  SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
-                  params = new WindowManager.LayoutParams(
-                      WindowManager.LayoutParams.WRAP_CONTENT,
-                      WindowManager.LayoutParams.WRAP_CONTENT,
-                      layoutType,
-                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                      PixelFormat.TRANSLUCENT
-                  );
-                  params.gravity = Gravity.TOP | Gravity.START;
-                  params.x = sp.getInt("pos_x", dp(16));
-                  params.y = sp.getInt("pos_y", dp(90));
+        progressFill = new View(this);
+        GradientDrawable progFillDraw = new GradientDrawable();
+        progFillDraw.setColor(Color.parseColor("#1E7E34"));
+        progFillDraw.setCornerRadius(dp(4f));
+        progressFill.setBackground(progFillDraw);
+        progWrap.addView(progressFill, new FrameLayout.LayoutParams(0, FrameLayout.LayoutParams.MATCH_PARENT));
+        progressTrack = progWrap;
+        cardView.addView(progWrap);
 
-                  header.setOnTouchListener(new View.OnTouchListener() {
-                      private int initX, initY;
-                      private float touchX, touchY;
-                      @Override
-                      public boolean onTouch(View v, MotionEvent ev) {
-                          switch (ev.getAction()) {
-                              case MotionEvent.ACTION_DOWN:
-                                  initX = params.x;
-                                  initY = params.y;
-                                  touchX = ev.getRawX();
-                                  touchY = ev.getRawY();
-                                  return true;
-                              case MotionEvent.ACTION_MOVE:
-                                  params.x = Math.max(0, initX + Math.round(ev.getRawX() - touchX));
-                                  params.y = Math.max(0, initY + Math.round(ev.getRawY() - touchY));
-                                  if (windowManager != null && rootView != null) {
-                                      windowManager.updateViewLayout(rootView, params);
-                                  }
-                                  return true;
-                              case MotionEvent.ACTION_UP:
-                                  getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                                      .putInt("pos_x", params.x)
-                                      .putInt("pos_y", params.y)
-                                      .apply();
-                                  return true;
-                          }
-                          return false;
-                      }
-                  });
+        // Large Circular TAP Button (matches V2 .tasbeeh-btn-large)
+        tapBtn = new Button(this);
+        tapBtn.setText("TAP");
+        tapBtn.setTextColor(Color.WHITE);
+        tapBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        tapBtn.setAllCaps(true);
+        tapBtn.setPadding(0, 0, 0, 0);
+        tapBtn.setMinWidth(0);
+        tapBtn.setMinimumWidth(0);
+        tapBtn.setMinHeight(0);
+        tapBtn.setMinimumHeight(0);
+        GradientDrawable tapDraw = new GradientDrawable();
+        tapDraw.setShape(GradientDrawable.OVAL);
+        tapDraw.setColor(Color.parseColor("#1E7E34"));
+        tapBtn.setBackground(tapDraw);
+        cardView.addView(tapBtn);
 
-                  minusBtn.setOnClickListener(v -> {
-                      scalePct = Math.max(45, scalePct - 10);
-                      applyScaleLayout();
-                      persistState();
-                  });
-                  plusBtn.setOnClickListener(v -> {
-                      scalePct = Math.min(115, scalePct + 10);
-                      applyScaleLayout();
-                      persistState();
-                  });
-                  closeBtn.setOnClickListener(v -> {
-                      stopAuto();
-                      stopAllahAudio();
-                      persistState();
-                      stopSelf();
-                  });
-                  tapBtn.setOnClickListener(v -> incrementCounter(true));
-                  autoToggleBtn.setOnClickListener(v -> {
-                      if (autoRunning) {
-                          stopAuto();
-                      } else {
-                          mode = "auto";
-                          startAuto();
-                      }
-                      refreshLabels();
-                  });
-                  resetBtn.setOnClickListener(v -> {
-                      stopAuto();
-                      stopAllahAudio();
-                      count = 0;
-                      completionPlayed = false;
-                      refreshLabels();
-                      persistState();
-                  });
+        // Controls Row (matches V2 .tasbeeh-controls: Auto, Reset)
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
 
-                  windowManager.addView(rootView, params);
-              }
+        autoToggleBtn = makeControlBtn("Auto", "#1A365D");
+        resetBtn = makeControlBtn("Reset", "#1A365D");
+        footer.addView(autoToggleBtn);
+        footer.addView(resetBtn);
+        cardView.addView(footer, new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
 
-              private Button makeMiniBtn(String text) {
-                  Button b = new Button(this);
-                  b.setText(text);
-                  b.setTextColor(Color.parseColor("#F6E099"));
-                  b.setBackground(roundedBg(Color.parseColor("#33FFFFFF"), Color.parseColor("#88F6E099"), 6));
-                  b.setPadding(0, 0, 0, 0);
-                  b.setMinWidth(0);
-                  b.setMinimumWidth(0);
-                  b.setMinHeight(0);
-                  b.setMinimumHeight(0);
-                  return b;
-              }
+        outerHostView.addView(cardView, new FrameLayout.LayoutParams(
+            dp(BASE_CARD_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
 
-              private Button makeActionBtn(String text, String hexBg) {
-                  Button b = new Button(this);
-                  b.setText(text);
-                  b.setAllCaps(false);
-                  b.setTextColor(Color.WHITE);
-                  b.setBackground(roundedBg(Color.parseColor(hexBg), Color.parseColor("#C59B27"), 8));
-                  b.setMinWidth(0);
-                  b.setMinimumWidth(0);
-                  b.setMinHeight(0);
-                  b.setMinimumHeight(0);
-                  return b;
-              }
+        int layoutType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            : WindowManager.LayoutParams.TYPE_PHONE;
 
-              private void applyScaleLayout() {
-                  if (rootView == null) return;
-                  float s = scalePct / 100f;
-                  int pad = dp(10 * s + 4);
-                  rootView.setPadding(pad, pad, pad, pad);
+        SharedPreferences sp = getSharedPreferences(PREFS, MODE_PRIVATE);
+        params = new WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        );
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.x = sp.getInt("pos_x", dp(16));
+        params.y = sp.getInt("pos_y", dp(72));
 
-                  titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(10f, 14f * s));
-                  countView.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(18f, 34f * s));
-                  countView.setPadding(0, dp(4 * s), 0, dp(4 * s));
+        header.setOnTouchListener(new View.OnTouchListener() {
+            private int initX, initY;
+            private float touchX, touchY;
+            @Override
+            public boolean onTouch(View v, MotionEvent ev) {
+                switch (ev.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initX = params.x;
+                        initY = params.y;
+                        touchX = ev.getRawX();
+                        touchY = ev.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        params.x = Math.max(0, initX + Math.round(ev.getRawX() - touchX));
+                        params.y = Math.max(0, initY + Math.round(ev.getRawY() - touchY));
+                        if (windowManager != null && outerHostView != null) {
+                            windowManager.updateViewLayout(outerHostView, params);
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                            .putInt("pos_x", params.x)
+                            .putInt("pos_y", params.y)
+                            .apply();
+                        return true;
+                }
+                return false;
+            }
+        });
 
-                  int miniSz = dp(Math.max(22f, 28f * s));
-                  int miniMargin = dp(3);
-                  Button[] minis = new Button[] { minusBtn, plusBtn, closeBtn };
-                  for (Button b : minis) {
-                      LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(miniSz, miniSz);
-                      lp.setMargins(miniMargin, 0, 0, 0);
-                      b.setLayoutParams(lp);
-                      b.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(10f, 13f * s));
-                  }
+        minusBtn.setOnClickListener(v -> {
+            scalePct = Math.max(45, scalePct - 10);
+            applyScaleLayout();
+            persistState();
+        });
+        plusBtn.setOnClickListener(v -> {
+            scalePct = Math.min(115, scalePct + 10);
+            applyScaleLayout();
+            persistState();
+        });
+        closeBtn.setOnClickListener(v -> {
+            stopAuto();
+            stopAllahAudio();
+            persistState();
+            stopSelf();
+        });
+        tapBtn.setOnClickListener(v -> incrementCounter(true));
+        autoToggleBtn.setOnClickListener(v -> {
+            if (autoRunning) {
+                stopAuto();
+            } else {
+                mode = "auto";
+                startAuto();
+            }
+            refreshLabels();
+        });
+        resetBtn.setOnClickListener(v -> {
+            stopAuto();
+            stopAllahAudio();
+            count = 0;
+            completionPlayed = false;
+            refreshLabels();
+            persistState();
+        });
 
-                  int tapSz = dp(Math.max(52f, 84f * s));
-                  LinearLayout.LayoutParams tapLp = new LinearLayout.LayoutParams(tapSz, tapSz);
-                  tapLp.setMargins(0, dp(4 * s), 0, dp(6 * s));
-                  tapBtn.setLayoutParams(tapLp);
-                  tapBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(12f, 18f * s));
+        windowManager.addView(outerHostView, params);
+    }
 
-                  int actPadH = dp(Math.max(6f, 10f * s));
-                  int actPadV = dp(Math.max(3f, 5f * s));
-                  LinearLayout.LayoutParams aLp1 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                  aLp1.setMargins(0, 0, dp(4), 0);
-                  autoToggleBtn.setLayoutParams(aLp1);
-                  autoToggleBtn.setPadding(actPadH, actPadV, actPadH, actPadV);
-                  autoToggleBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(9.5f, 12f * s));
+    private Button makeHeaderBtn(String text, int textColor) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setTextColor(textColor);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setAllCaps(false);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(0, 0, 0, 0);
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.WHITE);
+        bg.setStroke(dp(1f), Color.parseColor("#8CC59B27"));
+        bg.setCornerRadius(dp(6f));
+        b.setBackground(bg);
+        return b;
+    }
 
-                  LinearLayout.LayoutParams aLp2 = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                  resetBtn.setLayoutParams(aLp2);
-                  resetBtn.setPadding(actPadH, actPadV, actPadH, actPadV);
-                  resetBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, Math.max(9.5f, 12f * s));
+    private Button makeControlBtn(String text, String hexBg) {
+        Button b = new Button(this);
+        b.setText(text);
+        b.setTextColor(Color.WHITE);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setAllCaps(false);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(12f), dp(8f), dp(12f), dp(8f));
+        b.setMinWidth(0);
+        b.setMinimumWidth(0);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Color.parseColor(hexBg));
+        bg.setCornerRadius(dp(6f));
+        b.setBackground(bg);
+        return b;
+    }
 
-                  if (windowManager != null && rootView.isAttachedToWindow()) {
-                      windowManager.updateViewLayout(rootView, params);
-                  }
-              }
+    // Identical V2 proportions scaled directly to scalePct (default 45% = exact match with 45% in-app Tasbeeh)
+    private void applyScaleLayout() {
+        if (cardView == null || outerHostView == null) return;
+        float s = scalePct / 100f;
+        int fullW = dp(BASE_CARD_WIDTH_DP);
+        int sidePad = dp(BASE_CARD_PAD_DP);
 
-              private void refreshLabels() {
-                  if (titleView != null) titleView.setText("Tasbeeh " + scalePct + "%");
-                  if (countView != null) countView.setText(count + " / " + target);
-                  if (autoToggleBtn != null) autoToggleBtn.setText(autoRunning ? "Pause" : "Auto");
-              }
+        cardView.setLayoutParams(new FrameLayout.LayoutParams(fullW, ViewGroup.LayoutParams.WRAP_CONTENT));
+        cardView.setPadding(sidePad, 0, sidePad, dp(BASE_CARD_PAD_DP));
+        cardView.setScaleX(s);
+        cardView.setScaleY(s);
 
-              private void persistState() {
-                  getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                      .putInt("count", count)
-                      .putInt("target", target)
-                      .putInt("scalePct", scalePct)
-                      .putString("mode", mode)
-                      .putLong("updatedAt", System.currentTimeMillis())
-                      .apply();
-              }
+        // Size outerHostView to exact visual footprint so dragging & screen bounds match visual edges
+        cardView.measure(
+            View.MeasureSpec.makeMeasureSpec(fullW, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        );
+        int visW = Math.max(1, Math.round(fullW * s));
+        int visH = Math.max(1, Math.round(cardView.getMeasuredHeight() * s));
+        outerHostView.setLayoutParams(new FrameLayout.LayoutParams(visW, visH));
 
-              private void startAuto() {
-                  if (count >= target) return;
-                  autoRunning = true;
-                  handler.removeCallbacks(autoTick);
-                  handler.postDelayed(autoTick, Math.max(1000L, intervalSec * 1000L));
-              }
+        titleView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
 
-              private void stopAuto() {
-                  autoRunning = false;
-                  handler.removeCallbacks(autoTick);
-              }
+        int miniSz = dp(28f);
+        Button[] minis = new Button[] { minusBtn, plusBtn, closeBtn };
+        for (int i = 0; i < minis.length; i++) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(miniSz, miniSz);
+            if (i > 0) lp.setMargins(dp(5f), 0, 0, 0);
+            minis[i].setLayoutParams(lp);
+            minis[i].setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        }
 
-              private void vibrateShort(long ms) {
-                  if (!vibrateEnabled) return;
-                  try {
-                      Vibrator vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-                      if (vib == null) return;
-                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                          vib.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
-                      } else {
-                          vib.vibrate(ms);
-                      }
-                  } catch (Exception ignored) {}
-              }
+        countView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 52f);
+        countView.setPadding(0, dp(10f), 0, dp(8f));
 
-              private void stopAllahAudio() {
-                  allahPlaysLeft = 0;
-                  if (mediaPlayer != null) {
-                      try {
-                          if (mediaPlayer.isPlaying()) mediaPlayer.stop();
-                          mediaPlayer.release();
-                      } catch (Exception ignored) {}
-                      mediaPlayer = null;
-                  }
-              }
+        LinearLayout.LayoutParams progLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(8f)
+        );
+        progLp.setMargins(0, dp(8f), 0, dp(10f));
+        progressTrack.setLayoutParams(progLp);
 
-              private void playAllahTimes(int times) {
-                  if (!soundEnabled) return;
-                  stopAllahAudio();
-                  allahPlaysLeft = Math.max(1, times);
-                  playNextAllahShot();
-              }
+        int tapSz = dp(110f);
+        LinearLayout.LayoutParams tapLp = new LinearLayout.LayoutParams(tapSz, tapSz);
+        tapLp.setMargins(0, dp(14f), 0, dp(14f));
+        tapBtn.setLayoutParams(tapLp);
+        tapBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f);
 
-              private void playNextAllahShot() {
-                  if (allahPlaysLeft <= 0) {
-                      stopAllahAudio();
-                      return;
-                  }
-                  allahPlaysLeft--;
-                  try {
-                      AssetFileDescriptor afd = getAssets().openFd("public/allah.mp3");
-                      mediaPlayer = new MediaPlayer();
-                      mediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
-                      afd.close();
-                      mediaPlayer.setOnCompletionListener(mp -> {
-                          try { mp.release(); } catch (Exception ignored) {}
-                          mediaPlayer = null;
-                          if (allahPlaysLeft > 0) {
-                              handler.postDelayed(this::playNextAllahShot, 220);
-                          }
-                      });
-                      mediaPlayer.prepare();
-                      mediaPlayer.start();
-                  } catch (Exception ignored) {
-                      stopAllahAudio();
-                  }
-              }
+        LinearLayout.LayoutParams aLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        aLp.setMargins(0, 0, dp(8f), 0);
+        autoToggleBtn.setLayoutParams(aLp);
+        autoToggleBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
 
-              private void incrementCounter(boolean isManual) {
-                  if (count >= target) return;
-                  count++;
-                  refreshLabels();
-                  persistState();
-                  if (count == target) {
-                      boolean isAutoMode = !isManual && "auto".equalsIgnoreCase(mode);
-                      stopAuto();
-                      vibrateShort(180);
-                      if (!completionPlayed) {
-                          completionPlayed = true;
-                          playAllahTimes(isAutoMode ? 3 : 1);
-                      }
-                      refreshLabels();
-                  } else if (isManual) {
-                      vibrateShort(20);
-                  }
-              }
+        LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        resetBtn.setLayoutParams(rLp);
+        resetBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
 
-              @Override
-              public void onDestroy() {
-                  stopAuto();
-                  stopAllahAudio();
-                  persistState();
-                  if (windowManager != null && rootView != null) {
-                      try { windowManager.removeView(rootView); } catch (Exception ignored) {}
-                      rootView = null;
-                  }
-                  super.onDestroy();
-              }
-          }
-          `;
+        updateProgressBar();
+
+        if (windowManager != null && outerHostView.isAttachedToWindow()) {
+            windowManager.updateViewLayout(outerHostView, params);
+        }
+    }
+
+    private void updateProgressBar() {
+        if (progressTrack == null || progressFill == null) return;
+        int totalW = Math.max(0, dp(BASE_CARD_WIDTH_DP - BASE_CARD_PAD_DP * 2));
+        float ratio = target > 0 ? Math.min(1f, Math.max(0f, (float) count / (float) target)) : 0f;
+        int fillW = Math.round(totalW * ratio);
+        progressFill.setLayoutParams(new FrameLayout.LayoutParams(fillW, FrameLayout.LayoutParams.MATCH_PARENT));
+    }
+
+    private void refreshLabels() {
+        if (titleView != null) titleView.setText("Tasbeeh (" + scalePct + "%)");
+        if (countView != null) countView.setText(String.valueOf(count));
+        if (autoToggleBtn != null) autoToggleBtn.setText(autoRunning ? "Pause" : "Auto");
+        updateProgressBar();
+    }
+
+    private void persistState() {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+            .putInt("count", count)
+            .putInt("target", target)
+            .putInt("scalePct", scalePct)
+            .putString("mode", mode)
+            .putLong("updatedAt", System.currentTimeMillis())
+            .apply();
+    }
+
+    private void startAuto() {
+        if (count >= target) return;
+        autoRunning = true;
+        handler.removeCallbacks(autoTick);
+        handler.postDelayed(autoTick, Math.max(1000L, intervalSec * 1000L));
+    }
+
+    private void stopAuto() {
+        autoRunning = false;
+        handler.removeCallbacks(autoTick);
+    }
+
+    private void vibrateShort(long ms) {
+        if (!vibrateEnabled) return;
+        try {
+            Vibrator vib = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (vib == null) return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vib.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                vib.vibrate(ms);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void stopAllahAudio() {
+        allahPlaysLeft = 0;
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) mediaPlayer.stop();
+                mediaPlayer.release();
+            } catch (Exception ignored) {}
+            mediaPlayer = null;
+        }
+    }
+
+    private void playAllahTimes(int times) {
+        if (!soundEnabled) return;
+        stopAllahAudio();
+        allahPlaysLeft = Math.max(1, times);
+        playNextAllahShot();
+    }
+
+    private AssetFileDescriptor openAllahAssetFd() throws Exception {
+        String[] candidates = new String[] { "allah.mp3", "public/allah.mp3" };
+        for (int i = 0; i < candidates.length; i++) {
+            try {
+                return getAssets().openFd(candidates[i]);
+            } catch (Exception ignored) {}
+        }
+        throw new java.io.FileNotFoundException("allah.mp3 not found in assets");
+    }
+
+    private void playNextAllahShot() {
+        if (allahPlaysLeft <= 0) {
+            stopAllahAudio();
+            return;
+        }
+        allahPlaysLeft--;
+        try {
+            AssetFileDescriptor afd = openAllahAssetFd();
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setDataSource(afd.getFileDescriptor(), afd.getStartOffset(), afd.getLength());
+            afd.close();
+            mediaPlayer.setOnCompletionListener(mp -> {
+                try { mp.release(); } catch (Exception ignored) {}
+                mediaPlayer = null;
+                if (allahPlaysLeft > 0) {
+                    handler.postDelayed(this::playNextAllahShot, 220);
+                }
+            });
+            mediaPlayer.prepare();
+            mediaPlayer.start();
+        } catch (Exception ignored) {
+            stopAllahAudio();
+        }
+    }
+
+    private void incrementCounter(boolean isManual) {
+        if (count >= target) return;
+        count++;
+        refreshLabels();
+        persistState();
+        if (count == target) {
+            boolean isAutoMode = !isManual && "auto".equalsIgnoreCase(mode);
+            stopAuto();
+            vibrateShort(180);
+            if (!completionPlayed) {
+                completionPlayed = true;
+                playAllahTimes(isAutoMode ? 3 : 1);
+            }
+            refreshLabels();
+        } else if (isManual) {
+            vibrateShort(20);
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        stopAuto();
+        stopAllahAudio();
+        persistState();
+        if (windowManager != null && outerHostView != null) {
+            try { windowManager.removeView(outerHostView); } catch (Exception ignored) {}
+            outerHostView = null;
+        }
+        super.onDestroy();
+    }
+}
+`;
 
           const pluginJava = `package ${appId};
 
