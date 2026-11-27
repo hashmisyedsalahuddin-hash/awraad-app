@@ -10786,23 +10786,22 @@
 })();
 
 // ==========================================
-// PART 19: LIGHTWEIGHT GOOGLE ANALYTICS (ANDROID APK + iPHONE PWA)
+// PART 19: LIGHTWEIGHT GOOGLE ANALYTICS (ANDROID APK + iPHONE PWA + PACKAGE/VERSION TRACKING)
 // ==========================================
 (function() {
     const GA_MEASUREMENT_ID = "G-D26FJ05YQZ";
     const IGNORE_KEY = "awraad_admin_ignore";
+    const OFFICIAL_PACKAGE_ID = "com.alaviyanooriya.awraad";
+    const REQUIRED_NATIVE_VER = 2;
     if (!GA_MEASUREMENT_ID || !GA_MEASUREMENT_ID.startsWith("G-")) return;
 
     function isNativeCapacitorApp() {
         try {
-            return Boolean(
-                window.Capacitor &&
-                typeof window.Capacitor.isNativePlatform === "function" &&
-                window.Capacitor.isNativePlatform()
-            );
-        } catch (e) {
-            return false;
-        }
+            if (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) {
+                return true;
+            }
+        } catch (e) {}
+        return /\b(AwraadNative\/\d+|wv)\b/i.test(navigator.userAgent || "");
     }
 
     function checkAdminOptFlag() {
@@ -10817,15 +10816,72 @@
                 return false;
             }
 
-            if (explicitEnable || isNativeCapacitorApp()) {
+            if (explicitEnable) {
                 localStorage.setItem(IGNORE_KEY, "1");
                 window.name = "AWR_ADMIN_IGNORE";
             }
 
             return localStorage.getItem(IGNORE_KEY) === "1" || window.name === "AWR_ADMIN_IGNORE";
         } catch (e) {
-            return window.name === "AWR_ADMIN_IGNORE" || isNativeCapacitorApp();
+            return window.name === "AWR_ADMIN_IGNORE";
         }
+    }
+
+    function detectNativeVer() {
+        var m = (navigator.userAgent || "").match(/AwraadNative\/(\d+)/i);
+        if (m && m[1]) return parseInt(m[1], 10) || 0;
+        if (typeof window.__AWRAAD_NATIVE_VER === "number") return window.__AWRAAD_NATIVE_VER;
+        return 1;
+    }
+
+    function detectPkgId(cb) {
+        var ua = navigator.userAgent || "";
+        var m = ua.match(/AwraadPkg\/([a-zA-Z0-9._]+)/i);
+        if (m && m[1]) {
+            cb(m[1]);
+            return;
+        }
+        try {
+            var capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+            if (capApp && typeof capApp.getInfo === "function") {
+                capApp.getInfo().then(function(info) {
+                    cb((info && info.id) ? String(info.id) : "unknown_pkg");
+                }).catch(function() {
+                    cb("unknown_pkg");
+                });
+                return;
+            }
+        } catch (e) {}
+        cb("unknown_pkg");
+    }
+
+    function emitApkStatus(gtagFn, appMode) {
+        var nativeVer = detectNativeVer();
+        var isStore = Boolean(window.__AWRAAD_STORE_INSTALL === true || /\bAwraadStore\b/i.test(navigator.userAgent || ""));
+        detectPkgId(function(pkgId) {
+            var cleanPkg = String(pkgId || "unknown_pkg").trim();
+            var isConflicted = Boolean(cleanPkg && cleanPkg !== "unknown_pkg" && cleanPkg.toLowerCase() !== OFFICIAL_PACKAGE_ID);
+            var isOutdated = nativeVer < REQUIRED_NATIVE_VER;
+            var statusBucket = isStore
+                ? "store_install"
+                : (isConflicted ? "conflicted_pkg" : (isOutdated ? "outdated_v1" : "updated_v2"));
+
+            try {
+                gtagFn("set", "user_properties", {
+                    awraad_pkg_id: cleanPkg,
+                    awraad_native_ver: String(nativeVer),
+                    awraad_apk_status: statusBucket
+                });
+                gtagFn("event", "apk_client_status", {
+                    app_mode: appMode,
+                    pkg_id: cleanPkg,
+                    native_ver: nativeVer,
+                    is_conflicted_pkg: isConflicted ? 1 : 0,
+                    needs_apk_update: (isOutdated || isConflicted) ? 1 : 0,
+                    apk_status: statusBucket
+                });
+            } catch (e) {}
+        });
     }
 
     function initAwraadAnalytics() {
@@ -10835,8 +10891,9 @@
             if (window.__awraadGaLoaded) return;
             window.__awraadGaLoaded = true;
 
+            const isNative = isNativeCapacitorApp();
             const isStandalonePwa = Boolean((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true);
-            const appMode = isNativeCapacitorApp() ? "android_apk" : (isStandalonePwa ? "iphone_or_pwa" : "web_browser");
+            const appMode = isNative ? "android_apk" : (isStandalonePwa ? "iphone_or_pwa" : "web_browser");
 
             window.dataLayer = window.dataLayer || [];
             function gtag(){ window.dataLayer.push(arguments); }
@@ -10847,6 +10904,10 @@
                 app_mode: appMode,
                 anonymize_ip: true
             });
+
+            if (isNative) {
+                emitApkStatus(gtag, appMode);
+            }
 
             const s = document.createElement("script");
             s.async = true;
