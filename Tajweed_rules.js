@@ -1449,6 +1449,8 @@
                         <span>Tasbeeh Counter</span>
                     </span>
                     <div class="tasbeeh-header-actions">
+                        <button type="button" id="tasbeehZoomOutBtn" class="tasbeeh-icon-btn" title="Decrease Size (min 45%)">&minus;</button>
+                        <button type="button" id="tasbeehZoomInBtn" class="tasbeeh-icon-btn" title="Increase Size (max 115%)">+</button>
                         <button type="button" id="minimizeTasbeehBtn" class="tasbeeh-icon-btn" title="Minimize">_</button>
                         <button type="button" id="closeTasbeehBtn" class="tasbeeh-icon-btn close-btn" title="Close">&times;</button>
                     </div>
@@ -1526,12 +1528,18 @@
 
         const MIN_SCALE = 0.45;
         const MAX_SCALE = 1.15;
+        const DEFAULT_SCALE = 0.45;
 
         let count = parseInt(localStorage.getItem('tasbeeh_count')) || 0;
         let target = parseInt(localStorage.getItem('tasbeeh_target')) || 100;
+        if (!localStorage.getItem('tasbeeh_default45_v1')) {
+            localStorage.setItem('tasbeeh_default45_v1', '1');
+            localStorage.setItem('tasbeeh_scale', String(DEFAULT_SCALE));
+            localStorage.removeItem('tasbeeh_pos');
+        }
         let currentScale = parseFloat(localStorage.getItem('tasbeeh_scale'));
         if (isNaN(currentScale) || currentScale < MIN_SCALE || currentScale > MAX_SCALE) {
-            currentScale = 1;
+            currentScale = DEFAULT_SCALE;
         }
         let currentLeft = 0;
         let currentTop = 0;
@@ -1624,9 +1632,10 @@
         }
 
         function updateBackdropMode() {
-            // Chota zoom (< 95%) ya drag hone par transparent floating mode taake Awraad aaraam se padh aur scroll kar sakein
-            const isFloating = currentScale < 0.95 || hasCustomPos;
-            tasbeehModal.classList.toggle('tasbeeh-compact', isFloating);
+            // Tasbeeh is always exempt from Main Screen Scroll Lock so users can scroll Awraad while Tasbeeh is open
+            tasbeehModal.classList.add('tasbeeh-compact');
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            tasbeehModal.classList.toggle('tasbeeh-aot-active', aotOn);
         }
 
         function applyTasbeehTransform(left, top, scale) {
@@ -1664,8 +1673,12 @@
 
                 const baseW = tasbeehContent.offsetWidth || 320;
                 const baseH = tasbeehContent.offsetHeight || 400;
-                const defaultLeft = (window.innerWidth - baseW * currentScale) / 2;
-                const defaultTop = (window.innerHeight - baseH * currentScale) / 2;
+                const defaultLeft = currentScale <= 0.65
+                    ? Math.max(8, window.innerWidth - (baseW * currentScale) - 12)
+                    : (window.innerWidth - baseW * currentScale) / 2;
+                const defaultTop = currentScale <= 0.65
+                    ? 68
+                    : (window.innerHeight - baseH * currentScale) / 2;
 
                 if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
                     hasCustomPos = true;
@@ -1678,6 +1691,97 @@
         }
 
         refreshTasbeehLayoutRef = initTasbeehLayout;
+
+        const zoomOutBtn = document.getElementById('tasbeehZoomOutBtn');
+        const zoomInBtn = document.getElementById('tasbeehZoomInBtn');
+        function stepTasbeehScale(delta) {
+            hasCustomPos = true;
+            const targetScale = Math.min(getMaxAllowedScale(), Math.max(MIN_SCALE, +(currentScale + delta).toFixed(2)));
+            applyTasbeehTransform(currentLeft, currentTop, targetScale);
+            showZoomBadge(currentScale);
+            saveTasbeehGeometry();
+            syncNativeOverlayIfRunning();
+        }
+        if (zoomOutBtn) zoomOutBtn.addEventListener('click', (e) => { e.stopPropagation(); stepTasbeehScale(-0.10); });
+        if (zoomInBtn) zoomInBtn.addEventListener('click', (e) => { e.stopPropagation(); stepTasbeehScale(0.10); });
+
+        function getNativeOverlayPlugin() {
+            try {
+                return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay) || null;
+            } catch (e) { return null; }
+        }
+        function buildOverlayPayload() {
+            let sec = parseInt(customIntervalInput && customIntervalInput.value, 10);
+            if (!sec || sec < 1) sec = 1;
+            return {
+                count: count,
+                target: target,
+                mode: modeSelect ? modeSelect.value : 'manual',
+                intervalSec: sec,
+                scalePct: Math.round(currentScale * 100),
+                soundEnabled: soundEnabled,
+                vibrateEnabled: vibrateEnabled
+            };
+        }
+        function syncNativeOverlayIfRunning() {
+            const plg = getNativeOverlayPlugin();
+            if (!plg || typeof plg.updateOverlay !== 'function') return;
+            if (localStorage.getItem('app_tasbeeh_always_on_top') !== 'true') return;
+            try { plg.updateOverlay(buildOverlayPayload()).catch(() => {}); } catch (e) {}
+        }
+        function pullStateFromNativeOverlay() {
+            const plg = getNativeOverlayPlugin();
+            if (!plg || typeof plg.getState !== 'function') return;
+            plg.getState().then((st) => {
+                if (!st || typeof st.count !== 'number') return;
+                if (st.updatedAt && st.updatedAt > (window.__awraadLastOverlaySyncTs || 0)) {
+                    window.__awraadLastOverlaySyncTs = st.updatedAt;
+                    count = st.count;
+                    if (typeof st.target === 'number' && st.target >= 1) target = st.target;
+                    localStorage.setItem('tasbeeh_count', count);
+                    localStorage.setItem('tasbeeh_target', target);
+                    if (countDisplay) countDisplay.innerText = count;
+                    if (typeof st.scalePct === 'number' && st.scalePct >= 45 && st.scalePct <= 115) {
+                        currentScale = st.scalePct / 100;
+                        localStorage.setItem('tasbeeh_scale', currentScale.toFixed(3));
+                        if (tasbeehModal && tasbeehModal.classList.contains('show')) {
+                            applyTasbeehTransform(currentLeft, currentTop, currentScale);
+                        }
+                    }
+                    updateProgress();
+                }
+            }).catch(() => {});
+        }
+        window.awraadSyncTasbeehAot = function() {
+            updateBackdropMode();
+            const plg = getNativeOverlayPlugin();
+            if (!plg) return;
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            if (!aotOn && typeof plg.hideOverlay === 'function') {
+                try { plg.hideOverlay().catch(() => {}); } catch (e) {}
+            } else if (aotOn && tasbeehModal && tasbeehModal.classList.contains('show')) {
+                syncNativeOverlayIfRunning();
+            }
+        };
+        document.addEventListener('visibilitychange', () => {
+            const plg = getNativeOverlayPlugin();
+            if (!plg) return;
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            const tasbeehActiveVis = (tasbeehModal && tasbeehModal.classList.contains('show')) ||
+                                     (tasbeehMinimized && tasbeehMinimized.style.display !== 'none');
+            if (document.visibilityState === 'hidden') {
+                if (aotOn && tasbeehActiveVis && typeof plg.showOverlay === 'function') {
+                    plg.checkPermission().then((res) => {
+                        if (res && res.granted) plg.showOverlay(buildOverlayPayload()).catch(() => {});
+                    }).catch(() => {});
+                }
+            } else if (document.visibilityState === 'visible') {
+                pullStateFromNativeOverlay();
+                if (typeof plg.hideOverlay === 'function') {
+                    try { plg.hideOverlay().catch(() => {}); } catch (e) {}
+                }
+            }
+        });
 
         // 1. Two-Finger Pinch Zoom-In / Zoom-Out Resizing (anywhere on Tasbeeh Window)
         if (tasbeehContent) {
@@ -1857,11 +1961,13 @@
 
         function resetCount() {
             pauseAuto();
+            stopTasbeehAllah();
             count = 0;
             localStorage.setItem('tasbeeh_count', count);
             beepPlayed = false;
             countDisplay.innerText = count;
             updateProgress();
+            syncNativeOverlayIfRunning();
 
             if (modeSelect.value === 'auto') {
                 startBtn.style.display = 'inline-block';
@@ -1884,6 +1990,11 @@
             e.stopPropagation();
             tasbeehModal.classList.remove('show');
             pauseAuto();
+            stopTasbeehAllah();
+            const plg = getNativeOverlayPlugin();
+            if (plg && typeof plg.hideOverlay === 'function') {
+                try { plg.hideOverlay().catch(() => {}); } catch (err) {}
+            }
         });
 
         tasbeehModal.addEventListener('click', (e) => {
@@ -1903,14 +2014,18 @@
                 customTargetInput.style.display = 'none';
                 target = parseInt(targetSelect.value);
             }
+            if (count < target) beepPlayed = false;
             localStorage.setItem('tasbeeh_target', target);
             updateProgress();
+            syncNativeOverlayIfRunning();
         });
 
         customTargetInput.addEventListener('input', () => {
             target = parseInt(customTargetInput.value) || 1;
+            if (count < target) beepPlayed = false;
             localStorage.setItem('tasbeeh_target', target);
             updateProgress();
+            syncNativeOverlayIfRunning();
         });
 
         modeSelect.addEventListener('change', () => {
@@ -1958,17 +2073,142 @@
             });
         }
 
-        function playBeep() {
-            if (!soundEnabled) return;
+        let tasbeehAllahBuffer = null;
+        let tasbeehAllahDecodePromise = null;
+        let tasbeehAllahSources = [];
+        let tasbeehAllahHtmlAudio = null;
+        let tasbeehAllahHtmlLeft = 0;
+        let tasbeehAllahPlayToken = 0;
+
+        function preloadTasbeehAllah() {
+            if (tasbeehAllahBuffer) return Promise.resolve(tasbeehAllahBuffer);
+            if (tasbeehAllahDecodePromise) return tasbeehAllahDecodePromise;
+            try { unlockAudio(); } catch (e) {}
+            if (!audioCtx || typeof fetch !== 'function') return Promise.resolve(null);
+            tasbeehAllahDecodePromise = fetch('./allah.mp3')
+                .then((res) => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.arrayBuffer();
+                })
+                .then((buf) => new Promise((resolve, reject) => audioCtx.decodeAudioData(buf.slice(0), resolve, reject)))
+                .then((decoded) => {
+                    tasbeehAllahBuffer = decoded;
+                    return decoded;
+                })
+                .catch(() => {
+                    tasbeehAllahDecodePromise = null;
+                    return null;
+                });
+            return tasbeehAllahDecodePromise;
+        }
+
+        function ensureTasbeehHtmlAudio() {
+            if (!tasbeehAllahHtmlAudio) {
+                tasbeehAllahHtmlAudio = new Audio('./allah.mp3');
+                tasbeehAllahHtmlAudio.preload = 'auto';
+                tasbeehAllahHtmlAudio.addEventListener('ended', () => {
+                    const tok = tasbeehAllahHtmlAudio._awraadTok;
+                    if (tok !== tasbeehAllahPlayToken) return;
+                    if (tasbeehAllahHtmlLeft > 0) {
+                        tasbeehAllahHtmlLeft--;
+                        setTimeout(() => {
+                            if (tasbeehAllahHtmlAudio._awraadTok !== tasbeehAllahPlayToken) return;
+                            tasbeehAllahHtmlAudio.currentTime = 0;
+                            const p = tasbeehAllahHtmlAudio.play();
+                            if (p && typeof p.catch === 'function') p.catch(() => {});
+                        }, 220);
+                    }
+                });
+            }
+            return tasbeehAllahHtmlAudio;
+        }
+
+        function stopTasbeehAllah() {
+            tasbeehAllahPlayToken++;
+            tasbeehAllahSources.forEach((src) => {
+                try { src.stop(0); } catch (e) {}
+                try { src.disconnect(); } catch (e) {}
+            });
+            tasbeehAllahSources = [];
+            tasbeehAllahHtmlLeft = 0;
+            if (tasbeehAllahHtmlAudio) {
+                try {
+                    tasbeehAllahHtmlAudio.pause();
+                    tasbeehAllahHtmlAudio.currentTime = 0;
+                } catch (e) {}
+            }
+        }
+
+        function playTasbeehAllahHtml(times, tok) {
             try {
-                unlockAudio();
-                const oscillator = audioCtx.createOscillator();
-                oscillator.type = 'sine';
-                oscillator.frequency.value = 800;
-                oscillator.connect(audioCtx.destination);
-                oscillator.start();
-                setTimeout(() => oscillator.stop(), 800);
-            } catch (error) {}
+                const a = ensureTasbeehHtmlAudio();
+                a._awraadTok = tok;
+                a.muted = false;
+                a.currentTime = 0;
+                tasbeehAllahHtmlLeft = Math.max(0, times - 1);
+                const p = a.play();
+                if (p && typeof p.catch === 'function') p.catch(() => { tasbeehAllahHtmlLeft = 0; });
+            } catch (e) {}
+        }
+
+        // Auto Mode = 3 times, Manual Mode = 1 time (strictly using ./allah.mp3)
+        function playTasbeehAllah(repeatCount) {
+            if (!soundEnabled) return;
+            const times = Math.max(1, parseInt(repeatCount, 10) || 1);
+            stopTasbeehAllah();
+            const tok = tasbeehAllahPlayToken;
+            try { unlockAudio(); } catch (e) {}
+
+            if (audioCtx) {
+                preloadTasbeehAllah().then((buf) => {
+                    if (tok !== tasbeehAllahPlayToken) return;
+                    if (!buf) {
+                        playTasbeehAllahHtml(times, tok);
+                        return;
+                    }
+                    const scheduleAll = () => {
+                        if (tok !== tasbeehAllahPlayToken) return;
+                        const now = audioCtx.currentTime + 0.04;
+                        const gap = 0.25;
+                        const dur = buf.duration || 0;
+                        for (let i = 0; i < times; i++) {
+                            const src = audioCtx.createBufferSource();
+                            src.buffer = buf;
+                            src.connect(audioCtx.destination);
+                            src.start(now + i * (dur + gap));
+                            tasbeehAllahSources.push(src);
+                        }
+                    };
+                    if (audioCtx.state === 'suspended') {
+                        audioCtx.resume().then(scheduleAll).catch(() => playTasbeehAllahHtml(times, tok));
+                    } else {
+                        scheduleAll();
+                    }
+                }).catch(() => playTasbeehAllahHtml(times, tok));
+            } else {
+                playTasbeehAllahHtml(times, tok);
+            }
+        }
+
+        function unlockTasbeehAllahOnGesture() {
+            try { unlockAudio(); } catch (e) {}
+            preloadTasbeehAllah();
+            try {
+                const a = ensureTasbeehHtmlAudio();
+                if (!a._awraadUnlocked) {
+                    const prevMuted = a.muted;
+                    a.muted = true;
+                    const p = a.play();
+                    if (p && typeof p.then === 'function') {
+                        p.then(() => {
+                            a.pause();
+                            a.currentTime = 0;
+                            a.muted = prevMuted;
+                            a._awraadUnlocked = true;
+                        }).catch(() => { a.muted = prevMuted; });
+                    }
+                }
+            } catch (e) {}
         }
 
         function incrementCount(isManualTap) {
@@ -1977,12 +2217,14 @@
                 localStorage.setItem('tasbeeh_count', count);
                 countDisplay.innerText = count;
                 updateProgress();
+                syncNativeOverlayIfRunning();
                 if (count === target) {
+                    const isAutoTrigger = (modeSelect && modeSelect.value === 'auto') && !isManualTap;
                     pauseAuto();
                     triggerHaptic([80, 60, 120, 60, 180]);
                     if (!beepPlayed) {
-                        playBeep();
                         beepPlayed = true;
+                        playTasbeehAllah(isAutoTrigger ? 3 : 1);
                     }
                 } else if (isManualTap) {
                     if (count % 33 === 0) {
@@ -1996,13 +2238,13 @@
 
         mainTapBtn.addEventListener('click', () => {
             if (isPinching || (Date.now() - lastPinchEndTime) < 260) return;
-            unlockAudio();
+            unlockTasbeehAllahOnGesture();
             activateTasbeehGuard();
             if (count < target) incrementCount(true);
         });
 
         function startAuto() {
-            unlockAudio();
+            unlockTasbeehAllahOnGesture();
             if (count >= target) return;
             if (autoTimer) clearInterval(autoTimer);
             let interval = intervalSelect.value === 'custom' ? parseInt(customIntervalInput.value) * 1000 : parseInt(intervalSelect.value);
@@ -2042,7 +2284,7 @@
 
         const pathLower = window.location.pathname.toLowerCase();
         const isIndex = pathLower.endsWith('index.html') || pathLower.endsWith('/') || pathLower === '';
-        const isShajara = pathLower.endsWith('shajara_e_alaviyya.html');
+        const isShajara = pathLower.endsWith('Shajara_e_Alaviyya.html');
         const indexPath = isIndex ? '#main-menu' : './index.html#main-menu';
         const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
         const I = window.AWRAAD_SVG;
@@ -2235,12 +2477,14 @@
             }
             drawerBackdrop.classList.add('open');
             sideDrawer.classList.add('open');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         }
 
         function closeDrawer() {
             if (drawerBackdrop) drawerBackdrop.classList.remove('open');
             if (sideDrawer) sideDrawer.classList.remove('open');
             closeAllSubmenus();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         }
 
         window.awraadOpenDrawer = openDrawer;
@@ -2648,23 +2892,16 @@
                 pending.push(el);
             });
 
-            if (!pending.length) {
-                window.__awraadTajweedBusy = false;
-                try { window.dispatchEvent(new CustomEvent('awraad:tajweeddone')); } catch (err) {}
-                return;
-            }
+            if (!pending.length) return;
 
             if (immediate || pending.length <= 6) {
-                window.__awraadTajweedBusy = true;
                 for (var i = 0; i < pending.length; i++) {
                     processSingleEntry(pending[i]);
                 }
-                window.__awraadTajweedBusy = false;
-                try { window.dispatchEvent(new CustomEvent('awraad:tajweeddone')); } catch (err) {}
                 return;
             }
 
-            window.__awraadTajweedBusy = true;
+            // Process first 5 visible entries immediately, then chunk remaining on animation frames so UI never freezes
             var idx = 0;
             var firstBatch = Math.min(5, pending.length);
             for (; idx < firstBatch; idx++) {
@@ -2679,7 +2916,6 @@
                 if (idx < pending.length) {
                     requestAnimationFrame(processNextChunk);
                 } else {
-                    window.__awraadTajweedBusy = false;
                     try { window.dispatchEvent(new CustomEvent('awraad:tajweeddone')); } catch (err) {}
                 }
             }
@@ -2801,11 +3037,6 @@
     let htmlAudio = null;
     let htmlPlaysLeft = 0;
 
-    function isTvDevice() {
-        const ua = navigator.userAgent || '';
-        if (/(Android TV|GoogleTV|SMART-TV|SmartTV|BRAVIA|MIBOX|SHIELD|Leanback|CrKey)/i.test(ua)) return true;
-        return Boolean(document.body && document.body.classList.contains('awraad-tv'));
-    }
 
     function ensureAudioContext() {
         try {
@@ -2986,8 +3217,6 @@
         }
 
         function attachMobileSteppers() {
-            if (isTvDevice()) return;
-
             document.querySelectorAll('.timer-card').forEach(function(card) {
                 const specs = [
                     { sel: '.zikr-minutes', min: 0, max: 999, wrap: false, label: 'Min' },
@@ -2996,7 +3225,7 @@
 
                 specs.forEach(function(spec) {
                     const inp = card.querySelector(spec.sel);
-                    if (!inp || inp.closest('.mobile-timer-stepper') || inp.closest('.tv-stepper-wrap')) return;
+                    if (!inp || inp.closest('.mobile-timer-stepper')) return;
 
                     inp.setAttribute('min', String(spec.min));
                     inp.setAttribute('max', String(spec.max));
@@ -3168,11 +3397,7 @@
             var rawR = localStorage.getItem('awraad_pending_resume_v3') || sessionStorage.getItem('awraad_resume_scroll_target');
             if (rawR) {
                 var parsedR = JSON.parse(rawR);
-                var pNow = (window.location.pathname || '').split('?')[0].split('#')[0];
-                var segNow = decodeURIComponent(pNow.substring(pNow.lastIndexOf('/') + 1)).trim().toLowerCase();
-                var curFileNow = (segNow && /\.html?$/i.test(segNow)) ? segNow : 'index.html';
-                var targetFileR = (parsedR && parsedR.file) ? String(parsedR.file).toLowerCase() : '';
-                if (parsedR && (!parsedR.expiresAt || Date.now() < parsedR.expiresAt) && (!targetFileR || targetFileR === curFileNow)) {
+                if (parsedR && (!parsedR.expiresAt || Date.now() < parsedR.expiresAt)) {
                     hasPendingResume = true;
                 }
             }
@@ -3180,7 +3405,6 @@
         if (!hasPendingResume) {
             window.scrollTo(0, 0);
         }
-
 
         // Lazily apply Tajweed only to the newly opened section (after paint for instant switch!)
         if (activeSection && typeof window.applyTajweedToContainer === 'function') {
@@ -3794,6 +4018,24 @@
                             </label>
                             <span class="settings-label-lg">Tajweed Colors</span>
                         </div>
+                        <div class="settings-awake-row">
+                            <label class="awake-toggle">
+                                <input type="checkbox" id="alwaysOnTopCheckbox">
+                                <span class="awake-track" id="alwaysOnTopLabel">OFF</span>
+                            </label>
+                            <span class="settings-label-lg">Always-on-Top Overlay</span>
+                        </div>
+                        <div id="aotPermissionHintRow" class="settings-aot-hint" style="display:none;">
+                            <span id="aotPermissionStatusText">Android system overlay permission</span>
+                            <button type="button" id="aotRequestPermBtn" class="settings-aot-perm-btn">Grant Permission</button>
+                        </div>
+                        <div class="settings-awake-row">
+                            <label class="awake-toggle">
+                                <input type="checkbox" id="scrollBtnToggleCheckbox" checked>
+                                <span class="awake-track" id="scrollBtnToggleLabel">ON</span>
+                            </label>
+                            <span class="settings-label-lg">Optional Scroll Button</span>
+                        </div>
                     </div>
 
                     <hr class="settings-divider">
@@ -3941,6 +4183,13 @@
         const keepAwakeLabel = document.getElementById('keepAwakeLabel');
         const tajweedToggleCheckbox = document.getElementById('tajweedToggleCheckbox');
         const tajweedToggleLabel = document.getElementById('tajweedToggleLabel');
+        const alwaysOnTopCheckbox = document.getElementById('alwaysOnTopCheckbox');
+        const alwaysOnTopLabel = document.getElementById('alwaysOnTopLabel');
+        const aotPermissionHintRow = document.getElementById('aotPermissionHintRow');
+        const aotPermissionStatusText = document.getElementById('aotPermissionStatusText');
+        const aotRequestPermBtn = document.getElementById('aotRequestPermBtn');
+        const scrollBtnToggleCheckbox = document.getElementById('scrollBtnToggleCheckbox');
+        const scrollBtnToggleLabel = document.getElementById('scrollBtnToggleLabel');
         const bgColorRow = document.getElementById('bgColorRow');
         const textColorRow = document.getElementById('textColorRow');
         const resetDefaultColorsBtn = document.getElementById('resetDefaultColorsBtn');
@@ -4098,6 +4347,17 @@
             tajweedToggleCheckbox.checked = tajweedOn;
             tajweedToggleLabel.textContent = tajweedOn ? 'ON' : 'OFF';
 
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            if (alwaysOnTopCheckbox) alwaysOnTopCheckbox.checked = aotOn;
+            if (alwaysOnTopLabel) alwaysOnTopLabel.textContent = aotOn ? 'ON' : 'OFF';
+            if (typeof window.awraadRefreshAotPermissionUI === 'function') {
+                window.awraadRefreshAotPermissionUI();
+            }
+
+            const scrollBtnOn = localStorage.getItem('app_scroll_btn_enabled') !== 'false';
+            if (scrollBtnToggleCheckbox) scrollBtnToggleCheckbox.checked = scrollBtnOn;
+            if (scrollBtnToggleLabel) scrollBtnToggleLabel.textContent = scrollBtnOn ? 'ON' : 'OFF';
+
             previewBox.style.setProperty('--preview-bg', bg);
             previewBox.style.setProperty('--preview-text', text);
             previewBox.style.setProperty('--preview-border', border);
@@ -4135,9 +4395,15 @@
 
         syncSettingsUIRef = syncSettingsUI;
 
-        closeSettingsBtn.addEventListener('click', () => settingsModal.classList.remove('show'));
+        closeSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('show');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+        });
         settingsModal.addEventListener('click', (e) => {
-            if (e.target === settingsModal) settingsModal.classList.remove('show');
+            if (e.target === settingsModal) {
+                settingsModal.classList.remove('show');
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+            }
         });
 
         keepAwakeCheckbox.addEventListener('change', () => {
@@ -4154,6 +4420,77 @@
             applySavedDisplaySettings();
             syncSettingsUI();
         });
+
+        function refreshAotPermissionUI() {
+            if (!aotPermissionHintRow) return;
+            const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+            const plg = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay;
+            if (!aotOn) {
+                aotPermissionHintRow.style.display = 'none';
+                return;
+            }
+            if (plg && typeof plg.checkPermission === 'function') {
+                aotPermissionHintRow.style.display = 'flex';
+                plg.checkPermission().then((res) => {
+                    if (res && res.granted) {
+                        if (aotPermissionStatusText) aotPermissionStatusText.textContent = '✅ System Overlay Permission Granted (Active over apps)';
+                        if (aotRequestPermBtn) aotRequestPermBtn.style.display = 'none';
+                    } else {
+                        if (aotPermissionStatusText) aotPermissionStatusText.textContent = '⚠️ Allow "Display over other apps" for system overlay';
+                        if (aotRequestPermBtn) aotRequestPermBtn.style.display = 'inline-block';
+                    }
+                }).catch(() => {});
+            } else {
+                aotPermissionHintRow.style.display = 'flex';
+                if (aotPermissionStatusText) aotPermissionStatusText.textContent = '✅ In-app Always-on-Top active (System overlay works in Android APK)';
+                if (aotRequestPermBtn) aotRequestPermBtn.style.display = 'none';
+            }
+        }
+        window.awraadRefreshAotPermissionUI = refreshAotPermissionUI;
+
+        if (alwaysOnTopCheckbox) {
+            alwaysOnTopCheckbox.addEventListener('change', () => {
+                const enabled = alwaysOnTopCheckbox.checked;
+                if (alwaysOnTopLabel) alwaysOnTopLabel.textContent = enabled ? 'ON' : 'OFF';
+                localStorage.setItem('app_tasbeeh_always_on_top', enabled ? 'true' : 'false');
+                document.body.classList.toggle('awraad-aot-enabled', enabled);
+                if (typeof window.awraadSyncTasbeehAot === 'function') window.awraadSyncTasbeehAot();
+                const plg = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay;
+                if (enabled && plg && typeof plg.checkPermission === 'function') {
+                    plg.checkPermission().then((res) => {
+                        if (!res || !res.granted) {
+                            if (typeof plg.requestPermission === 'function') plg.requestPermission().catch(() => {});
+                        }
+                        refreshAotPermissionUI();
+                    }).catch(() => refreshAotPermissionUI());
+                } else {
+                    refreshAotPermissionUI();
+                }
+            });
+        }
+        if (aotRequestPermBtn) {
+            aotRequestPermBtn.addEventListener('click', () => {
+                const plg = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TasbeehOverlay;
+                if (plg && typeof plg.requestPermission === 'function') {
+                    plg.requestPermission().catch(() => {});
+                }
+            });
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') refreshAotPermissionUI();
+        });
+
+        if (scrollBtnToggleCheckbox) {
+            scrollBtnToggleCheckbox.addEventListener('change', () => {
+                const enabled = scrollBtnToggleCheckbox.checked;
+                if (scrollBtnToggleLabel) scrollBtnToggleLabel.textContent = enabled ? 'ON' : 'OFF';
+                if (typeof window.awraadSetScrollButtonEnabled === 'function') {
+                    window.awraadSetScrollButtonEnabled(enabled);
+                } else {
+                    localStorage.setItem('app_scroll_btn_enabled', enabled ? 'true' : 'false');
+                }
+            });
+        }
 
         resetDefaultColorsBtn.addEventListener('click', () => {
             localStorage.removeItem('app_custom_bg');
@@ -4289,6 +4626,11 @@
                 'app_hijri_after_maghrib',
                 'tasbeeh_pos',
                 'tasbeeh_scale',
+                'tasbeeh_default45_v1',
+                'app_tasbeeh_always_on_top',
+                'app_scroll_btn_enabled',
+                'app_autoscroll_speed_v2',
+                'app_autoscroll_speed',
                 'app_urs_notif_enabled',
                 'app_urs_notif_time'
             ];
@@ -4367,7 +4709,7 @@
             if (syncSettingsUIRef) syncSettingsUIRef();
             const modal = document.getElementById('settingsModal');
             if (modal) modal.classList.add('show');
-            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         });
     }
 
@@ -4995,9 +5337,15 @@
 
         renderPrayerTimesRef = renderPrayerTimes;
 
-        closeBtn.addEventListener('click', () => prayerModal.classList.remove('show'));
+        closeBtn.addEventListener('click', () => {
+            prayerModal.classList.remove('show');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+        });
         prayerModal.addEventListener('click', (e) => {
-            if (e.target === prayerModal) prayerModal.classList.remove('show');
+            if (e.target === prayerModal) {
+                prayerModal.classList.remove('show');
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
+            }
         });
 
         // 1. Calculation Method Picker
@@ -5236,7 +5584,7 @@
                 if (renderPrayerTimesRef) renderPrayerTimesRef();
                 const prayerModal = document.getElementById('prayerTimesModal');
                 if (prayerModal) prayerModal.classList.add('show');
-                if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
                 return;
             }
             const openBtn = e.target.closest('#openPrayerTimesBtn');
@@ -5246,7 +5594,7 @@
             if (renderPrayerTimesRef) renderPrayerTimesRef();
             const prayerModal = document.getElementById('prayerTimesModal');
             if (prayerModal) prayerModal.classList.add('show');
-            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
 
             if (typeof window.awraadRequestLocationOnce === 'function') {
                 window.awraadRequestLocationOnce(() => {
@@ -5302,16 +5650,6 @@
     }
 
     function closeTopOpenModal() {
-        const shortcutRail = document.getElementById('awraadShortcutRail');
-        if (shortcutRail && shortcutRail.classList.contains('open')) {
-            if (typeof window.awraadCloseShortcutRail === 'function') window.awraadCloseShortcutRail();
-            return true;
-        }
-        const sideDrawer = document.getElementById('awraadSideDrawer');
-        if (sideDrawer && sideDrawer.classList.contains('open')) {
-            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
-            return true;
-        }
         const selectors = [
             '#navWarningModal.show',
             '#resetAllConfirmModal.show',
@@ -5323,21 +5661,28 @@
             '.settings-modal.show',
             '.events-modal.show',
             '.prayer-modal.show',
-            '#tasbeehModal.show:not(.tasbeeh-compact)',
             '#autoScrollBar.show'
         ];
         for (let i = 0; i < selectors.length; i++) {
             const el = document.querySelector(selectors[i]);
             if (el) {
                 el.classList.remove('show');
-                if (selectors[i].indexOf('tasbeehModal') !== -1 && typeof window.tasbeehPauseAuto === 'function') {
-                    window.tasbeehPauseAuto();
-                }
                 if (selectors[i].indexOf('autoScrollBar') !== -1 && typeof window.awraadStopAutoScroll === 'function') {
                     window.awraadStopAutoScroll();
                 }
+                if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
                 return true;
             }
+        }
+        const shortcutRail = document.getElementById('awraadShortcutRail');
+        if (shortcutRail && shortcutRail.classList.contains('open')) {
+            if (typeof window.awraadCloseShortcutRail === 'function') window.awraadCloseShortcutRail();
+            return true;
+        }
+        const sideDrawer = document.getElementById('awraadSideDrawer');
+        if (sideDrawer && sideDrawer.classList.contains('open')) {
+            if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+            return true;
         }
         return false;
     }
@@ -6930,7 +7275,7 @@
     }
 
     function getShajaraLink(hash) {
-        const isShajara = window.location.pathname.toLowerCase().endsWith('shajara_e_alaviyya.html');
+        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
         const targetHash = hash || '#qadriya';
         return isShajara ? targetHash : ('./Shajara_e_Alaviyya.html' + targetHash);
     }
@@ -7724,6 +8069,7 @@
         function closeModal() {
             modal.classList.remove('show');
             stopCountdown();
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
         }
 
         closeBtn.addEventListener('click', closeModal);
@@ -7779,6 +8125,7 @@
             });
             switchEventsTab(initialTab);
             if (modal) modal.classList.add('show');
+            if (typeof window.awraadSyncScrollLock === 'function') window.awraadSyncScrollLock();
             startCountdown();
             if (initialTab === 'calendar') {
                 scheduleAllUrsNotifications(false);
@@ -7830,7 +8177,7 @@
     }
 })();
 // ==========================================
-// PART 17: ULTRA-FAST UNIVERSAL READING UX SUITE (CONTINUE READING + USER-CONTROLLED EXACT LINE BOOKMARKS)
+// PART 17: ULTRA-FAST UNIVERSAL READING UX SUITE (SINGLE IMMEDIATE LAST VISITED + ZERO-LAG)
 // ==========================================
 (function() {
     const LAST_VISITED_KEY = 'app_last_visited_v4';
@@ -7840,10 +8187,10 @@
     const BOOKMARKS_KEY = 'app_bookmarks_v1';
     const PAGES_DIR_KEY = 'app_pages_directory_v1';
     const AUTOSCROLL_SPEED_KEY = 'app_autoscroll_speed';
-    const RESUME_TTL_MS = 35000;
-    const MAX_BOOKMARKS_LIMIT = 500;
-    const MODAL_PAGE_SIZE = 25;
+    const END_THRESHOLD_PCT = 92;
+    const RESUME_TTL_MS = 20000;
 
+    // One-time cleanup of all legacy multi-record Continue Reading keys so zero old data lingers
     const LEGACY_KEYS_TO_PURGE = [
         'app_main_continue_section_v1',
         'app_main_continue_section_v2',
@@ -7869,14 +8216,12 @@
         } catch (e) {}
     }
 
+    // Lightweight built-in group hints only for multi-file books (all future sections auto-discovered from Main Menu!)
     const BUILTIN_GROUP_HINTS = [
-        { key: 'shajara', label: 'Shajara e Shareef', labelUr: 'شجرہ شریف', href: './Shajara_e_Alaviyya.html#qadriya', patterns: ['shajara', 'shijra', 'silsila', 'asnaad', 'asnad', 'qadriya', 'chisht', 'akbar', 'rozana', 'fajr-maghrib', 'har-namaz', 'haftawari', 'irshadaat', 'khidmat', 'salaam', 'fazeelat-tareeqa'] },
-        { key: 'dalail', label: 'Dalail-ul-Khairat', labelUr: 'دلائل الخیرات', href: './Monday_Hizb1.html', patterns: ['dalail', 'daily', 'monday_hizb', 'tuesday_hizb', 'wednesday_hizb', 'thursday_hizb', 'friday_hizb', 'saturday_hizb', 'sunday_hizb', 'hizb_', 'iftitah', 'bada_dalail', 'tareeqa_faatiha', 'aqeeb', 'asma_ul_husna', 'asma_un_nabi'] },
-        { key: 'bashair', label: 'Bashair-ul-Khairaat', labelUr: 'بشائر الخیرات', href: './Bashair_ul_Khairaat.html#bashair-salaat', patterns: ['bashair'] },
-        { key: 'usboo', label: 'Usboo e Shareef', labelUr: 'اُسبوع شریف', href: './Usboo_e_Shareef.html', patterns: ['usboo', 'usbu', 'day-sunday', 'day-monday', 'day-tuesday', 'day-wednesday', 'day-thursday', 'day-friday', 'day-saturday'] },
-        { key: 'intro', label: 'Muqaddima e Awraad', labelUr: 'مُقَدِّمَةُ الْأَوْرَادِ', href: './index.html#menu-intro', patterns: ['menu-intro'] },
-        { key: 'malfoozat', label: 'Malfoozat e Bahrul Irfan', labelUr: 'ملفوظات بحر العرفان', href: './Malfoozaat_e_Bahrul_Irfan.html', patterns: ['malfoozaat', 'malfoozat'] },
-        { key: 'tajweed', label: 'Tajweed Rules Guide', labelUr: 'تفصیل قواعد التجوید', href: './Tajweed_Explanation.html', patterns: ['tajweed_explanation'] }
+        { key: 'shajara', label: 'Shajara e Shareef', labelUr: 'شجرہ شریف', href: './Shajara_e_Alaviyya.html#qadriya', patterns: ['shajara', 'shijra', 'silsila', 'asnaad', 'asnad', 'qadriya', 'chisht', 'akbar', 'rozana', 'fajr-maghrib', 'har-namaz', 'haftawari'] },
+        { key: 'dalail', label: 'Dalail-ul-Khairat', labelUr: 'دلائل الخیرات', href: './Monday_Hizb1.html', patterns: ['dalail', 'monday_hizb', 'tuesday_hizb', 'wednesday_hizb', 'thursday_hizb', 'friday_hizb', 'saturday_hizb', 'sunday_hizb', 'hizb_', 'iftitah', 'bada_dalail', 'aqeeb', 'asma_ul_husna', 'asma_un_nabi'] },
+        { key: 'bashair', label: 'Bashair-ul-Khairaat', labelUr: 'بشائر الخیرات', href: './Bashair_ul_Khairaat.html', patterns: ['bashair'] },
+        { key: 'usboo', label: 'Usboo e Shareef', labelUr: 'اُسبوع شریف', href: './Usboo_e_Shareef.html', patterns: ['usboo', 'usbu'] }
     ];
 
     const DEFAULT_PAGES_DIRECTORY = [
@@ -7894,14 +8239,6 @@
         { title: 'Dua Al Aqeeb Awraad Alaviyya', titleUr: 'دعاء عقیب اورادِ علویہ', href: './Dua_Yuqrau_Aqeeb_Alaviyya.html', tag: 'Dua' }
     ];
 
-    const SECTION_WRAPPER_SELECTOR = '.hizb-section, .shijra-section, .index-section, .day-section, .usboo-section, .content-section, .chapter-section, .note-section';
-    const ACTIVE_SECTION_WRAPPER_SELECTOR = '.hizb-section.active, .shijra-section.active, .index-section.active, .day-section.active, .usboo-section.active, .content-section.active, .chapter-section.active, .note-section.active';
-
-    const KNOWN_MENU_IDS = new Set([
-        'main-menu', 'index-menu', 'sub-menu', 'default-view',
-        'menu-shijara', 'menu-dalail', 'menu-bashair'
-    ]);
-
     function escapeHtml(str) {
         return String(str || '')
             .replace(/&/g, '&amp;')
@@ -7915,17 +8252,9 @@
     }
 
     function normalizeFileName(rawPath) {
-        const clean = safeDecode(rawPath || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
+        const clean = safeDecode(rawPath || '').split('?')[0].split('#')[0];
         const base = clean.substring(clean.lastIndexOf('/') + 1).trim().toLowerCase();
-        if (!base || !/\.html?$/i.test(base)) return 'index.html';
-        return base;
-    }
-
-    function getCurrentFileName() {
-        const clean = safeDecode(window.location.pathname || '').split('?')[0].split('#')[0].replace(/\/+$/, '');
-        const file = clean.substring(clean.lastIndexOf('/') + 1).trim();
-        if (!file || !/\.html?$/i.test(file)) return 'index.html';
-        return file;
+        return base || 'index.html';
     }
 
     function normalizeSearchText(str) {
@@ -7942,6 +8271,7 @@
             .toLowerCase();
     }
 
+    // Fast visibility check (uses cheap offsetParent/offsetHeight before expensive getComputedStyle)
     function isElementVisible(el) {
         if (!el || el.nodeType !== 1) return false;
         if (el.offsetHeight === 0 && el.offsetWidth === 0) return false;
@@ -7952,16 +8282,23 @@
         return true;
     }
 
+    function getCurrentFileName() {
+        const path = window.location.pathname || '';
+        const file = safeDecode(path.substring(path.lastIndexOf('/') + 1)).split('?')[0].split('#')[0];
+        return file || 'index.html';
+    }
+
     function getCleanHash() {
         const h = window.location.hash || '';
         return h.startsWith('#t-') ? '' : h;
     }
 
     function isMenuElementId(idStr) {
-        const id = String(idStr || '').toLowerCase().trim();
+        const id = String(idStr || '').toLowerCase();
         if (!id) return false;
-        if (KNOWN_MENU_IDS.has(id)) return true;
-        return id.endsWith('-menu') || id.endsWith('_menu') || id.includes('sub-index') || id.includes('sub_index');
+        return id === 'main-menu' || id === 'index-menu' || id === 'sub-menu' || id === 'default-view' ||
+            id.endsWith('-menu') || id.endsWith('_menu') || id.startsWith('menu-') || id.startsWith('menu_') ||
+            id.includes('sub-index') || id.includes('sub_index');
     }
 
     function getNavbarHeight() {
@@ -7975,167 +8312,9 @@
         return Boolean(el.closest(
             '#injected-app-navbar, #awraadSideDrawer, #awraadDrawerBackdrop, #awraadShortcutRail, #awraadShortcutBackdrop, #awraadShortcutFlyout, #injected-daily-malfooz, ' +
             '.daily-malfooz-container, #settingsModal, #prayerTimesModal, #eventsModal, #tasbeehModal, ' +
-            '#bookmarksModal, #quickSearchModal, .ux-modal, .continue-reading-card, #mainMenuBookmarksSection, .floating-reading-fab-group, ' +
-            '#autoScrollBar, #awraadSplashScreen, .screen-header, .print-none, #tvCompactSidebar, #tvHomeSplash, #tvStartMenuWrap, #tvBottomBar, #awraadApkUpdateBanner'
+            '#bookmarksModal, #quickSearchModal, .ux-modal, .continue-reading-card, .floating-reading-fab-group, ' +
+            '#autoScrollBar, #awraadSplashScreen, .screen-header, .print-none'
         ));
-    }
-
-    // -----------------------------------------
-    // UNIVERSAL SCROLL-CONTAINER DETECTION (WORKS FOR window, html, body, .continuous-frame, .continuous-inner)
-    // -----------------------------------------
-    let lastObservedScroller = null;
-
-    function isRootWindowScroller(el) {
-        if (!el || el === window || el === document) return true;
-        if (el === document.documentElement) {
-            const st = window.getComputedStyle(el);
-            return !st || st.overflowY !== 'hidden';
-        }
-        if (el === document.body) {
-            const htmlSt = window.getComputedStyle(document.documentElement);
-            const bodySt = window.getComputedStyle(document.body);
-            if (htmlSt && htmlSt.overflowY === 'hidden' && bodySt && (bodySt.overflowY === 'auto' || bodySt.overflowY === 'scroll')) {
-                return false;
-            }
-            return el === document.scrollingElement;
-        }
-        return false;
-    }
-
-    function isValidReadingScroller(el) {
-        if (!el || el === window || el === document) return true;
-        if (el.nodeType !== 1 || !el.isConnected) return false;
-        if (isChromeOrExcludedNode(el)) return false;
-        if (el.closest('.table-scroll-wrap')) return false;
-        if (el === document.documentElement || el === document.body) {
-            return (el.scrollHeight - el.clientHeight) > 12;
-        }
-        const st = window.getComputedStyle(el);
-        const canScrollY = st && (st.overflowY === 'auto' || st.overflowY === 'scroll' || st.overflowY === 'overlay');
-        return Boolean(canScrollY && (el.scrollHeight - el.clientHeight) > 16);
-    }
-
-    function getActiveScrollContainer() {
-        if (lastObservedScroller && lastObservedScroller !== window && lastObservedScroller !== document) {
-            if (isValidReadingScroller(lastObservedScroller) && lastObservedScroller.scrollTop > 0) {
-                return lastObservedScroller;
-            }
-        }
-
-        const winY = window.scrollY || window.pageYOffset || 0;
-        if (winY > 0) return document.scrollingElement || document.documentElement;
-
-        const frame = document.querySelector('.continuous-frame');
-        const inner = document.querySelector('.continuous-inner');
-        const ordered = [frame, inner, document.body, document.scrollingElement, document.documentElement];
-
-        for (let i = 0; i < ordered.length; i++) {
-            const el = ordered[i];
-            if (el && el.nodeType === 1 && el.scrollTop > 0 && isValidReadingScroller(el)) {
-                return el;
-            }
-        }
-
-        for (let i = 0; i < 3; i++) {
-            const el = ordered[i];
-            if (!el || el.nodeType !== 1) continue;
-            const st = window.getComputedStyle(el);
-            if (st && (st.overflowY === 'auto' || st.overflowY === 'scroll' || st.overflowY === 'overlay') && (el.scrollHeight - el.clientHeight) > 16) {
-                return el;
-            }
-        }
-
-        const docEl = document.scrollingElement || document.documentElement;
-        if (docEl && (docEl.scrollHeight - window.innerHeight) > 12) return docEl;
-        if (document.body && (document.body.scrollHeight - document.body.clientHeight) > 12) return document.body;
-        return docEl || document.body;
-    }
-
-    function getCurrentScrollY() {
-        const scroller = getActiveScrollContainer();
-        if (scroller && !isRootWindowScroller(scroller)) {
-            return Math.max(0, Math.round(scroller.scrollTop || 0));
-        }
-        const frame = document.querySelector('.continuous-frame');
-        const inner = document.querySelector('.continuous-inner');
-        return Math.max(
-            0,
-            Math.round(
-                Math.max(
-                    window.scrollY || 0,
-                    window.pageYOffset || 0,
-                    (document.documentElement && document.documentElement.scrollTop) || 0,
-                    (document.body && document.body.scrollTop) || 0,
-                    (frame && frame.scrollTop) || 0,
-                    (inner && inner.scrollTop) || 0
-                )
-            )
-        );
-    }
-
-    function getMaxScrollableY() {
-        const scroller = getActiveScrollContainer();
-        let maxY = 0;
-        if (scroller && !isRootWindowScroller(scroller)) {
-            maxY = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-        } else {
-            const rootMax = Math.max(
-                (document.documentElement ? document.documentElement.scrollHeight : 0) - window.innerHeight,
-                (document.body ? document.body.scrollHeight : 0) - window.innerHeight
-            );
-            const bodyElemMax = document.body ? (document.body.scrollHeight - document.body.clientHeight) : 0;
-            const frame = document.querySelector('.continuous-frame');
-            const frameMax = (frame && isValidReadingScroller(frame)) ? (frame.scrollHeight - frame.clientHeight) : 0;
-            maxY = Math.max(0, rootMax, bodyElemMax, frameMax);
-        }
-        cachedMaxScrollY = maxY;
-        return maxY;
-    }
-
-    function scrollPageTo(targetY, smooth) {
-        const y = Math.max(0, Math.round(targetY || 0));
-        const scroller = getActiveScrollContainer();
-        const opts = smooth ? { top: y, behavior: 'smooth' } : { top: y, behavior: 'auto' };
-
-        if (scroller && !isRootWindowScroller(scroller)) {
-            try {
-                if (typeof scroller.scrollTo === 'function') scroller.scrollTo(opts);
-                else scroller.scrollTop = y;
-            } catch (e) {
-                scroller.scrollTop = y;
-            }
-            if (!smooth) scroller.scrollTop = y;
-        } else {
-            try {
-                window.scrollTo(opts);
-            } catch (e) {
-                window.scrollTo(0, y);
-            }
-            if (!smooth) {
-                if (document.documentElement) document.documentElement.scrollTop = y;
-                if (document.body) document.body.scrollTop = y;
-            }
-        }
-    }
-
-    function scrollPageBy(deltaY) {
-        const scroller = getActiveScrollContainer();
-        if (scroller && !isRootWindowScroller(scroller)) {
-            scroller.scrollTop = (scroller.scrollTop || 0) + deltaY;
-        } else {
-            window.scrollBy(0, deltaY);
-        }
-    }
-
-    function getScrollPercentageFloat() {
-        const maxY = getMaxScrollableY();
-        if (maxY <= 20) return 0;
-        const y = getCurrentScrollY();
-        return Math.min(100, Math.max(0, (y / maxY) * 100));
-    }
-
-    function getScrollPercentage() {
-        return Math.round(getScrollPercentageFloat());
     }
 
     function hasVisibleMenuCards(root) {
@@ -8157,7 +8336,7 @@
 
     function hasVisibleReadingContent(root) {
         const scope = root || document;
-        const knownNodes = scope.querySelectorAll('.dua-entry, .ruled-text, .urdu-text, .muqaddima-urdu, .shijra-table, .malfooz-card, .name-card, .durood-repeat-box, .fourteen-times-box, .abyat-box, .sher-box, .rule-card, .note-card, .qaseeda-line, .verse');
+        const knownNodes = scope.querySelectorAll('.dua-entry, .ruled-text, .urdu-text, .shijra-table, .malfooz-card, .note-card, .qaseeda-line, .verse');
         for (let i = 0; i < knownNodes.length; i++) {
             if (!isChromeOrExcludedNode(knownNodes[i]) && isElementVisible(knownNodes[i])) {
                 return true;
@@ -8170,60 +8349,46 @@
             if (isChromeOrExcludedNode(el) || el.closest('.index-nav-grid, .shijra-grid, .nav-card, .sub-nav-card')) continue;
             if (!isElementVisible(el)) continue;
             charCount += (el.textContent || '').trim().length;
-            if (charCount >= 50) return true;
+            if (charCount >= 80) return true;
         }
         return false;
     }
 
-    function isSectionPanelElement(el) {
-        if (!el || el.nodeType !== 1) return false;
-        if (el.matches(SECTION_WRAPPER_SELECTOR)) return true;
-        const parent = el.parentElement;
-        if (!parent || el.classList.contains('continuous-inner') || el.classList.contains('continuous-frame')) return false;
-        const sibs = parent.children;
-        for (let i = 0; i < sibs.length; i++) {
-            const s = sibs[i];
-            if (s !== el && s.nodeType === 1 && s.id && !s.classList.contains('print-none') && s.offsetHeight === 0 && s.offsetWidth === 0) {
-                return true;
-            }
-        }
-        return false;
-    }
-
+    // Cached DOM state — invalidated only on section change / hash change / resize (ZERO per-scroll DOM scanning!)
     let cachedBlocksScope = null;
     let cachedReadingBlocks = null;
-    let cachedViewState = null;
+    let cachedViewState = null; // { isMain, isSubIndex, activeSecEl }
     let cachedMaxScrollY = 0;
     let lastSavedSignature = '';
-    let completedUniqueKey = null;
 
     function invalidateLayoutCaches() {
         cachedBlocksScope = null;
         cachedReadingBlocks = null;
         cachedViewState = null;
-        getMaxScrollableY();
+        cachedMaxScrollY = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
     }
 
     function getActiveContentSectionEl() {
-        const activePanels = document.querySelectorAll(ACTIVE_SECTION_WRAPPER_SELECTOR);
-        for (let i = 0; i < activePanels.length; i++) {
-            const el = activePanels[i];
-            if (isElementVisible(el) && !hasVisibleMenuCards(el)) {
-                return el;
-            }
-        }
-
         const h = getCleanHash();
         if (h && h.length > 1) {
             try {
                 const byHash = document.querySelector(h);
-                if (byHash && isElementVisible(byHash) && isSectionPanelElement(byHash) && !hasVisibleMenuCards(byHash)) {
+                if (byHash && !isMenuElementId(byHash.id) && isElementVisible(byHash) && !hasVisibleMenuCards(byHash)) {
                     return byHash;
                 }
             } catch (err) {}
         }
 
-        const nodes = document.querySelectorAll('.dua-entry, .muqaddima-urdu, .shijra-table, .malfooz-card, .name-card, .rule-card, .continuous-inner p');
+        const known = document.querySelectorAll('.hizb-section.active, .shijra-section.active, .index-section.active, .day-section.active, .usboo-section.active, .content-section.active, .chapter-section.active, .note-section.active');
+        for (let i = 0; i < known.length; i++) {
+            const el = known[i];
+            if (!isMenuElementId(el.id) && isElementVisible(el) && !hasVisibleMenuCards(el)) {
+                return el;
+            }
+        }
+
+        // Fallback for inline-JS switched sub-sections (display:block/none without hash or standard class)
+        const nodes = document.querySelectorAll('.dua-entry, .ruled-text, .shijra-table, .malfooz-card, .note-card, .qaseeda-line, .verse, .continuous-inner p');
         let contentNode = null;
         for (let i = 0; i < nodes.length; i++) {
             if (!isChromeOrExcludedNode(nodes[i]) && !nodes[i].closest('.index-nav-grid, .shijra-grid, .nav-card, .sub-nav-card') && isElementVisible(nodes[i])) {
@@ -8235,8 +8400,17 @@
         if (contentNode) {
             let cur = contentNode.parentElement;
             while (cur && cur !== document.body && cur !== document.documentElement) {
-                if (cur.id && !isMenuElementId(cur.id) && isSectionPanelElement(cur) && !hasVisibleMenuCards(cur)) {
-                    return cur;
+                if (cur.id && !isMenuElementId(cur.id) && !cur.classList.contains('continuous-inner') && !cur.classList.contains('continuous-frame')) {
+                    const parent = cur.parentElement;
+                    if (parent) {
+                        const sibs = parent.children;
+                        for (let s = 0; s < sibs.length; s++) {
+                            const ch = sibs[s];
+                            if (ch !== cur && ch.nodeType === 1 && !ch.classList.contains('print-none') && ch.offsetHeight === 0 && ch.offsetWidth === 0) {
+                                return cur;
+                            }
+                        }
+                    }
                 }
                 cur = cur.parentElement;
             }
@@ -8253,9 +8427,11 @@
             return cachedReadingBlocks;
         }
 
-        const primarySel = '.dua-entry, .muqaddima-urdu p, .muqaddima-list li, .shijra-table tr, .malfooz-card, .name-card, .durood-repeat-box, .fourteen-times-box, .abyat-box, .sher-box, .rule-card, .note-card, .qaseeda-line, .verse';
-        let list = Array.from(scope.querySelectorAll(primarySel)).filter((el) => !isChromeOrExcludedNode(el) && isElementVisible(el));
+        // Fast O(N) primary selector for standard reading blocks (no O(N^2) nesting checks!)
+        let list = Array.from(scope.querySelectorAll('.dua-entry, .shijra-table tr, .malfooz-card, .note-card, .qaseeda-line, .verse'));
+        list = list.filter((el) => !isChromeOrExcludedNode(el) && isElementVisible(el));
 
+        // Fallback for future plain HTML notes / articles / ruled-text pages
         if (!list.length) {
             list = Array.from(scope.querySelectorAll('.ruled-text, article, blockquote, p, li, h2, h3')).filter((el) => {
                 if (isChromeOrExcludedNode(el)) return false;
@@ -8291,7 +8467,7 @@
     }
 
     // -----------------------------------------
-    // AUTO-DISCOVERED SECTION REGISTRY
+    // AUTO-DISCOVERED SECTION REGISTRY (ZERO HARDCODING FOR FUTURE SECTIONS)
     // -----------------------------------------
     function loadSectionRegistry() {
         try {
@@ -8303,7 +8479,9 @@
     }
 
     function saveSectionRegistry(reg) {
-        try { localStorage.setItem(AUTO_SECTION_REGISTRY_KEY, JSON.stringify(reg)); } catch (e) {}
+        try {
+            localStorage.setItem(AUTO_SECTION_REGISTRY_KEY, JSON.stringify(reg));
+        } catch (e) {}
     }
 
     function detectBuiltInGroupKey(hayLower) {
@@ -8318,7 +8496,7 @@
 
     function harvestSectionRegistryFromIndex() {
         const f = normalizeFileName(getCurrentFileName());
-        if (f !== 'index.html') return;
+        if (f !== 'index.html' && f !== '') return;
 
         const mainMenu = document.getElementById('main-menu');
         if (!mainMenu) return;
@@ -8398,37 +8576,40 @@
         return null;
     }
 
+    function getCurrentPageHref() {
+        let hash = getCleanHash();
+        if (hash && isMenuElementId(hash.slice(1))) hash = '';
+        if (!hash) {
+            const activeSec = getActiveContentSectionEl();
+            if (activeSec && activeSec.id) hash = '#' + activeSec.id;
+        }
+        return './' + getCurrentFileName() + hash;
+    }
+
     function isMainIndexPage() {
         const f = normalizeFileName(getCurrentFileName());
-        const h = getCleanHash().toLowerCase();
-        return f === 'index.html' && (h === '' || h === '#' || h === '#main-menu');
+        const h = (window.location.hash || '').toLowerCase();
+        return (f === '' || f === 'index.html') && (h === '' || h === '#' || h === '#main-menu');
     }
 
     function computeIsSubIndexView() {
         if (isMainIndexPage()) return false;
+        const f = normalizeFileName(getCurrentFileName());
+        const h = (window.location.hash || '').toLowerCase();
+        if (f === 'index.html' && h && h !== '#main-menu') return true;
+        if (h && isMenuElementId(h.slice(1))) return true;
 
-        const activePanel = document.querySelector(ACTIVE_SECTION_WRAPPER_SELECTOR);
-        if (activePanel && isElementVisible(activePanel)) {
-            if (hasVisibleMenuCards(activePanel)) return true;
-            if (isMenuElementId(activePanel.id) && !hasVisibleReadingContent(activePanel)) return true;
-            return false;
+        const activeIdxSec = document.querySelector('.index-section.active:not(#main-menu), #index-menu.active, #sub-menu.active');
+        if (activeIdxSec && isElementVisible(activeIdxSec)) {
+            if (isMenuElementId(activeIdxSec.id) || (hasVisibleMenuCards(activeIdxSec) && !hasVisibleReadingContent(activeIdxSec))) {
+                return true;
+            }
         }
 
-        const h = getCleanHash();
-        if (h && h.length > 1) {
-            const hashId = h.slice(1);
-            try {
-                const hashEl = document.querySelector(h);
-                if (hashEl && isElementVisible(hashEl)) {
-                    if (hasVisibleMenuCards(hashEl)) return true;
-                    if (isMenuElementId(hashId) && !hasVisibleReadingContent(hashEl)) return true;
-                }
-            } catch (err) {}
-            if (isMenuElementId(hashId)) return true;
+        if (hasVisibleMenuCards(document) && !hasVisibleReadingContent(document)) {
+            return true;
         }
-
-        if (hasVisibleMenuCards(document)) return true;
-        return !hasVisibleReadingContent(document);
+        return false;
     }
 
     function isSubIndexView(forceFresh) {
@@ -8438,25 +8619,8 @@
         return sub;
     }
 
-    function getCurrentPageHref() {
-        const activeSec = getActiveContentSectionEl();
-        let hash = '';
-        if (activeSec && activeSec.id && !isMenuElementId(activeSec.id)) {
-            hash = '#' + activeSec.id;
-        } else {
-            const h = getCleanHash();
-            if (h && h.length > 1 && !isMenuElementId(h.slice(1))) {
-                try {
-                    const el = document.querySelector(h);
-                    if (el && isSectionPanelElement(el)) hash = h;
-                } catch (e) {}
-            }
-        }
-        return './' + getCurrentFileName() + hash;
-    }
-
     function detectParentSectionKey(hrefOrFile) {
-        const raw = String(hrefOrFile || getCurrentPageHref());
+        const raw = String(hrefOrFile || (getCurrentFileName() + getCleanHash()));
         const hay = safeDecode(raw).toLowerCase();
         if (hay === 'index.html' || hay === './index.html' || hay === 'index.html#main-menu' || hay === './index.html#main-menu' || hay === '#main-menu') {
             return null;
@@ -8464,13 +8628,6 @@
 
         const fileOnly = normalizeFileName(hay);
         const reg = loadSectionRegistry();
-
-        if (fileOnly === 'index.html' && hay.includes('#')) {
-            const hashId = hay.split('#')[1];
-            const builtInHash = detectBuiltInGroupKey(hashId);
-            if (builtInHash) return builtInHash;
-            return 'sec_' + hashId.replace(/[^a-z0-9]+/g, '_');
-        }
 
         if (fileOnly && fileOnly !== 'index.html' && reg.fileToSection && reg.fileToSection[fileOnly]) {
             return reg.fileToSection[fileOnly];
@@ -8481,6 +8638,10 @@
 
         if (fileOnly && fileOnly !== 'index.html') {
             return 'sec_' + fileOnly.replace(/\.html$/i, '').replace(/[^a-z0-9]+/g, '_');
+        }
+        const hashOnly = hay.includes('#') ? hay.split('#')[1].replace(/[^a-z0-9]+/g, '_') : '';
+        if (hashOnly && hashOnly !== 'main_menu') {
+            return 'sec_' + hashOnly;
         }
         return null;
     }
@@ -8503,128 +8664,56 @@
     }
 
     function getCurrentSubSectionTitle() {
+        const trig = loadLastSubTriggerForCurrentFile();
         const activeSec = getActiveContentSectionEl();
         if (activeSec) {
             const hEl = activeSec.querySelector('.title-main, .section-heading, .hizb-title, h1, h2');
             if (hEl && isElementVisible(hEl)) {
                 const t = (hEl.textContent || '').replace(/\s+/g, ' ').trim();
-                if (t && t.length > 1) return t.slice(0, 76);
+                if (t && t.length > 1) return t.slice(0, 72);
             }
         }
-        const trig = loadLastSubTriggerForCurrentFile();
         if (trig && trig.cardTitle) return trig.cardTitle;
         const docHeading = document.querySelector('.title-main, .section-heading, h1, h2');
         if (docHeading && !isChromeOrExcludedNode(docHeading) && isElementVisible(docHeading)) {
             const t = (docHeading.textContent || '').replace(/\s+/g, ' ').trim();
-            if (t && t.length > 1) return t.slice(0, 76);
+            if (t && t.length > 1) return t.slice(0, 72);
         }
         if (document.title && document.title.trim()) return document.title.trim();
         return getCurrentFileName().replace(/\.html$/i, '').replace(/[_-]+/g, ' ');
     }
 
-    // -----------------------------------------
-    // EXACT LINE-LEVEL CHARACTER OFFSET CAPTURE & RESTORE (CONTAINER-AGNOSTIC)
-    // -----------------------------------------
-    function getCaretPoint(x, y) {
-        try {
-            if (typeof document.caretRangeFromPoint === 'function') {
-                const r = document.caretRangeFromPoint(x, y);
-                if (r && r.startContainer) return { node: r.startContainer, offset: r.startOffset };
-            } else if (typeof document.caretPositionFromPoint === 'function') {
-                const p = document.caretPositionFromPoint(x, y);
-                if (p && p.offsetNode) return { node: p.offsetNode, offset: p.offset };
-            }
-        } catch (e) {}
-        return null;
+    function getCurrentScrollY() {
+        return Math.max(
+            0,
+            Math.round(
+                window.scrollY ||
+                window.pageYOffset ||
+                document.documentElement.scrollTop ||
+                document.body.scrollTop ||
+                0
+            )
+        );
     }
 
-    function captureCharOffsetInBlock(blockEl, readingLine) {
-        if (!blockEl) return -1;
-        const rect = blockEl.getBoundingClientRect();
-        if (rect.height < 40) return 0;
-
-        const probesX = [
-            Math.max(rect.left + 8, rect.right - 22),
-            Math.round((rect.left + rect.right) / 2),
-            Math.min(rect.right - 8, rect.left + 22)
-        ];
-        const probesY = [readingLine, readingLine + 14, readingLine + 28];
-
-        let caret = null;
-        for (let yi = 0; yi < probesY.length && !caret; yi++) {
-            const py = probesY[yi];
-            if (py < rect.top || py > rect.bottom) continue;
-            for (let xi = 0; xi < probesX.length; xi++) {
-                const candidate = getCaretPoint(probesX[xi], py);
-                if (candidate && candidate.node && blockEl.contains(candidate.node)) {
-                    if (candidate.node.nodeType === 3) {
-                        caret = candidate;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!caret) return -1;
-
-        let nonWsCount = 0;
-        const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT, null);
-        let curNode = walker.nextNode();
-        while (curNode) {
-            if (curNode === caret.node) {
-                const before = (curNode.nodeValue || '').slice(0, caret.offset);
-                nonWsCount += before.replace(/\s+/g, '').length;
-                return nonWsCount;
-            }
-            nonWsCount += (curNode.nodeValue || '').replace(/\s+/g, '').length;
-            curNode = walker.nextNode();
-        }
-        return -1;
+    function getMaxScrollableY() {
+        const fresh = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
+        cachedMaxScrollY = fresh;
+        return fresh;
     }
 
-    function extractLinePreviewFromBlock(blockEl, charOffset) {
-        if (!blockEl) return '';
-        const raw = (blockEl.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!raw) return '';
-        if (typeof charOffset === 'number' && charOffset > 24 && raw.length > 90) {
-            const approxStart = Math.max(0, Math.min(raw.length - 60, charOffset));
-            const slice = raw.slice(approxStart, approxStart + 88).trim();
-            return (approxStart > 0 ? '…' : '') + slice + (approxStart + 88 < raw.length ? '…' : '');
-        }
-        return raw.slice(0, 88) + (raw.length > 88 ? '…' : '');
+    function getScrollPercentageFloat() {
+        const maxY = getMaxScrollableY();
+        if (maxY <= 20) return 0;
+        const y = getCurrentScrollY();
+        return Math.min(100, Math.max(0, (y / maxY) * 100));
     }
 
-    function getExactLineViewportTopByCharOffset(blockEl, targetCharOffset) {
-        if (!blockEl || typeof targetCharOffset !== 'number' || targetCharOffset <= 0) return null;
-
-        let remaining = targetCharOffset;
-        const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT, null);
-        let curNode = walker.nextNode();
-
-        while (curNode) {
-            const val = curNode.nodeValue || '';
-            for (let i = 0; i < val.length; i++) {
-                if (!/\s/.test(val.charAt(i))) {
-                    if (remaining <= 0) {
-                        try {
-                            const range = document.createRange();
-                            range.setStart(curNode, i);
-                            range.setEnd(curNode, Math.min(val.length, i + 1));
-                            const r = range.getBoundingClientRect();
-                            if (r && (r.height > 0 || r.width > 0)) {
-                                return r.top;
-                            }
-                        } catch (e) {}
-                        return null;
-                    }
-                    remaining--;
-                }
-            }
-            curNode = walker.nextNode();
-        }
-        return null;
+    function getScrollPercentage() {
+        return Math.round(getScrollPercentageFloat());
     }
 
+    // O(log N) Binary Search Anchor Capture (takes < 0.2ms even on 500-block pages!)
     function captureReadingAnchor() {
         const blocks = getVisibleReadingBlocks(false);
         if (!blocks.length) return null;
@@ -8648,30 +8737,25 @@
         const chosenEl = blocks[chosenIdx];
         const rect = chosenEl.getBoundingClientRect();
         const blockH = Math.max(1, rect.height);
-        const offsetPx = Math.max(0, Math.round(readingLine - rect.top));
-        const offsetRatio = Math.min(0.98, Math.max(0, +(offsetPx / blockH).toFixed(4)));
-        const snippet = normalizeSearchText(chosenEl.textContent || '').slice(0, 64);
-        const charOffset = captureCharOffsetInBlock(chosenEl, readingLine);
-        const linePreview = extractLinePreviewFromBlock(chosenEl, charOffset);
+        const offsetPx = Math.max(0, readingLine - rect.top);
+        const offsetRatio = Math.min(0.95, Math.max(0, +(offsetPx / blockH).toFixed(4)));
+        const snippet = normalizeSearchText(chosenEl.textContent || '').slice(0, 48);
 
         return {
             anchorIndex: chosenIdx,
             anchorId: chosenEl.id || '',
             anchorSnippet: snippet,
-            anchorCharOffset: charOffset,
-            anchorOffsetPx: offsetPx,
-            anchorOffsetRatio: offsetRatio,
-            linePreview: linePreview
+            anchorOffsetRatio: offsetRatio
         };
     }
 
-    function resolveTargetPosition(data) {
-        const readingLine = getNavbarHeight() + 18;
-        const currY = getCurrentScrollY();
+    function resolveTargetScrollY(data) {
+        const navH = getNavbarHeight();
         const blocks = getVisibleReadingBlocks(true);
-        let targetEl = null;
 
         if (blocks.length && (typeof data.anchorIndex === 'number' || data.anchorId || data.anchorSnippet)) {
+            let targetEl = null;
+
             if (data.anchorId) {
                 const byId = document.getElementById(data.anchorId);
                 if (byId && isElementVisible(byId)) targetEl = byId;
@@ -8679,14 +8763,14 @@
 
             if (!targetEl && typeof data.anchorIndex === 'number' && data.anchorIndex >= 0 && data.anchorIndex < blocks.length) {
                 const cand = blocks[data.anchorIndex];
-                if (!data.anchorSnippet || normalizeSearchText(cand.textContent || '').slice(0, 64) === data.anchorSnippet) {
+                if (!data.anchorSnippet || normalizeSearchText(cand.textContent || '').slice(0, 48) === data.anchorSnippet) {
                     targetEl = cand;
                 }
             }
 
             if (!targetEl && data.anchorSnippet && data.anchorSnippet.length >= 6) {
                 for (let i = 0; i < blocks.length; i++) {
-                    if (normalizeSearchText(blocks[i].textContent || '').slice(0, 64) === data.anchorSnippet) {
+                    if (normalizeSearchText(blocks[i].textContent || '').slice(0, 48) === data.anchorSnippet) {
                         targetEl = blocks[i];
                         break;
                     }
@@ -8698,20 +8782,14 @@
             }
 
             if (targetEl) {
-                if (typeof data.anchorCharOffset === 'number' && data.anchorCharOffset > 0) {
-                    const lineViewportTop = getExactLineViewportTopByCharOffset(targetEl, data.anchorCharOffset);
-                    if (lineViewportTop !== null) {
-                        return { y: Math.max(0, Math.round(currY + (lineViewportTop - readingLine))), el: targetEl };
-                    }
-                }
-
                 const rect = targetEl.getBoundingClientRect();
+                const docTop = rect.top + getCurrentScrollY();
                 const ratio = (typeof data.anchorOffsetRatio === 'number' && data.anchorOffsetRatio >= 0 && data.anchorOffsetRatio < 1)
                     ? data.anchorOffsetRatio
                     : 0;
                 const extraOffset = Math.round(ratio * rect.height);
-                const computed = Math.max(0, Math.round(currY + (rect.top - readingLine) + extraOffset));
-                return { y: computed, el: targetEl };
+                const computed = Math.max(0, Math.round(docTop - navH - 16 + extraOffset));
+                if (computed > 0) return computed;
             }
         }
 
@@ -8720,28 +8798,9 @@
             : (parseFloat(data.pct) || 0);
         const maxY = getMaxScrollableY();
         if (pctVal > 0 && maxY > 40) {
-            return { y: Math.min(maxY, Math.max(0, Math.round((pctVal / 100) * maxY))), el: null };
+            return Math.min(maxY, Math.max(0, Math.round((pctVal / 100) * maxY)));
         }
-        return { y: Math.max(0, parseInt(data.scrollY, 10) || 0), el: null };
-    }
-
-    function isSubsectionCompleted(currY, maxY, pctFloat) {
-        if (maxY <= 80) return false;
-        const remainingPx = maxY - currY;
-        const bottomTolerance = Math.min(85, Math.max(48, Math.round(window.innerHeight * 0.12)));
-        if (remainingPx <= bottomTolerance || pctFloat >= 97.5) {
-            return true;
-        }
-        if (pctFloat >= 85) {
-            const blocks = getVisibleReadingBlocks(false);
-            if (blocks.length > 0) {
-                const lastRect = blocks[blocks.length - 1].getBoundingClientRect();
-                if (lastRect.bottom > 0 && lastRect.bottom <= window.innerHeight + 16) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return Math.max(0, parseInt(data.scrollY, 10) || 0);
     }
 
     function showQuickToast(msg) {
@@ -8757,7 +8816,7 @@
         void toast.offsetWidth;
         toast.classList.add('show');
         clearTimeout(toast._uxTimer);
-        toast._uxTimer = setTimeout(() => toast.classList.remove('show'), 2100);
+        toast._uxTimer = setTimeout(() => toast.classList.remove('show'), 1900);
     }
 
     function clearPendingResume() {
@@ -8784,7 +8843,7 @@
         const targetScroll = (typeof scrollY === 'number' && scrollY > 0) ? Math.round(scrollY) : 0;
         const meta = resumeMeta || {};
         const shouldStore = targetScroll > 0 || (parseFloat(meta.pct) || 0) > 0 || meta.anchorSnippet || meta.sectionId ||
-            (typeof meta.triggerCardIndex === 'number' && meta.triggerCardIndex >= 0) || Boolean(meta.triggerCardText);
+            (typeof meta.triggerCardIndex === 'number' && meta.triggerCardIndex >= 0);
 
         if (shouldStore) {
             const pendingObj = {
@@ -8798,8 +8857,6 @@
                 anchorIndex: typeof meta.anchorIndex === 'number' ? meta.anchorIndex : -1,
                 anchorId: meta.anchorId || '',
                 anchorSnippet: meta.anchorSnippet || '',
-                anchorCharOffset: typeof meta.anchorCharOffset === 'number' ? meta.anchorCharOffset : -1,
-                anchorOffsetPx: typeof meta.anchorOffsetPx === 'number' ? meta.anchorOffsetPx : 0,
                 anchorOffsetRatio: typeof meta.anchorOffsetRatio === 'number' ? meta.anchorOffsetRatio : 0,
                 scrollY: targetScroll,
                 pct: parseInt(meta.pct, 10) || 0,
@@ -8868,28 +8925,16 @@
         const targetId = data.sectionId || hrefHash || '';
 
         if (targetId && !isMenuElementId(targetId)) {
-            const targetEl = document.getElementById(targetId);
-            if (targetEl && isSectionPanelElement(targetEl)) {
-                const wantHash = '#' + targetId;
-                if (window.location.hash.toLowerCase() !== wantHash.toLowerCase()) {
-                    try { history.replaceState(null, null, wantHash); } catch (e) {}
-                }
-                if (typeof window.showActiveSection === 'function') {
-                    window.showActiveSection();
-                }
+            const wantHash = '#' + targetId;
+            if (window.location.hash.toLowerCase() !== wantHash.toLowerCase()) {
+                try { history.replaceState(null, null, wantHash); } catch (e) {}
+            }
+            if (typeof window.showActiveSection === 'function') {
+                window.showActiveSection();
             }
         }
 
-        // Handle multi-panel pages driven by sub-index card clicks (even if switching between two cards in the same file)
-        const curTrig = loadLastSubTriggerForCurrentFile();
-        const needsCardSwitch = isSubIndexView(true) || (
-            !targetId &&
-            typeof data.triggerCardIndex === 'number' &&
-            data.triggerCardIndex >= 0 &&
-            (!curTrig || curTrig.cardIndex !== data.triggerCardIndex)
-        );
-
-        if (needsCardSwitch) {
+        if (isSubIndexView(true)) {
             const cardEl = findMatchingSubMenuCard(data);
             if (cardEl) {
                 saveLastSubTrigger({
@@ -8906,11 +8951,17 @@
 
         if (targetId && !isMenuElementId(targetId)) {
             const targetEl = document.getElementById(targetId);
-            if (targetEl && isSectionPanelElement(targetEl) && !isElementVisible(targetEl)) {
+            if (targetEl && !isElementVisible(targetEl)) {
+                document.querySelectorAll('.hizb-section, .shijra-section, .index-section, #index-menu, #sub-menu').forEach((m) => {
+                    if (m !== targetEl && m.parentElement === targetEl.parentElement) {
+                        m.classList.remove('active');
+                        if (!hasVisibleMenuCards(m)) m.style.display = 'none';
+                    }
+                });
                 const parent = targetEl.parentElement;
                 if (parent) {
                     Array.from(parent.children).forEach((sib) => {
-                        if (sib !== targetEl && sib.nodeType === 1 && (sib.matches(SECTION_WRAPPER_SELECTOR) || hasVisibleMenuCards(sib))) {
+                        if (sib !== targetEl && sib.nodeType === 1 && (sib.classList.contains('hizb-section') || sib.classList.contains('shijra-section') || sib.classList.contains('index-section') || hasVisibleMenuCards(sib))) {
                             sib.classList.remove('active');
                             sib.style.display = 'none';
                         }
@@ -8918,71 +8969,45 @@
                 }
                 targetEl.style.display = 'block';
                 targetEl.classList.add('active');
+                if (typeof window.applyTajweedToContainer === 'function') {
+                    window.applyTajweedToContainer(targetEl, false);
+                }
             }
-        }
-
-        const scope = getActiveContentSectionEl() || document.querySelector('.continuous-inner') || document;
-        if (typeof window.applyTajweedToContainer === 'function') {
-            window.applyTajweedToContainer(scope, true);
         }
 
         invalidateLayoutCaches();
         return !isSubIndexView(true);
     }
 
-    // -----------------------------------------
-    // LAYOUT-AWARE RESTORATION ENGINE (SHARED BY CONTINUE READING & BOOKMARKS)
-    // -----------------------------------------
     let resumeRestoreActive = false;
-    let userScrolledSinceLoad = false;
+    let userInteractedSinceLoad = false;
     let activeResumeData = null;
     let resumeTimers = [];
-    let resumeResizeObs = null;
-    let resumeHighlighted = false;
-
-    function stopResumeObserver() {
-        if (resumeResizeObs) {
-            try { resumeResizeObs.disconnect(); } catch (e) {}
-            resumeResizeObs = null;
-        }
-    }
 
     function cancelActiveResumeTimers() {
         for (let i = 0; i < resumeTimers.length; i++) clearTimeout(resumeTimers[i]);
         resumeTimers = [];
-        stopResumeObserver();
         resumeRestoreActive = false;
         activeResumeData = null;
-        resumeHighlighted = false;
     }
 
-    function markUserScrolled() {
-        userScrolledSinceLoad = true;
+    function markUserInteraction() {
+        userInteractedSinceLoad = true;
         if (resumeRestoreActive) {
             cancelActiveResumeTimers();
             clearPendingResume();
         }
     }
 
-    function applyPendingResumeNow(allowHighlight) {
-        if (!resumeRestoreActive || !activeResumeData || userScrolledSinceLoad) return;
+    function applyPendingResumeNow() {
+        if (!resumeRestoreActive || !activeResumeData || userInteractedSinceLoad) return;
         if (isSubIndexView(true)) {
             ensureTargetSubSectionOpened(activeResumeData);
             if (isSubIndexView(true)) return;
         }
-
-        const resolved = resolveTargetPosition(activeResumeData);
-        if (resolved.y >= 0 && Math.abs(getCurrentScrollY() - resolved.y) > 4) {
-            scrollPageTo(resolved.y, false);
-        }
-
-        if (allowHighlight && !resumeHighlighted && resolved.el && !window.__awraadTajweedBusy) {
-            resumeHighlighted = true;
-            try {
-                resolved.el.classList.remove('search-jump-highlight');
-                void resolved.el.offsetWidth;
-                resolved.el.classList.add('search-jump-highlight');
-            } catch (e) {}
+        const targetY = resolveTargetScrollY(activeResumeData);
+        if (targetY > 0 && Math.abs(getCurrentScrollY() - targetY) > 6) {
+            window.scrollTo(0, targetY);
         }
     }
 
@@ -9002,10 +9027,9 @@
         } catch (e) {}
 
         cancelActiveResumeTimers();
-        userScrolledSinceLoad = false;
+        userInteractedSinceLoad = false;
         resumeRestoreActive = true;
         activeResumeData = data;
-        resumeHighlighted = false;
 
         if (data.triggerCardText || data.triggerCardIndex >= 0 || data.sectionId) {
             saveLastSubTrigger({
@@ -9019,46 +9043,27 @@
         }
 
         ensureTargetSubSectionOpened(data);
-        applyPendingResumeNow(false);
-
-        if (typeof ResizeObserver === 'function') {
-            const watchEl = document.querySelector('.continuous-inner') || document.body;
-            if (watchEl) {
-                resumeResizeObs = new ResizeObserver(() => {
-                    if (resumeRestoreActive && !userScrolledSinceLoad) {
-                        invalidateLayoutCaches();
-                        applyPendingResumeNow(false);
-                    }
-                });
-                try { resumeResizeObs.observe(watchEl); } catch (e) {}
-            }
-        }
-
-        [60, 180, 420, 850, 1400, 2100].forEach((ms, idx) => {
-            resumeTimers.push(setTimeout(() => applyPendingResumeNow(idx >= 2), ms));
+        applyPendingResumeNow();
+        [70, 220, 480, 900, 1350].forEach((ms) => {
+            resumeTimers.push(setTimeout(applyPendingResumeNow, ms));
         });
 
         if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(() => {
-                if (resumeRestoreActive && !userScrolledSinceLoad) {
-                    invalidateLayoutCaches();
-                    applyPendingResumeNow(true);
-                }
+                if (resumeRestoreActive && !userInteractedSinceLoad) applyPendingResumeNow();
             }).catch(() => {});
         }
 
         resumeTimers.push(setTimeout(() => {
-            if (resumeRestoreActive && !userScrolledSinceLoad) {
-                invalidateLayoutCaches();
-                applyPendingResumeNow(true);
-            }
+            if (resumeRestoreActive && !userInteractedSinceLoad) applyPendingResumeNow();
             cancelActiveResumeTimers();
             clearPendingResume();
-        }, 3200));
+            refreshContinueViews();
+        }, 1650));
     }
 
     // -----------------------------------------
-    // A. CONTINUE READING (COMPLETELY INDEPENDENT OF BOOKMARKS)
+    // A. SINGLE IMMEDIATE LAST VISITED STORAGE (ONLY 1 RECORD — OLD RECORDS OVERWRITTEN/DELETED!)
     // -----------------------------------------
     function loadLastVisited() {
         try {
@@ -9079,7 +9084,7 @@
                 lastSavedSignature = '';
                 return;
             }
-            const sig = `${entryObj.uniqueKey}|${entryObj.pct}|${entryObj.anchorIndex}|${entryObj.anchorCharOffset}|${Math.round((entryObj.scrollY || 0) / 8)}`;
+            const sig = `${entryObj.uniqueKey}|${entryObj.pct}|${entryObj.anchorIndex}|${Math.round((entryObj.scrollY || 0) / 10)}`;
             if (sig === lastSavedSignature) return;
             localStorage.setItem(LAST_VISITED_KEY, JSON.stringify(entryObj));
             lastSavedSignature = sig;
@@ -9091,39 +9096,35 @@
     }
 
     function getNormalizedPageKey(href, extraId) {
-        const clean = safeDecode(href || getCurrentPageHref()).toLowerCase().replace(/^\.\//, '');
-        const hashIdx = clean.indexOf('#');
-        const filePart = normalizeFileName(hashIdx === -1 ? clean : clean.slice(0, hashIdx));
-        const hashPart = hashIdx === -1 ? '' : clean.slice(hashIdx + 1);
-        let key = filePart + (hashPart ? ('#' + hashPart) : '');
-        if (!hashPart && extraId) {
-            key += '#' + String(extraId).toLowerCase();
+        let base = safeDecode(href || getCurrentPageHref()).toLowerCase().replace(/^\.\//, '');
+        if (!base.includes('#') && extraId) {
+            base += '#' + String(extraId).toLowerCase();
         }
-        return key;
+        return base;
     }
 
     function getActiveSubSectionDescriptor() {
         const activeSec = getActiveContentSectionEl();
         const trig = loadLastSubTriggerForCurrentFile();
-        let sectionId = (activeSec && activeSec.id && !isMenuElementId(activeSec.id)) ? activeSec.id : '';
-
+        let sectionId = (activeSec && activeSec.id) ? activeSec.id : '';
         if (!sectionId) {
             const h = getCleanHash();
             if (h && h.length > 1 && !isMenuElementId(h.slice(1))) {
-                try {
-                    const el = document.querySelector(h);
-                    if (el && isSectionPanelElement(el)) sectionId = h.slice(1);
-                } catch (e) {}
-            } else if (trig && trig.sectionId && !isMenuElementId(trig.sectionId)) {
-                const el = document.getElementById(trig.sectionId);
-                if (el && isSectionPanelElement(el)) sectionId = trig.sectionId;
+                sectionId = h.slice(1);
+            } else if (trig && trig.sectionId) {
+                sectionId = trig.sectionId;
             }
         }
-
+        if (!sectionId) {
+            const visIdx = document.querySelector('.index-section.active');
+            if (visIdx && visIdx.id && !isMenuElementId(visIdx.id) && isElementVisible(visIdx) && !hasVisibleMenuCards(visIdx)) {
+                sectionId = visIdx.id;
+            }
+        }
         const href = './' + getCurrentFileName() + (sectionId ? ('#' + sectionId) : '');
         const uniqueKey = sectionId
             ? getNormalizedPageKey(href)
-            : getNormalizedPageKey(href, (trig && typeof trig.cardIndex === 'number' && trig.cardIndex >= 0 && document.querySelectorAll(SECTION_WRAPPER_SELECTOR).length > 0) ? ('card_' + trig.cardIndex) : '');
+            : getNormalizedPageKey(href, (trig && typeof trig.cardIndex === 'number' && trig.cardIndex >= 0) ? ('card_' + trig.cardIndex) : '');
 
         return {
             href,
@@ -9137,48 +9138,38 @@
         };
     }
 
-    let progressDebounceTimer = null;
-    let lastThrottleSaveTs = 0;
-
+    let progressTimer = null;
     function syncSubSectionReadingProgress(forceWrite) {
         if (isMainIndexPage() || isSubIndexView(Boolean(forceWrite))) return;
-        if (resumeRestoreActive && !userScrolledSinceLoad) return;
+        if (resumeRestoreActive && !userInteractedSinceLoad) return;
 
         const secKey = detectParentSectionKey();
         if (!secKey) return;
 
         const desc = getActiveSubSectionDescriptor();
-        const currY = getCurrentScrollY();
-        const maxY = getMaxScrollableY();
         const pctFloat = getScrollPercentageFloat();
         const pct = Math.round(pctFloat);
-
+        const currY = getCurrentScrollY();
         const existing = loadLastVisited();
         const sameAsSaved = Boolean(existing && (
             existing.uniqueKey === desc.uniqueKey ||
             getNormalizedPageKey(existing.href) === getNormalizedPageKey(desc.href)
         ));
 
-        if (completedUniqueKey && completedUniqueKey === desc.uniqueKey) {
-            if (userScrolledSinceLoad && maxY > 80 && pctFloat < 75) {
-                completedUniqueKey = null;
-            } else {
-                if (sameAsSaved) clearLastVisited();
-                return;
-            }
-        }
-
-        if (isSubsectionCompleted(currY, maxY, pctFloat)) {
-            completedUniqueKey = desc.uniqueKey;
+        // Reached the end of this sub-section -> clear Continue Reading record cleanly
+        if (pct >= END_THRESHOLD_PCT) {
             if (sameAsSaved) clearLastVisited();
             return;
         }
 
-        if (sameAsSaved && !userScrolledSinceLoad && currY <= 25 && ((existing.scrollY || 0) > 25 || (existing.pct || 0) > 0 || (existing.anchorIndex || 0) > 0)) {
+        // If user re-opened the SAME sub-section at top (scrollY ~ 0) without scrolling yet, preserve its saved progress
+        if (sameAsSaved && !userInteractedSinceLoad && currY <= 20 && ((existing.scrollY || 0) > 20 || (existing.pct || 0) > 0)) {
             return;
         }
 
-        if (!sameAsSaved || userScrolledSinceLoad || forceWrite || currY > 15) {
+        // Rule 3: If user opened a NEW/DIFFERENT sub-section, immediately replace previous Last Visited record (even at 0%)
+        // If user is on the SAME sub-section and has scrolled, update its latest reading position
+        if (!sameAsSaved || userInteractedSinceLoad || forceWrite || pct > 0 || currY > 15) {
             const cat = getSectionCatalogEntry(secKey, desc.href, getCurrentSubSectionTitle());
             const anchor = captureReadingAnchor() || {};
             const payload = {
@@ -9196,8 +9187,6 @@
                 anchorIndex: typeof anchor.anchorIndex === 'number' ? anchor.anchorIndex : -1,
                 anchorId: anchor.anchorId || '',
                 anchorSnippet: anchor.anchorSnippet || '',
-                anchorCharOffset: typeof anchor.anchorCharOffset === 'number' ? anchor.anchorCharOffset : -1,
-                anchorOffsetPx: typeof anchor.anchorOffsetPx === 'number' ? anchor.anchorOffsetPx : 0,
                 anchorOffsetRatio: typeof anchor.anchorOffsetRatio === 'number' ? anchor.anchorOffsetRatio : 0,
                 subTitle: getCurrentSubSectionTitle(),
                 scrollY: currY,
@@ -9205,27 +9194,22 @@
                 pctFloat: +pctFloat.toFixed(2),
                 ts: Date.now()
             };
+            // Single record only: completely overwrites/deletes any previous Last Visited record
             saveLastVisited(payload);
         }
     }
 
+    // Idle debounce (450ms after scroll stops) so ZERO heavy work happens while finger is scrolling!
     function scheduleSyncReadingProgress() {
-        const now = Date.now();
-        if (now - lastThrottleSaveTs >= 400) {
-            lastThrottleSaveTs = now;
-            syncSubSectionReadingProgress(false);
-        }
-        if (progressDebounceTimer) clearTimeout(progressDebounceTimer);
-        progressDebounceTimer = setTimeout(() => {
-            lastThrottleSaveTs = Date.now();
-            syncSubSectionReadingProgress(false);
-        }, 160);
+        if (progressTimer) clearTimeout(progressTimer);
+        progressTimer = setTimeout(() => syncSubSectionReadingProgress(false), 450);
     }
 
+    // Centralized flush API called by ALL navigation methods (Navbar Back/Forward, Phone Back, Hash Switch, Sidebar)
     window.awraadFlushReadingProgress = function() {
-        if (progressDebounceTimer) {
-            clearTimeout(progressDebounceTimer);
-            progressDebounceTimer = null;
+        if (progressTimer) {
+            clearTimeout(progressTimer);
+            progressTimer = null;
         }
         lastSavedSignature = '';
         syncSubSectionReadingProgress(true);
@@ -9236,6 +9220,7 @@
         if (!last || !last.href) return null;
 
         const pct = Math.min(99, Math.max(0, parseInt(last.pct, 10) || 0));
+
         const cat = getSectionCatalogEntry(last.sectionKey, last.href, last.sectionLabel);
         const sectionTitle = (cat && cat.label) || last.sectionLabel || last.subTitle || 'Last Visited';
         const subTitle = last.subTitle || sectionTitle;
@@ -9291,9 +9276,9 @@
         if (!isSameSubSection) return null;
 
         const pct = Math.min(99, Math.max(0, parseInt(saved.pct, 10) || 0));
-        const resolved = resolveTargetPosition(saved);
-        if (pct <= 0 || resolved.y <= 30) return null;
-        if (getCurrentScrollY() >= resolved.y - 35) return null;
+        const targetY = resolveTargetScrollY(saved);
+        if (pct <= 0 || pct >= END_THRESHOLD_PCT || targetY <= 25) return null;
+        if (getCurrentScrollY() >= targetY - 35) return null;
 
         const I = window.AWRAAD_SVG;
         const card = document.createElement('div');
@@ -9322,11 +9307,11 @@
                 showQuickToast('Continue Reading clear ho gayi');
                 return;
             }
-            userScrolledSinceLoad = true;
+            userInteractedSinceLoad = true;
             cancelActiveResumeTimers();
             card.remove();
-            const fresh = resolveTargetPosition(saved);
-            scrollPageTo(fresh.y, true);
+            const freshY = resolveTargetScrollY(saved);
+            window.scrollTo({ top: freshY, behavior: 'smooth' });
         });
 
         return card;
@@ -9338,22 +9323,18 @@
         if (isMainIndexPage()) {
             const mainCard = buildMainIndexContinueSectionCard();
             if (mainCard) {
-                const bmSection = document.getElementById('mainMenuBookmarksSection');
                 const navGrid = document.querySelector('#main-menu .index-nav-grid, .index-nav-grid');
                 const dailyMalfooz = document.getElementById('injected-daily-malfooz') || document.querySelector('.daily-malfooz-container');
-                if (bmSection && bmSection.parentNode) {
-                    bmSection.parentNode.insertBefore(mainCard, bmSection);
-                } else if (navGrid && navGrid.parentNode) {
+                if (navGrid && navGrid.parentNode) {
                     navGrid.parentNode.insertBefore(mainCard, navGrid);
                 } else if (dailyMalfooz && dailyMalfooz.parentNode) {
                     dailyMalfooz.insertAdjacentElement('afterend', mainCard);
                 }
             }
-            renderMainMenuBookmarksSection();
             return;
         }
 
-        if (isSubIndexView(true) || resumeRestoreActive) return;
+        if (isSubIndexView(true)) return;
 
         const subCard = buildSubSectionPageContinueCard();
         if (!subCard) return;
@@ -9376,377 +9357,98 @@
     }
 
     // -----------------------------------------
-    // B. USER-CONTROLLED MULTIPLE BOOKMARKS & FAVORITES (O(1) MEMORY-CACHED, ZERO LAG)
+    // B. BOOKMARKS / FAVORITES
     // -----------------------------------------
-    let cachedBookmarks = null;
-    let bookmarkedPageKeysSet = new Set();
-    let bookmarkedMalfoozSet = new Set();
-
-    function rebuildBookmarkIndexes(list) {
-        const pSet = new Set();
-        const mSet = new Set();
-        for (let i = 0; i < list.length; i++) {
-            const b = list[i];
-            if (!b) continue;
-            if (b.type === 'malfooz' && b.malfoozId) {
-                mSet.add(String(b.malfoozId));
-            } else if (b.href) {
-                pSet.add(b.uniqueKey || getNormalizedPageKey(b.href));
-            }
-        }
-        bookmarkedPageKeysSet = pSet;
-        bookmarkedMalfoozSet = mSet;
-    }
-
-    function normalizeLegacyBookmark(raw, idx) {
-        if (!raw || typeof raw !== 'object') return null;
-        if (raw.type === 'malfooz') {
-            return {
-                id: raw.id || ('malfooz:' + String(raw.malfoozId || idx)),
-                type: 'malfooz',
-                malfoozId: String(raw.malfoozId || ''),
-                sectionName: 'Malfoozat e Bahrul Irfan',
-                subSectionName: raw.title || ('Malfooz #' + (raw.malfoozId || '')),
-                title: raw.title || ('Malfooz #' + (raw.malfoozId || '')),
-                snippet: String(raw.snippet || '').slice(0, 180),
-                ts: raw.ts || Date.now()
-            };
-        }
-        if (!raw.href) return null;
-        const secKey = raw.sectionKey || detectParentSectionKey(raw.href) || '';
-        const cat = secKey ? getSectionCatalogEntry(secKey, raw.href, raw.sectionName || raw.title) : null;
-        const secName = raw.sectionName || (cat && cat.label) || 'Awraad e Alaviya';
-        const subName = raw.subSectionName || raw.title || secName;
-        return {
-            id: (raw.id && !raw.id.startsWith('page:')) ? raw.id : ('bm_' + (raw.ts || Date.now()) + '_' + idx),
-            type: 'page',
-            sectionKey: secKey,
-            sectionName: String(secName).slice(0, 72),
-            subSectionName: String(subName).slice(0, 84),
-            uniqueKey: raw.uniqueKey || getNormalizedPageKey(raw.href),
-            href: raw.href,
-            file: raw.file || normalizeFileName(raw.href),
-            sectionId: raw.sectionId || '',
-            triggerCardIndex: typeof raw.triggerCardIndex === 'number' ? raw.triggerCardIndex : -1,
-            triggerCardText: raw.triggerCardText || '',
-            triggerCardHref: raw.triggerCardHref || '',
-            triggerCardOnclick: raw.triggerCardOnclick || '',
-            anchorIndex: typeof raw.anchorIndex === 'number' ? raw.anchorIndex : -1,
-            anchorId: raw.anchorId || '',
-            anchorSnippet: String(raw.anchorSnippet || '').slice(0, 64),
-            anchorCharOffset: typeof raw.anchorCharOffset === 'number' ? raw.anchorCharOffset : -1,
-            anchorOffsetPx: typeof raw.anchorOffsetPx === 'number' ? raw.anchorOffsetPx : 0,
-            anchorOffsetRatio: typeof raw.anchorOffsetRatio === 'number' ? raw.anchorOffsetRatio : 0,
-            lineSnippet: String(raw.lineSnippet || raw.snippet || '').slice(0, 110),
-            scrollY: Math.max(0, parseInt(raw.scrollY, 10) || 0),
-            pct: Math.min(100, Math.max(0, parseInt(raw.pct, 10) || 0)),
-            pctFloat: typeof raw.pctFloat === 'number' ? raw.pctFloat : (parseFloat(raw.pct) || 0),
-            ts: raw.ts || Date.now()
-        };
-    }
-
-    function loadBookmarks(forceDisk) {
-        if (!forceDisk && Array.isArray(cachedBookmarks)) {
-            return cachedBookmarks;
-        }
+    function loadBookmarks() {
         try {
             const arr = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || '[]');
-            const clean = [];
-            if (Array.isArray(arr)) {
-                for (let i = 0; i < arr.length && clean.length < MAX_BOOKMARKS_LIMIT; i++) {
-                    const norm = normalizeLegacyBookmark(arr[i], i);
-                    if (norm) clean.push(norm);
-                }
-            }
-            cachedBookmarks = clean;
-            rebuildBookmarkIndexes(clean);
-            return clean;
+            return Array.isArray(arr) ? arr : [];
         } catch (e) {
-            cachedBookmarks = [];
-            rebuildBookmarkIndexes([]);
             return [];
         }
     }
 
     function saveBookmarks(list) {
-        const trimmed = Array.isArray(list) ? list.slice(0, MAX_BOOKMARKS_LIMIT) : [];
-        cachedBookmarks = trimmed;
-        rebuildBookmarkIndexes(trimmed);
         try {
-            localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(trimmed));
-        } catch (e) {
-            // If storage is tight, drop oldest entries beyond 150 and retry
-            try {
-                const compact = trimmed.slice(0, 150);
-                cachedBookmarks = compact;
-                rebuildBookmarkIndexes(compact);
-                localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(compact));
-            } catch (e2) {}
-        }
+            localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list));
+        } catch (e) {}
         refreshBookmarkIndicators();
-        if (isMainIndexPage()) {
-            renderMainMenuBookmarksSection();
-        }
     }
 
-    function deleteBookmarkById(bmId) {
-        if (!bmId) return false;
-        const list = loadBookmarks(false);
-        const idx = list.findIndex((b) => b.id === bmId);
-        if (idx === -1) return false;
-        const next = list.slice(0, idx).concat(list.slice(idx + 1));
-        saveBookmarks(next);
-        return true;
+    function getCurrentPageBookmarkId() {
+        return 'page:' + getCurrentPageHref().toLowerCase();
     }
 
     function refreshBookmarkIndicators() {
-        const list = loadBookmarks(false);
+        const list = loadBookmarks();
         const badge = document.getElementById('drawerBookmarkCount');
         if (badge) badge.textContent = String(list.length);
 
         const navBmBtn = document.getElementById('navBookmarkBtn');
         if (navBmBtn) {
-            if (isMainIndexPage() || isSubIndexView(false)) {
-                navBmBtn.classList.toggle('bookmarked', list.length > 0);
-                navBmBtn.title = `Bookmarks & Favorites (${list.length})`;
-            } else {
-                const desc = getActiveSubSectionDescriptor();
-                const hasAnyHere = bookmarkedPageKeysSet.has(desc.uniqueKey) || bookmarkedPageKeysSet.has(getNormalizedPageKey(desc.href));
-                navBmBtn.classList.toggle('bookmarked', hasAnyHere);
-                navBmBtn.title = 'Bookmark Exact Reading Position';
-            }
+            const isSaved = list.some((b) => b.id === getCurrentPageBookmarkId());
+            navBmBtn.classList.toggle('bookmarked', isSaved);
+            navBmBtn.title = isSaved ? 'Remove Bookmark' : 'Bookmark Page';
         }
 
-        const mBtns = document.querySelectorAll('.malfooz-bm-btn[data-malfooz-bm-id]');
-        for (let i = 0; i < mBtns.length; i++) {
-            const btn = mBtns[i];
-            const mid = String(btn.getAttribute('data-malfooz-bm-id') || '');
-            const isSaved = bookmarkedMalfoozSet.has(mid);
+        document.querySelectorAll('.malfooz-bm-btn[data-malfooz-bm-id]').forEach((btn) => {
+            const mid = 'malfooz:' + btn.getAttribute('data-malfooz-bm-id');
+            const isSaved = list.some((b) => b.id === mid);
             btn.classList.toggle('saved', isSaved);
             const sp = btn.querySelector('span');
             if (sp) sp.textContent = isSaved ? 'Bookmarked' : 'Bookmark';
-        }
+        });
     }
     window.awraadRefreshBookmarkBadge = refreshBookmarkIndicators;
 
-    // User-controlled Bookmark creation at exact reading position (never automatic!)
-    function createCurrentPositionBookmark() {
-        if (isMainIndexPage() || isSubIndexView(true)) {
-            openBookmarksModal();
-            return false;
+    function toggleCurrentPageBookmark() {
+        const id = getCurrentPageBookmarkId();
+        const list = loadBookmarks();
+        const idx = list.findIndex((b) => b.id === id);
+        if (idx !== -1) {
+            list.splice(idx, 1);
+            saveBookmarks(list);
+            showQuickToast('Bookmark hata diya gaya');
+        } else {
+            list.unshift({
+                id,
+                type: 'page',
+                href: getCurrentPageHref(),
+                title: getCurrentSubSectionTitle(),
+                scrollY: Math.round(window.scrollY || 0),
+                pct: getScrollPercentage(),
+                ts: Date.now()
+            });
+            saveBookmarks(list);
+            showQuickToast('★ Page Bookmark ho gaya!');
         }
-
-        const desc = getActiveSubSectionDescriptor();
-        const secKey = detectParentSectionKey(desc.href) || '';
-        const subTitle = getCurrentSubSectionTitle();
-        const cat = secKey ? getSectionCatalogEntry(secKey, desc.href, subTitle) : null;
-        const sectionName = (cat && cat.label) || subTitle || 'Awraad e Alaviya';
-        const anchor = captureReadingAnchor() || {};
-        const currY = getCurrentScrollY();
-        const pct = getScrollPercentage();
-        const pctFloat = +getScrollPercentageFloat().toFixed(2);
-        const anchorIdx = typeof anchor.anchorIndex === 'number' ? anchor.anchorIndex : -1;
-        const charOff = typeof anchor.anchorCharOffset === 'number' ? anchor.anchorCharOffset : -1;
-
-        const list = loadBookmarks(false);
-
-        // Prevent accidental double-tap duplicate on the exact same line, while allowing multiple bookmarks anywhere else in the same subsection!
-        const exactSameLineExists = list.some((b) => {
-            if (b.type !== 'page') return false;
-            const sameSub = (b.uniqueKey === desc.uniqueKey) || (getNormalizedPageKey(b.href) === getNormalizedPageKey(desc.href));
-            if (!sameSub) return false;
-            const sameAnchor = (b.anchorIndex === anchorIdx) && (Math.abs((b.anchorCharOffset || 0) - Math.max(0, charOff)) <= 8);
-            const sameScroll = Math.abs((b.scrollY || 0) - currY) <= 18;
-            return sameAnchor && sameScroll;
-        });
-
-        if (exactSameLineExists) {
-            showQuickToast('★ Yeh line pehle se Bookmarked hai');
-            return false;
-        }
-
-        const newId = 'bm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-        const entry = {
-            id: newId,
-            type: 'page',
-            sectionKey: secKey,
-            sectionName: String(sectionName).slice(0, 72),
-            subSectionName: String(subTitle).slice(0, 84),
-            uniqueKey: desc.uniqueKey,
-            href: desc.href,
-            file: desc.file,
-            sectionId: desc.sectionId,
-            triggerCardIndex: desc.triggerCardIndex,
-            triggerCardText: desc.triggerCardText,
-            triggerCardHref: desc.triggerCardHref,
-            triggerCardOnclick: desc.triggerCardOnclick,
-            anchorIndex: anchorIdx,
-            anchorId: anchor.anchorId || '',
-            anchorSnippet: anchor.anchorSnippet || '',
-            anchorCharOffset: charOff,
-            anchorOffsetPx: typeof anchor.anchorOffsetPx === 'number' ? anchor.anchorOffsetPx : 0,
-            anchorOffsetRatio: typeof anchor.anchorOffsetRatio === 'number' ? anchor.anchorOffsetRatio : 0,
-            lineSnippet: anchor.linePreview || '',
-            scrollY: currY,
-            pct: pct,
-            pctFloat: pctFloat,
-            ts: Date.now()
-        };
-
-        saveBookmarks([entry].concat(list));
-        showQuickToast(`★ Bookmark Saved (${pct}%)`);
-        return true;
     }
 
     function toggleMalfoozBookmark(malfoozId, arabicNum, plainText) {
         const id = 'malfooz:' + String(malfoozId);
-        const list = loadBookmarks(false);
+        const list = loadBookmarks();
         const idx = list.findIndex((b) => b.id === id);
         if (idx !== -1) {
-            const next = list.slice(0, idx).concat(list.slice(idx + 1));
-            saveBookmarks(next);
+            list.splice(idx, 1);
+            saveBookmarks(list);
             showQuickToast('Malfooz bookmark hata diya gaya');
         } else {
-            const entry = {
+            list.unshift({
                 id,
                 type: 'malfooz',
                 malfoozId: String(malfoozId),
-                sectionName: 'Malfoozat e Bahrul Irfan',
-                subSectionName: `مَلْفُوْظَاتِ شَيْخ #${arabicNum || malfoozId}`,
                 title: `مَلْفُوْظَاتِ شَيْخ #${arabicNum || malfoozId}`,
-                snippet: String(plainText || '').replace(/\s+/g, ' ').trim().slice(0, 180),
+                snippet: String(plainText || '').replace(/\s+/g, ' ').trim().slice(0, 220),
                 ts: Date.now()
-            };
-            saveBookmarks([entry].concat(list));
+            });
+            saveBookmarks(list);
             showQuickToast('★ Malfooz Bookmark ho gaya!');
         }
     }
 
-    function formatBookmarkMetaLabel(b) {
-        const sec = b.sectionName || '';
-        const sub = b.subSectionName || b.title || '';
-        if (!sec || normalizeSearchText(sec) === normalizeSearchText(sub)) {
-            return sub;
-        }
-        return `${sec} • ${sub}`;
-    }
-
-    // Main Menu Bookmarks & Favorites Section (renders max 3 items inline for instant 0ms performance + View All modal)
-    function renderMainMenuBookmarksSection() {
-        const existing = document.getElementById('mainMenuBookmarksSection');
-        if (!isMainIndexPage()) {
-            if (existing) existing.remove();
-            return;
-        }
-
-        const list = loadBookmarks(false);
-        const I = window.AWRAAD_SVG;
-        let container = existing;
-
-        if (!container) {
-            container = document.createElement('div');
-            container.id = 'mainMenuBookmarksSection';
-            container.className = 'main-bookmarks-section print-none no-smart-break';
-
-            const navGrid = document.querySelector('#main-menu .index-nav-grid, .index-nav-grid');
-            const dailyMalfooz = document.getElementById('injected-daily-malfooz') || document.querySelector('.daily-malfooz-container');
-            if (navGrid && navGrid.parentNode) {
-                navGrid.parentNode.insertBefore(container, navGrid);
-            } else if (dailyMalfooz && dailyMalfooz.parentNode) {
-                dailyMalfooz.insertAdjacentElement('afterend', container);
-            } else {
-                return;
-            }
-
-            // Single delegated click listener (zero per-item listener memory overhead!)
-            container.addEventListener('click', (e) => {
-                const delBtn = e.target.closest('[data-mm-bm-del]');
-                if (delBtn) {
-                    e.stopPropagation();
-                    const bmId = delBtn.getAttribute('data-mm-bm-del');
-                    if (deleteBookmarkById(bmId)) {
-                        showQuickToast('Bookmark delete ho gaya');
-                    }
-                    return;
-                }
-                if (e.target.closest('#openAllMainBookmarksBtn') || e.target.closest('#mainBookmarksHeaderBar')) {
-                    openBookmarksModal();
-                    return;
-                }
-                const openCard = e.target.closest('[data-mm-bm-open]');
-                if (openCard) {
-                    const bmId = openCard.getAttribute('data-mm-bm-open');
-                    const item = loadBookmarks(false).find((b) => b.id === bmId);
-                    if (!item) return;
-                    if (item.type === 'page' && item.href) {
-                        navigateWithScroll(item.href, item.scrollY || 0, item);
-                    } else {
-                        openBookmarksModal();
-                    }
-                }
-            });
-        }
-
-        if (!list.length) {
-            container.innerHTML = `
-                <div id="mainBookmarksHeaderBar" class="main-bm-header">
-                    <div class="main-bm-title-wrap">
-                        <span class="main-bm-star-badge">${I.starSm}</span>
-                        <span class="main-bm-heading">Bookmarks &amp; Favorites</span>
-                        <span class="main-bm-count-pill">0</span>
-                    </div>
-                    <button type="button" id="openAllMainBookmarksBtn" class="main-bm-manage-btn">Open</button>
-                </div>
-                <div class="main-bm-empty-hint">Koi Bookmark save nahi hai — kisi bhi Dua ya Hizb ko padhte waqt upar <strong>★</strong> tap karke exact line save karein.</div>
-            `;
-            return;
-        }
-
-        const previewItems = list.slice(0, 3);
-        const rowsHtml = previewItems.map((b) => {
-            const secLabel = escapeHtml(b.sectionName || 'Awraad e Alaviya');
-            const subLabel = escapeHtml(b.subSectionName || b.title || '');
-            const lineTxt = escapeHtml(b.lineSnippet || b.snippet || '');
-            const posText = b.type === 'malfooz' ? 'Malfooz-e-Shaykh' : `Saved at ${b.pct || 0}%`;
-
-            return `
-                <div class="main-bm-item" data-mm-bm-open="${escapeHtml(b.id)}">
-                    <div class="main-bm-item-body">
-                        <div class="main-bm-section-tag" dir="auto">${secLabel}</div>
-                        <div class="main-bm-sub-title" dir="auto">${subLabel}</div>
-                        ${lineTxt ? `<div class="main-bm-line-preview" dir="rtl">${lineTxt}</div>` : ''}
-                        <div class="main-bm-pos-meta">${posText}</div>
-                    </div>
-                    <button type="button" class="bookmark-delete-btn main-bm-del-btn" data-mm-bm-del="${escapeHtml(b.id)}" title="Delete Bookmark" aria-label="Delete Bookmark">${I.trashSm}</button>
-                </div>
-            `;
-        }).join('');
-
-        const moreFooter = list.length > 3
-            ? `<button type="button" id="openAllMainBookmarksBtn" class="main-bm-viewall-btn">View All Saved Bookmarks (${list.length})</button>`
-            : '';
-
-        container.innerHTML = `
-            <div id="mainBookmarksHeaderBar" class="main-bm-header">
-                <div class="main-bm-title-wrap">
-                    <span class="main-bm-star-badge">${I.starSm}</span>
-                    <span class="main-bm-heading">Bookmarks &amp; Favorites</span>
-                    <span class="main-bm-count-pill">${list.length}</span>
-                </div>
-                <button type="button" id="openAllMainBookmarksBtn" class="main-bm-manage-btn">Manage All</button>
-            </div>
-            <div class="main-bm-list">${rowsHtml}</div>
-            ${moreFooter}
-        `;
-    }
-
     let bookmarksModalBuilt = false;
-    let modalVisibleCount = MODAL_PAGE_SIZE;
-
     function openBookmarksModal() {
         if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
-        modalVisibleCount = MODAL_PAGE_SIZE;
-
         if (!bookmarksModalBuilt && !document.getElementById('bookmarksModal')) {
             bookmarksModalBuilt = true;
             const I = window.AWRAAD_SVG;
@@ -9762,51 +9464,11 @@
                 </div>
             `);
             const modal = document.getElementById('bookmarksModal');
-            const body = document.getElementById('bookmarksModalBody');
-
             document.getElementById('closeBookmarksBtn').addEventListener('click', () => modal.classList.remove('show'));
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
             });
-
-            // Single delegated listener for all modal actions (fast even with hundreds of bookmarks!)
-            body.addEventListener('click', (e) => {
-                if (e.target.closest('#bmAddCurrentPositionBtn')) {
-                    const added = createCurrentPositionBookmark();
-                    if (added) {
-                        modalVisibleCount = Math.max(modalVisibleCount, MODAL_PAGE_SIZE);
-                        renderBookmarksModalBody();
-                    }
-                    return;
-                }
-                if (e.target.closest('#bmLoadMoreBtn')) {
-                    modalVisibleCount += MODAL_PAGE_SIZE;
-                    renderBookmarksModalBody();
-                    return;
-                }
-                const delBtn = e.target.closest('[data-bm-del-id]');
-                if (delBtn) {
-                    e.stopPropagation();
-                    const bmId = delBtn.getAttribute('data-bm-del-id');
-                    if (deleteBookmarkById(bmId)) {
-                        renderBookmarksModalBody();
-                        showQuickToast('Bookmark delete ho gaya');
-                    }
-                    return;
-                }
-                const openEl = e.target.closest('[data-bm-open-id]');
-                if (openEl) {
-                    const bmId = openEl.getAttribute('data-bm-open-id');
-                    const item = loadBookmarks(false).find((b) => b.id === bmId);
-                    if (!item) return;
-                    modal.classList.remove('show');
-                    if (item.type === 'page' && item.href) {
-                        navigateWithScroll(item.href, item.scrollY || 0, item);
-                    }
-                }
-            });
         }
-
         renderBookmarksModalBody();
         const modal = document.getElementById('bookmarksModal');
         if (modal) modal.classList.add('show');
@@ -9815,80 +9477,136 @@
     function renderBookmarksModalBody() {
         const body = document.getElementById('bookmarksModalBody');
         if (!body) return;
-        const list = loadBookmarks(false);
+        const list = loadBookmarks();
         const I = window.AWRAAD_SVG;
-        const canBookmarkHere = !isMainIndexPage() && !isSubIndexView(true);
-
-        const addHereHtml = canBookmarkHere ? `
-            <button type="button" id="bmAddCurrentPositionBtn" class="bm-add-current-btn">
-                ${I.starSm}<span>Bookmark Exact Current Reading Line (${getScrollPercentage()}%)</span>
-            </button>
-        ` : '';
 
         if (!list.length) {
             body.innerHTML = `
-                ${addHereHtml}
                 <div class="bookmark-empty-state">
                     <div style="margin-bottom:8px; color:#c59b27;">${I.star}</div>
                     Abhi koi Bookmark save nahi hai.<br>
-                    Kisi bhi Dua, Hizb ya Shajara page ko padhte waqt upar <strong>★ Star</strong> icon tap karke apni exact line save kar sakte hain.
+                    Kisi bhi Dua, Hizb ya Shajara page par upar <strong>★ Star</strong> icon tap karke save kar sakte hain.
                 </div>
             `;
             return;
         }
 
-        const slice = list.slice(0, modalVisibleCount);
-        const itemsHtml = slice.map((b) => {
-            const secTitle = escapeHtml(b.sectionName || 'Awraad e Alaviya');
-            const subTitle = escapeHtml(b.subSectionName || b.title || '');
-            const snippetTxt = escapeHtml(b.lineSnippet || b.snippet || '');
-            const metaText = b.type === 'malfooz'
-                ? 'Malfooz-e-Shaykh'
-                : `Saved at ${b.pct || 0}% reading position`;
-
-            return `
-                <div class="bookmark-item-card">
-                    <div class="bookmark-item-main" data-bm-open-id="${escapeHtml(b.id)}">
-                        <div class="main-bm-section-tag" dir="auto">${secTitle}</div>
-                        <div class="bookmark-item-title" dir="auto">${subTitle}</div>
-                        ${snippetTxt ? `<div class="bookmark-item-snippet" dir="rtl">${snippetTxt}</div>` : ''}
-                        <div class="bookmark-item-meta">${metaText}</div>
+        body.innerHTML = list.map((b, i) => `
+            <div class="bookmark-item-card" data-bm-index="${i}">
+                <div class="bookmark-item-main" data-bm-open="${i}">
+                    <div class="bookmark-item-title" dir="auto">${escapeHtml(b.title)}</div>
+                    ${b.snippet ? `<div class="bookmark-item-snippet" dir="rtl">${escapeHtml(b.snippet)}</div>` : ''}
+                    <div class="bookmark-item-meta">
+                        ${b.type === 'malfooz' ? 'Malfooz-e-Shaykh' : `Saved at ${b.pct || 0}% reading position`}
                     </div>
-                    <button type="button" class="bookmark-delete-btn" data-bm-del-id="${escapeHtml(b.id)}" title="Delete Bookmark" aria-label="Delete Bookmark">${I.trashSm}</button>
                 </div>
-            `;
-        }).join('');
+                <button type="button" class="bookmark-delete-btn" data-bm-del="${i}" title="Remove">${I.trashSm}</button>
+            </div>
+        `).join('');
 
-        const remaining = list.length - slice.length;
-        const loadMoreHtml = remaining > 0
-            ? `<button type="button" id="bmLoadMoreBtn" class="bm-load-more-btn">Load More Bookmarks (${remaining} more)</button>`
-            : '';
+        body.querySelectorAll('[data-bm-open]').forEach((el) => {
+            el.addEventListener('click', () => {
+                const idx = parseInt(el.getAttribute('data-bm-open'), 10);
+                const item = loadBookmarks()[idx];
+                if (!item) return;
+                const modal = document.getElementById('bookmarksModal');
+                if (modal) modal.classList.remove('show');
+                if (item.type === 'page' && item.href) {
+                    navigateWithScroll(item.href, item.scrollY || 0);
+                }
+            });
+        });
 
-        body.innerHTML = `${addHereHtml}${itemsHtml}${loadMoreHtml}`;
+        body.querySelectorAll('[data-bm-del]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const idx = parseInt(btn.getAttribute('data-bm-del'), 10);
+                const cur = loadBookmarks();
+                cur.splice(idx, 1);
+                saveBookmarks(cur);
+                renderBookmarksModalBody();
+            });
+        });
     }
 
     // -----------------------------------------
-    // C. HANDS-FREE AUTO-SCROLL MODE (SCROLL-CONTAINER AGNOSTIC)
+    // C. OPTIONAL SCROLL BUTTON & HANDS-FREE AUTO-SCROLL (0.1x TO 10x, DEFAULT 1x)
     // -----------------------------------------
+    const SCROLL_BTN_KEY = 'app_scroll_btn_enabled';
+    const AUTOSCROLL_SPEED_V2_KEY = 'app_autoscroll_speed_v2';
+    const SCROLL_SPEED_STEPS = [0.1, 0.25, 0.5, 0.75, 1, 2, 3, 5, 10];
+    const DEFAULT_SCROLL_SPEED = 1;
+
+    function normalizeScrollSpeed(val) {
+        const n = parseFloat(val);
+        if (isNaN(n)) return DEFAULT_SCROLL_SPEED;
+        let best = SCROLL_SPEED_STEPS[0];
+        let bestDiff = Math.abs(n - best);
+        for (let i = 1; i < SCROLL_SPEED_STEPS.length; i++) {
+            const d = Math.abs(n - SCROLL_SPEED_STEPS[i]);
+            if (d < bestDiff) {
+                bestDiff = d;
+                best = SCROLL_SPEED_STEPS[i];
+            }
+        }
+        return best;
+    }
+
+    function isScrollButtonEnabled() {
+        return localStorage.getItem(SCROLL_BTN_KEY) !== 'false';
+    }
+
     let autoScrollBarBuilt = false;
     let autoScrollRunning = false;
+    let autoScrollPaused = false;
     let autoScrollRaf = null;
     let autoScrollLastTs = 0;
     let autoScrollCarry = 0;
-    let autoScrollSpeed = Math.min(10, Math.max(1, parseInt(localStorage.getItem(AUTOSCROLL_SPEED_KEY) || '3', 10) || 3));
+    let autoScrollSpeed = normalizeScrollSpeed(localStorage.getItem(AUTOSCROLL_SPEED_V2_KEY) || String(DEFAULT_SCROLL_SPEED));
 
-    function syncAutoScrollUI() {
-        const playBtn = document.getElementById('autoScrollPlayPauseBtn');
-        const speedLbl = document.getElementById('autoScrollSpeedLabel');
-        const fabBtn = document.getElementById('fabAutoScrollBtn');
-        const I = window.AWRAAD_SVG;
-        if (playBtn) playBtn.innerHTML = autoScrollRunning ? I.pause : I.play;
-        if (speedLbl) speedLbl.textContent = 'Speed ' + autoScrollSpeed + 'x';
-        if (fabBtn) fabBtn.classList.toggle('fab-active', autoScrollRunning);
+    function setScrollSpeed(newSpeed) {
+        autoScrollSpeed = normalizeScrollSpeed(newSpeed);
+        localStorage.setItem(AUTOSCROLL_SPEED_V2_KEY, String(autoScrollSpeed));
+        localStorage.setItem(AUTOSCROLL_SPEED_KEY, String(autoScrollSpeed));
+        syncAutoScrollUI();
     }
 
-    function stopAutoScroll() {
+    function stepScrollSpeed(delta) {
+        const idx = SCROLL_SPEED_STEPS.indexOf(autoScrollSpeed);
+        const curIdx = idx === -1 ? SCROLL_SPEED_STEPS.indexOf(DEFAULT_SCROLL_SPEED) : idx;
+        const nextIdx = Math.min(SCROLL_SPEED_STEPS.length - 1, Math.max(0, curIdx + delta));
+        setScrollSpeed(SCROLL_SPEED_STEPS[nextIdx]);
+    }
+
+    function syncAutoScrollUI() {
+        const enabled = isScrollButtonEnabled();
+        const playBtn = document.getElementById('autoScrollPlayPauseBtn');
+        const speedSel = document.getElementById('autoScrollSpeedSelect');
+        const fabBtn = document.getElementById('fabAutoScrollBtn');
+        const bar = document.getElementById('autoScrollBar');
+        const I = window.AWRAAD_SVG;
+
+        if (playBtn) {
+            playBtn.innerHTML = autoScrollRunning ? I.pause : I.play;
+            playBtn.title = autoScrollRunning ? 'Pause' : (autoScrollPaused ? 'Resume' : 'Start');
+            playBtn.setAttribute('aria-label', playBtn.title);
+        }
+        if (speedSel && speedSel.value !== String(autoScrollSpeed)) {
+            speedSel.value = String(autoScrollSpeed);
+        }
+        if (fabBtn) {
+            fabBtn.style.display = enabled ? 'inline-flex' : 'none';
+            fabBtn.classList.toggle('visible', enabled);
+            fabBtn.classList.toggle('fab-active', enabled && autoScrollRunning);
+        }
+        if (!enabled && bar) {
+            bar.classList.remove('show');
+        }
+    }
+
+    function stopAutoScroll(markPaused) {
         autoScrollRunning = false;
+        autoScrollPaused = Boolean(markPaused);
         if (autoScrollRaf) {
             cancelAnimationFrame(autoScrollRaf);
             autoScrollRaf = null;
@@ -9897,79 +9615,104 @@
         autoScrollCarry = 0;
         syncAutoScrollUI();
     }
-    window.awraadStopAutoScroll = stopAutoScroll;
+    window.awraadStopAutoScroll = function() { stopAutoScroll(false); };
 
     function autoScrollStep(ts) {
-        if (!autoScrollRunning) return;
+        if (!autoScrollRunning || !isScrollButtonEnabled()) {
+            stopAutoScroll(false);
+            return;
+        }
         if (!autoScrollLastTs) autoScrollLastTs = ts;
         const dtSec = Math.min(0.1, (ts - autoScrollLastTs) / 1000);
         autoScrollLastTs = ts;
 
-        const pxPerSec = 14 + autoScrollSpeed * 9.5;
+        // Proportional speed: 1x = 32 px/sec (0.1x = 3.2 px/sec, 10x = 320 px/sec)
+        const pxPerSec = 32 * autoScrollSpeed;
         autoScrollCarry += pxPerSec * dtSec;
         const stepPx = Math.floor(autoScrollCarry);
         if (stepPx >= 1) {
             autoScrollCarry -= stepPx;
-            userScrolledSinceLoad = true;
-            const maxScroll = getMaxScrollableY();
-            if (maxScroll > 20 && getCurrentScrollY() >= maxScroll - 2) {
-                stopAutoScroll();
-                syncSubSectionReadingProgress(true);
+            const maxScroll = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight;
+            if (window.scrollY >= maxScroll - 2) {
+                stopAutoScroll(false);
                 showQuickToast('Page mukammal ho gaya');
                 return;
             }
-            scrollPageBy(stepPx);
+            window.scrollBy(0, stepPx);
         }
         autoScrollRaf = requestAnimationFrame(autoScrollStep);
     }
 
     function startAutoScroll() {
+        if (!isScrollButtonEnabled()) {
+            showQuickToast('Optional Scroll Button OFF hai — Settings mein ON karein');
+            return;
+        }
         if (autoScrollRunning) return;
         autoScrollRunning = true;
+        autoScrollPaused = false;
         autoScrollLastTs = 0;
         autoScrollCarry = 0;
         syncAutoScrollUI();
         autoScrollRaf = requestAnimationFrame(autoScrollStep);
     }
 
+    window.awraadSetScrollButtonEnabled = function(enabled) {
+        const on = Boolean(enabled);
+        localStorage.setItem(SCROLL_BTN_KEY, on ? 'true' : 'false');
+        if (!on) stopAutoScroll(false);
+        syncAutoScrollUI();
+    };
+
     function openAutoScrollBar(autoStart) {
+        if (!isScrollButtonEnabled()) {
+            showQuickToast('Optional Scroll Button OFF hai — Settings mein ON karein');
+            return;
+        }
         if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
         if (!autoScrollBarBuilt && !document.getElementById('autoScrollBar')) {
             autoScrollBarBuilt = true;
             const I = window.AWRAAD_SVG;
+            const optsHtml = SCROLL_SPEED_STEPS.map((s) =>
+                `<option value="${s}"${s === autoScrollSpeed ? ' selected' : ''}>${s}x</option>`
+            ).join('');
             document.body.insertAdjacentHTML('beforeend', `
                 <div id="autoScrollBar" class="autoscroll-bar print-none" role="region" aria-label="Auto Scroll Controls">
-                    <button type="button" id="autoScrollPlayPauseBtn" class="autoscroll-btn play-primary" title="Play / Pause">${I.play}</button>
+                    <button type="button" id="autoScrollPlayPauseBtn" class="autoscroll-btn play-primary" title="Start">${I.play}</button>
                     <button type="button" id="autoScrollSlowerBtn" class="autoscroll-btn" title="Slower">&minus;</button>
-                    <span id="autoScrollSpeedLabel" class="autoscroll-speed-label">Speed 3x</span>
+                    <select id="autoScrollSpeedSelect" class="autoscroll-speed-select" aria-label="Scroll Speed">${optsHtml}</select>
                     <button type="button" id="autoScrollFasterBtn" class="autoscroll-btn" title="Faster">+</button>
                     <button type="button" id="autoScrollCloseBtn" class="autoscroll-btn" title="Close">${I.close}</button>
                 </div>
             `);
 
-            document.getElementById('autoScrollPlayPauseBtn').addEventListener('click', () => {
-                if (autoScrollRunning) stopAutoScroll();
+            document.getElementById('autoScrollPlayPauseBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (autoScrollRunning) stopAutoScroll(true);
                 else startAutoScroll();
             });
-            document.getElementById('autoScrollSlowerBtn').addEventListener('click', () => {
-                autoScrollSpeed = Math.max(1, autoScrollSpeed - 1);
-                localStorage.setItem(AUTOSCROLL_SPEED_KEY, String(autoScrollSpeed));
-                syncAutoScrollUI();
+            document.getElementById('autoScrollSlowerBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                stepScrollSpeed(-1);
             });
-            document.getElementById('autoScrollFasterBtn').addEventListener('click', () => {
-                autoScrollSpeed = Math.min(10, autoScrollSpeed + 1);
-                localStorage.setItem(AUTOSCROLL_SPEED_KEY, String(autoScrollSpeed));
-                syncAutoScrollUI();
+            document.getElementById('autoScrollFasterBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                stepScrollSpeed(1);
             });
-            document.getElementById('autoScrollCloseBtn').addEventListener('click', () => {
-                stopAutoScroll();
+            document.getElementById('autoScrollSpeedSelect').addEventListener('change', (e) => {
+                e.stopPropagation();
+                setScrollSpeed(e.target.value);
+            });
+            document.getElementById('autoScrollCloseBtn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                stopAutoScroll(false);
                 const bar = document.getElementById('autoScrollBar');
                 if (bar) bar.classList.remove('show');
             });
 
             window.addEventListener('touchstart', (e) => {
-                if (autoScrollRunning && !e.target.closest('#autoScrollBar')) {
-                    stopAutoScroll();
+                if (autoScrollRunning && !e.target.closest('#autoScrollBar, #fabAutoScrollBtn, #tasbeehModal, #tasbeehMinimized')) {
+                    stopAutoScroll(true);
                 }
             }, { passive: true });
         }
@@ -10008,7 +9751,9 @@
                 tag: 'Page'
             };
         });
-        try { localStorage.setItem(PAGES_DIR_KEY, JSON.stringify(Object.values(map))); } catch (e) {}
+        try {
+            localStorage.setItem(PAGES_DIR_KEY, JSON.stringify(Object.values(map)));
+        } catch (e) {}
     }
 
     function getSearchPagesDirectory() {
@@ -10042,7 +9787,7 @@
         }
 
         if (q.length >= 2 && (activeSearchFilter === 'all' || activeSearchFilter === 'thispage')) {
-            const activeSec = getActiveContentSectionEl();
+            const activeSec = document.querySelector('.hizb-section.active, .index-section.active, .shijra-section.active');
             const scope = activeSec || document;
             const nodes = scope.querySelectorAll('.section-heading, .dua-entry, .malfooz-card, .shijra-table tr');
             let pageHits = 0;
@@ -10211,7 +9956,7 @@
     }
 
     // -----------------------------------------
-    // E. PROGRESS BAR + FLOATING FABS (CAPTURE-PHASE SCROLL LISTENER FOR ANY CONTAINER)
+    // E. PROGRESS BAR + FLOATING SCROLL-TO-TOP / AUTO-SCROLL FABS (ZERO-LAG SCROLL LOOP)
     // -----------------------------------------
     function initReadingChrome() {
         const I = window.AWRAAD_SVG;
@@ -10241,20 +9986,22 @@
         if (scrollTopBtn) {
             scrollTopBtn.addEventListener('click', () => {
                 stopAutoScroll();
-                userScrolledSinceLoad = true;
-                scrollPageTo(0, true);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         }
         if (fabAutoScroll) {
-            fabAutoScroll.addEventListener('click', () => {
+            fabAutoScroll.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!isScrollButtonEnabled()) return;
                 const bar = document.getElementById('autoScrollBar');
                 if (bar && bar.classList.contains('show')) {
-                    if (autoScrollRunning) stopAutoScroll();
+                    if (autoScrollRunning) stopAutoScroll(true);
                     else startAutoScroll();
                 } else {
                     openAutoScrollBar(true);
                 }
             });
+            syncAutoScrollUI();
         }
 
         let rafTicking = false;
@@ -10263,8 +10010,10 @@
         function onScrollFrame() {
             rafTicking = false;
             const currY = getCurrentScrollY();
-            const maxY = getMaxScrollableY();
-            const pct = maxY > 20 ? Math.min(100, Math.max(0, (currY / maxY) * 100)) : 0;
+            if (cachedMaxScrollY <= 0) {
+                cachedMaxScrollY = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
+            }
+            const pct = cachedMaxScrollY > 20 ? Math.min(100, Math.max(0, (currY / cachedMaxScrollY) * 100)) : 0;
 
             if (progressFill) progressFill.style.width = pct.toFixed(1) + '%';
             const showTop = currY > 360;
@@ -10276,42 +10025,30 @@
                 navbar.classList.remove('navbar-hidden');
             }
 
-            if (!resumeRestoreActive || userScrolledSinceLoad) {
+            if (!resumeRestoreActive || userInteractedSinceLoad) {
                 scheduleSyncReadingProgress();
             }
         }
 
-        function handleAnyScroll(e) {
-            const tgt = e && e.target;
-            if (tgt && tgt !== window && tgt !== document && tgt.nodeType === 1) {
-                if (isChromeOrExcludedNode(tgt) || tgt.closest('.table-scroll-wrap')) return;
-                if (isValidReadingScroller(tgt)) {
-                    lastObservedScroller = tgt;
-                }
-            }
+        window.addEventListener('scroll', () => {
             if (!rafTicking) {
                 rafTicking = true;
                 requestAnimationFrame(onScrollFrame);
             }
-        }
-
-        document.addEventListener('scroll', handleAnyScroll, { capture: true, passive: true });
-        window.addEventListener('scroll', handleAnyScroll, { passive: true });
+        }, { passive: true });
     }
 
     // -----------------------------------------
-    // F. BOOT PART 17 & WIRE ALL EVENT LISTENERS
+    // F. BOOT PART 17 & WIRE ALL CLICK HANDLERS
     // -----------------------------------------
     function bootReadingUXSuite() {
         purgeLegacyContinueStorage();
         harvestSectionRegistryFromIndex();
         harvestIndexDirectoryIfOnIndex();
-        loadBookmarks(true);
         invalidateLayoutCaches();
 
         initReadingChrome();
         tryRestorePendingScroll();
-
         if (!isMainIndexPage() && !isSubIndexView(true) && !resumeRestoreActive) {
             syncSubSectionReadingProgress(false);
         }
@@ -10337,8 +10074,8 @@
 
         window.addEventListener('load', () => {
             invalidateLayoutCaches();
-            if (resumeRestoreActive && !userScrolledSinceLoad) {
-                applyPendingResumeNow(true);
+            if (resumeRestoreActive && !userInteractedSinceLoad) {
+                applyPendingResumeNow();
             }
         });
 
@@ -10348,11 +10085,12 @@
 
         window.addEventListener('awraad:tajweeddone', () => {
             invalidateLayoutCaches();
-            if (resumeRestoreActive && !userScrolledSinceLoad) {
-                applyPendingResumeNow(true);
+            if (resumeRestoreActive && !userInteractedSinceLoad) {
+                applyPendingResumeNow();
             }
         });
 
+        // Capture clicks on any Sub-Index Menu card (works for href links and inline JS onclick switchers)
         document.addEventListener('click', (e) => {
             if (isMainIndexPage()) return;
             const cards = getMenuCardsList();
@@ -10381,10 +10119,7 @@
                             curTrig.sectionId = activeSec.id;
                             saveLastSubTrigger(curTrig);
                         }
-                        userScrolledSinceLoad = false;
-                        if (!resumeRestoreActive) {
-                            syncSubSectionReadingProgress(false);
-                        }
+                        userInteractedSinceLoad = false;
                         refreshBookmarkIndicators();
                         refreshContinueViews();
                     }
@@ -10395,54 +10130,40 @@
         function onSectionSwitched() {
             setTimeout(() => {
                 invalidateLayoutCaches();
-                const nowSub = isSubIndexView(true);
-                if (!isMainIndexPage() && !nowSub) {
-                    const descNow = getActiveSubSectionDescriptor();
-                    if (completedUniqueKey && completedUniqueKey !== descNow.uniqueKey) {
-                        completedUniqueKey = null;
-                    }
-                    if (!resumeRestoreActive) {
-                        userScrolledSinceLoad = false;
-                        syncSubSectionReadingProgress(false);
-                    }
+                if (!isMainIndexPage() && !isSubIndexView(true) && !resumeRestoreActive) {
+                    syncSubSectionReadingProgress(false);
                 }
                 refreshBookmarkIndicators();
                 refreshContinueViews();
-            }, 110);
+            }, 120);
         }
 
         window.addEventListener('awraad:sectionchange', onSectionSwitched);
-        window.addEventListener('hashchange', onSectionSwitched);
 
-        let touchStartY = 0;
-        window.addEventListener('touchstart', (e) => {
-            if (e.touches && e.touches.length === 1) {
-                touchStartY = e.touches[0].clientY;
-            }
+        window.addEventListener('hashchange', () => {
+            onSectionSwitched();
+        });
+
+        window.addEventListener('touchstart', markUserInteraction, { passive: true });
+        window.addEventListener('pointerdown', (e) => {
+            if (!e.target.closest('#awraadExitToast')) markUserInteraction();
         }, { passive: true });
-        window.addEventListener('touchmove', (e) => {
-            if (e.touches && e.touches.length === 1) {
-                if (Math.abs(e.touches[0].clientY - touchStartY) > 12) {
-                    markUserScrolled();
-                }
-            }
-        }, { passive: true });
-        window.addEventListener('wheel', markUserScrolled, { passive: true });
+        window.addEventListener('wheel', markUserInteraction, { passive: true });
         window.addEventListener('keydown', (e) => {
             if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Space', 'Home', 'End', ' '].includes(e.key)) {
-                markUserScrolled();
+                markUserInteraction();
             }
         }, { passive: true });
 
         window.addEventListener('touchend', () => {
-            if (userScrolledSinceLoad && !isMainIndexPage() && !isSubIndexView(false)) {
+            if (userInteractedSinceLoad && !isMainIndexPage() && !isSubIndexView(false)) {
                 syncSubSectionReadingProgress(true);
             }
         }, { passive: true });
 
         document.addEventListener('click', (e) => {
             if (e.target.closest('a[href], button, .nav-btn, .drawer-item')) {
-                if (!isMainIndexPage() && !isSubIndexView(false) && (!resumeRestoreActive || userScrolledSinceLoad)) {
+                if (!isMainIndexPage() && !isSubIndexView(false) && (!resumeRestoreActive || userInteractedSinceLoad)) {
                     syncSubSectionReadingProgress(true);
                 }
             }
@@ -10450,7 +10171,6 @@
 
         window.addEventListener('pageshow', (e) => {
             invalidateLayoutCaches();
-            loadBookmarks(true);
             if (e.persisted || loadPendingResume()) {
                 tryRestorePendingScroll();
             }
@@ -10460,26 +10180,26 @@
 
         window.addEventListener('focus', () => {
             if (isMainIndexPage() || isSubIndexView(true)) {
-                loadBookmarks(true);
                 refreshContinueViews();
             }
         });
 
-        function flushOnAppExit() {
+        window.addEventListener('pagehide', () => {
             if (!isMainIndexPage() && !isSubIndexView(false)) {
                 syncSubSectionReadingProgress(true);
             }
-        }
-        window.addEventListener('pagehide', flushOnAppExit);
-        window.addEventListener('beforeunload', flushOnAppExit);
-        window.addEventListener('blur', flushOnAppExit);
-        document.addEventListener('freeze', flushOnAppExit);
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (!isMainIndexPage() && !isSubIndexView(false)) {
+                syncSubSectionReadingProgress(true);
+            }
+        });
 
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                flushOnAppExit();
+            if (document.visibilityState === 'hidden' && !isMainIndexPage() && !isSubIndexView(false)) {
+                syncSubSectionReadingProgress(true);
             } else if (document.visibilityState === 'visible') {
-                loadBookmarks(true);
                 refreshBookmarkIndicators();
                 refreshContinueViews();
             }
@@ -10488,7 +10208,7 @@
         document.addEventListener('click', (e) => {
             if (e.target.closest('#navBookmarkBtn')) {
                 e.preventDefault();
-                createCurrentPositionBookmark();
+                toggleCurrentPageBookmark();
                 return;
             }
             if (e.target.closest('#openBookmarksBtn')) {
@@ -10526,7 +10246,6 @@
         bootReadingUXSuite();
     }
 })();
-
 
 // ==========================================
 // PART 18: LEFT-TO-RIGHT SWIPE SIDEBAR SHORTCUT ICON RAIL (LAZY + ZERO-LAG)
@@ -10783,7 +10502,7 @@
     }
 
     function getSubmenuGroups() {
-        const isShajara = window.location.pathname.toLowerCase().endsWith('shajara_e_alaviyya.html');
+        const isShajara = window.location.pathname.toLowerCase().endsWith('Shajara_e_Alaviyya.html');
         const shajaraBase = isShajara ? '' : './Shajara_e_Alaviyya.html';
         return {
             shajara: {
@@ -11123,22 +10842,23 @@
 })();
 
 // ==========================================
-// PART 19: LIGHTWEIGHT GOOGLE ANALYTICS (ANDROID APK + iPHONE PWA + PACKAGE/VERSION TRACKING)
+// PART 19: LIGHTWEIGHT GOOGLE ANALYTICS (ANDROID APK + iPHONE PWA)
 // ==========================================
 (function() {
     const GA_MEASUREMENT_ID = "G-D26FJ05YQZ";
     const IGNORE_KEY = "awraad_admin_ignore";
-    const OFFICIAL_PACKAGE_ID = 'com.awraad.nooriya';
-    const REQUIRED_NATIVE_VER = 2;
     if (!GA_MEASUREMENT_ID || !GA_MEASUREMENT_ID.startsWith("G-")) return;
 
     function isNativeCapacitorApp() {
         try {
-            if (window.Capacitor && typeof window.Capacitor.isNativePlatform === "function" && window.Capacitor.isNativePlatform()) {
-                return true;
-            }
-        } catch (e) {}
-        return /\b(AwraadNative\/\d+|wv)\b/i.test(navigator.userAgent || "");
+            return Boolean(
+                window.Capacitor &&
+                typeof window.Capacitor.isNativePlatform === "function" &&
+                window.Capacitor.isNativePlatform()
+            );
+        } catch (e) {
+            return false;
+        }
     }
 
     function checkAdminOptFlag() {
@@ -11153,72 +10873,15 @@
                 return false;
             }
 
-            if (explicitEnable) {
+            if (explicitEnable || isNativeCapacitorApp()) {
                 localStorage.setItem(IGNORE_KEY, "1");
                 window.name = "AWR_ADMIN_IGNORE";
             }
 
             return localStorage.getItem(IGNORE_KEY) === "1" || window.name === "AWR_ADMIN_IGNORE";
         } catch (e) {
-            return window.name === "AWR_ADMIN_IGNORE";
+            return window.name === "AWR_ADMIN_IGNORE" || isNativeCapacitorApp();
         }
-    }
-
-    function detectNativeVer() {
-        var m = (navigator.userAgent || "").match(/AwraadNative\/(\d+)/i);
-        if (m && m[1]) return parseInt(m[1], 10) || 0;
-        if (typeof window.__AWRAAD_NATIVE_VER === "number") return window.__AWRAAD_NATIVE_VER;
-        return 1;
-    }
-
-    function detectPkgId(cb) {
-        var ua = navigator.userAgent || "";
-        var m = ua.match(/AwraadPkg\/([a-zA-Z0-9._]+)/i);
-        if (m && m[1]) {
-            cb(m[1]);
-            return;
-        }
-        try {
-            var capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-            if (capApp && typeof capApp.getInfo === "function") {
-                capApp.getInfo().then(function(info) {
-                    cb((info && info.id) ? String(info.id) : "unknown_pkg");
-                }).catch(function() {
-                    cb("unknown_pkg");
-                });
-                return;
-            }
-        } catch (e) {}
-        cb("unknown_pkg");
-    }
-
-    function emitApkStatus(gtagFn, appMode) {
-        var nativeVer = detectNativeVer();
-        var isStore = Boolean(window.__AWRAAD_STORE_INSTALL === true || /\bAwraadStore\b/i.test(navigator.userAgent || ""));
-        detectPkgId(function(pkgId) {
-            var cleanPkg = String(pkgId || "unknown_pkg").trim();
-            var isConflicted = Boolean(nativeVer < REQUIRED_NATIVE_VER && cleanPkg && cleanPkg !== "unknown_pkg" && cleanPkg.toLowerCase() !== OFFICIAL_PACKAGE_ID.toLowerCase());
-            var isOutdated = nativeVer < REQUIRED_NATIVE_VER;
-            var statusBucket = isStore
-                ? "store_install"
-                : (isConflicted ? "conflicted_pkg" : (isOutdated ? "outdated_v1" : "updated_v2"));
-
-            try {
-                gtagFn("set", "user_properties", {
-                    awraad_pkg_id: cleanPkg,
-                    awraad_native_ver: String(nativeVer),
-                    awraad_apk_status: statusBucket
-                });
-                gtagFn("event", "apk_client_status", {
-                    app_mode: appMode,
-                    pkg_id: cleanPkg,
-                    native_ver: nativeVer,
-                    is_conflicted_pkg: isConflicted ? 1 : 0,
-                    needs_apk_update: (isOutdated || isConflicted) ? 1 : 0,
-                    apk_status: statusBucket
-                });
-            } catch (e) {}
-        });
     }
 
     function initAwraadAnalytics() {
@@ -11228,9 +10891,8 @@
             if (window.__awraadGaLoaded) return;
             window.__awraadGaLoaded = true;
 
-            const isNative = isNativeCapacitorApp();
             const isStandalonePwa = Boolean((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true);
-            const appMode = isNative ? "android_apk" : (isStandalonePwa ? "iphone_or_pwa" : "web_browser");
+            const appMode = isNativeCapacitorApp() ? "android_apk" : (isStandalonePwa ? "iphone_or_pwa" : "web_browser");
 
             window.dataLayer = window.dataLayer || [];
             function gtag(){ window.dataLayer.push(arguments); }
@@ -11241,10 +10903,6 @@
                 app_mode: appMode,
                 anonymize_ip: true
             });
-
-            if (isNative) {
-                emitApkStatus(gtag, appMode);
-            }
 
             const s = document.createElement("script");
             s.async = true;
@@ -11261,3244 +10919,121 @@
         });
     }
 })();
-
 // ==========================================
-// PART 20: SMART TV UNIFIED REMOTE NAVIGATION SYSTEM (TIMER + PAGE SCROLL + MENU BAR + TOP-RIGHT CONTROLS + ALL EXISTING FIXES)
-// ==========================================
-(function() {
-    function isSmartTvDevice() {
-        var ua = navigator.userAgent || "";
-        var isTvUA = /\b(TV|Android TV|GoogleTV|SMART-TV|SmartTV|BRAVIA|AFT[A-Z0-9]+|MIBOX|SHIELD|Leanback|CrKey)\b/i.test(ua);
-        var w = window.innerWidth || 0;
-        var h = window.innerHeight || 0;
-        var shortSide = Math.min(w, h);
-        var hasTouch = (navigator.maxTouchPoints || 0) > 0;
-
-        if (hasTouch && shortSide < 460 && !isTvUA) return false;
-        if (isTvUA) return true;
-        return w > h && w >= 850 && h >= 460 && !hasTouch;
-    }
-
-    if (!isSmartTvDevice()) return;
-
-    function isIndexPage() {
-        var p = (window.location.pathname || "").toLowerCase();
-        var clean = p.replace(/\/+$/, "");
-        var lastSeg = clean.split("/").pop() || "";
-        if (!lastSeg || lastSeg === "index.html") return true;
-        if (lastSeg.indexOf(".html") === -1) return true;
-        if (document.getElementById("main-menu") || document.getElementById("menu-shijara") || document.querySelector(".index-nav-grid")) {
-            return true;
-        }
-        return false;
-    }
-
-    function isShajaraMultiSectionPage() {
-        return !!document.querySelector(".shijra-section");
-    }
-
-    function updateNavbarHeightVar() {
-        var nav = document.querySelector(".app-navbar");
-        var navH = 54;
-        if (nav) {
-            var r = nav.getBoundingClientRect();
-            navH = Math.max(44, Math.ceil(r.height > 0 ? r.height : 54));
-        }
-        document.documentElement.style.setProperty("--tv-nav-h", navH + "px");
-    }
-
-    // Persistent TV Navigation State (preserves active Shajara section, scroll position & page focus when entering/leaving Menu Bar or Top-Right Controls)
-    var tvNavState = {
-        lastPageFocusEl: null,
-        savedScrollTop: 0,
-        savedSectionId: "",
-        savedSidebarBtn: null,
-        wasModalOpen: false
-    };
-
-    // ------------------------------------------
-    // 1. LIVE AUTO-REFRESH & CACHE CLEAR ENGINE (OPEN OR CLOSED)
-    // ------------------------------------------
-    var TV_BUILD_STAMP = "1795647787672";
-    var lastCacheCheckAt = 0;
-
-    function runTvAutoCacheClear(forceNow) {
-        if (!navigator.onLine) return;
-        var now = Date.now();
-        if (!forceNow && now - lastCacheCheckAt < 25000) return;
-        lastCacheCheckAt = now;
-
-        try {
-            var prevStamp = localStorage.getItem("awraad_tv_js_stamp");
-            if (prevStamp && prevStamp !== TV_BUILD_STAMP && window.caches) {
-                caches.keys().then(function(keys) {
-                    return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-                }).catch(function() {});
-            }
-            localStorage.setItem("awraad_tv_js_stamp", TV_BUILD_STAMP);
-        } catch (e) {}
-
-        Promise.all([
-            fetch("./sw.js?tv_chk=" + now, { cache: "no-store" })
-                .then(function(res) {
-                    if (!res.ok) return "";
-                    var etag = res.headers.get("etag") || res.headers.get("last-modified") || "";
-                    return res.text().then(function(txt) {
-                        var m = txt.match(/CACHE_NAME\s*=\s*["']([^"']+)["']/);
-                        return (m ? m[1] : ("len_" + txt.length)) + "|" + etag;
-                    });
-                })
-                .catch(function() { return ""; }),
-            fetch("./Tajweed_rules.js?tv_chk=" + now, { method: "HEAD", cache: "no-store" })
-                .then(function(res) {
-                    if (!res.ok) return "";
-                    return (res.headers.get("etag") || "") + "|" + (res.headers.get("last-modified") || "") + "|" + (res.headers.get("content-length") || "");
-                })
-                .catch(function() { return ""; })
-        ]).then(function(parts) {
-            var liveVer = (parts[0] + "::" + parts[1]).replace(/^:+|:+$/g, "");
-            if (!liveVer || liveVer === "|::||") return;
-
-            var savedVer = "";
-            var reloadedVer = "";
-            try {
-                savedVer = localStorage.getItem("awraad_tv_live_ver") || "";
-                reloadedVer = sessionStorage.getItem("awraad_tv_reloaded_ver") || "";
-            } catch (e) {}
-
-            if (!savedVer) {
-                try { localStorage.setItem("awraad_tv_live_ver", liveVer); } catch (e) {}
-                return;
-            }
-
-            if (savedVer !== liveVer && reloadedVer !== liveVer) {
-                try {
-                    localStorage.setItem("awraad_tv_live_ver", liveVer);
-                    sessionStorage.setItem("awraad_tv_reloaded_ver", liveVer);
-                } catch (e) {}
-
-                var toast = document.createElement("div");
-                toast.textContent = "New update detected — Refreshing...";
-                toast.style.cssText = "position:fixed;top:16px;right:18px;z-index:2147483600;background:#0c3b2e;color:#fbe59b;border:1.5px solid #e5c158;padding:8px 16px;border-radius:10px;font:700 13px system-ui,sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.45);";
-                if (document.body) document.body.appendChild(toast);
-
-                var tasks = [];
-                if (window.caches) {
-                    tasks.push(
-                        caches.keys().then(function(keys) {
-                            return Promise.all(keys.map(function(k) { return caches.delete(k); }));
-                        }).catch(function() {})
-                    );
-                }
-                if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-                    tasks.push(
-                        navigator.serviceWorker.getRegistrations().then(function(regs) {
-                            return Promise.all(regs.map(function(r) { return r.unregister(); }));
-                        }).catch(function() {})
-                    );
-                }
-
-                Promise.all(tasks).then(function() {
-                    return Promise.all([
-                        fetch(window.location.href, { cache: "reload" }).catch(function() {}),
-                        fetch("./Tajweed_Style.css", { cache: "reload" }).catch(function() {}),
-                        fetch("./Tajweed_rules.js", { cache: "reload" }).catch(function() {})
-                    ]);
-                }).then(function() {
-                    window.location.reload();
-                }).catch(function() {
-                    window.location.reload();
-                });
-            }
-        }).catch(function() {});
-    }
-
-    runTvAutoCacheClear(true);
-    setInterval(function() {
-        if (document.visibilityState === "visible") runTvAutoCacheClear(false);
-    }, 30000);
-    window.addEventListener("online", function() { runTvAutoCacheClear(true); });
-    document.addEventListener("visibilitychange", function() {
-        if (document.visibilityState === "visible") runTvAutoCacheClear(true);
-    });
-
-    // ------------------------------------------
-    // 2. HOME GREEN SPLASH SCREEN (HIDES ALL NAV CARDS UNTIL SIDEBAR SELECTION)
-    // ------------------------------------------
-    function hideAllHomeNavCards() {
-        if (!isIndexPage()) return;
-        document.querySelectorAll("#menu-shijara, #menu-dalail, #menu-bashair, .index-nav-grid, .shijra-grid, .nav-card, .nav-cards, .card-grid").forEach(function(el) {
-            el.classList.add("tv-hide-nav-cards");
-        });
-        document.querySelectorAll(".index-section").forEach(function(sec) {
-            sec.classList.add("tv-hide-nav-cards");
-        });
-        var mainMenu = document.getElementById("main-menu");
-        if (mainMenu) mainMenu.classList.add("tv-hide-nav-cards");
-    }
-
-    function ensureGreenSplashScreen() {
-        if (!isIndexPage()) return;
-        updateNavbarHeightVar();
-        hideAllHomeNavCards();
-
-        var splash = document.getElementById("tvHomeSplash");
-        if (!splash) {
-            splash = document.createElement("section");
-            splash.id = "tvHomeSplash";
-            splash.className = "print-none";
-            splash.setAttribute("aria-label", "Awraad e Alaviya Splash Screen");
-            splash.innerHTML =
-                '<div class="tv-splash-inner">' +
-                    '<div class="tv-splash-bismillah">بِسْمِ اللَّهِ الرَّحْمٰنِ الرَّحِيمِ</div>' +
-                    '<div class="tv-splash-emblem">' +
-                        '<img id="tvSplashLogoImg" src="./icon.png" alt="Awraad e Alaviya">' +
-                    '</div>' +
-                    '<h1 class="tv-splash-ar">أَوْرَادِ عَلَوِيَّه</h1>' +
-                    '<div class="tv-splash-en">Awraad e Alaviya</div>' +
-                    '<div class="tv-splash-divider"></div>' +
-                    '<button type="button" id="tvSplashStartBtn" class="tv-splash-hint">' +
-                        '<span class="tv-splash-hint-dot"></span>' +
-                        '<span>Select an option from Main Menu to view content</span>' +
-                    '</button>' +
-                '</div>';
-            document.body.appendChild(splash);
-
-            var logoImg = document.getElementById("tvSplashLogoImg");
-            if (logoImg) {
-                logoImg.addEventListener("error", function() {
-                    if (logoImg.dataset.fb !== "1") {
-                        logoImg.dataset.fb = "1";
-                        logoImg.src = "./apple-touch-icon.png";
-                    } else {
-                        logoImg.style.display = "none";
-                    }
-                });
-            }
-
-            var hintBtn = document.getElementById("tvSplashStartBtn");
-            if (hintBtn) {
-                hintBtn.addEventListener("click", function() {
-                    var mainBtn = document.getElementById("tvSbMainMenu");
-                    if (mainBtn) openStartMenu("main", mainBtn, true);
-                });
-            }
-        }
-
-        var rawHash = (window.location.hash || "").replace(/^#/, "").toLowerCase();
-        var isHomeDefault = !rawHash || rawHash === "main-menu" || rawHash.indexOf("menu-") === 0;
-        if (isHomeDefault) {
-            document.body.classList.add("tv-home-splash");
-            document.body.classList.remove("tv-book-active");
-            document.body.classList.remove("tv-section-mode");
-        } else {
-            document.body.classList.remove("tv-home-splash");
-        }
-    }
-
-    // ------------------------------------------
-    // 3. SURGICAL OVERLAY QUARANTINE + BOTTOM NAMAAZ/FORBIDDEN BAR
-    // ------------------------------------------
-    var lastBadgeFallback = { isForbidden: false, prayer: "", remSecs: -1 };
-    var cachedAstroKey = "";
-    var cachedAstroSched = null;
-
-    function ensureBottomBar() {
-        var bar = document.getElementById("tvBottomBar");
-        if (bar) return bar;
-
-        bar = document.createElement("div");
-        bar.id = "tvBottomBar";
-        bar.className = "print-none";
-        bar.innerHTML =
-            '<div id="tvNamazStatus">' +
-                '<span id="tvNextNamazLabel" class="tv-nmz-pill">Next Namaaz: --</span>' +
-                '<span id="tvRemainingNamazLabel" class="tv-nmz-pill tv-nmz-rem">Remaining --</span>' +
-            '</div>' +
-            '<div id="tvPageControlsWrap">' +
-                '<button type="button" id="tvPgLeftBtn" class="tv-pg-btn" tabindex="-1">&#9664; Left</button>' +
-                '<span id="tvPageCounter">Page 1 / 1</span>' +
-                '<button type="button" id="tvPgRightBtn" class="tv-pg-btn" tabindex="-1">Right &#9654;</button>' +
-                '<span id="tvPageHint">&#9664; &#9654; Page &nbsp;|&nbsp; &#9650; Controls &nbsp;|&nbsp; Back Menu</span>' +
-            '</div>' +
-            '<div id="tvSectionHintWrap">' +
-                '<span>&#9650;&#9660; Scroll &nbsp;|&nbsp; &#9664;&#9654; Reset / Start / Min / Sec &nbsp;|&nbsp; &#9664; Reset = Menu</span>' +
-            '</div>';
-        document.body.appendChild(bar);
-
-        document.getElementById("tvPgLeftBtn").addEventListener("click", function() {
-            turnPageByDirection("left");
-        });
-        document.getElementById("tvPgRightBtn").addEventListener("click", function() {
-            turnPageByDirection("right");
-        });
-        return bar;
-    }
-
-    function todayDateKey() {
-        var d = new Date();
-        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-    }
-
-    function normalizeFardName(raw) {
-        var s = String(raw || "").toLowerCase().trim();
-        if (/fajr/.test(s)) return "Fajr";
-        if (/dhuhr|zuhr|zohr|duhr/.test(s)) return "Zuhr";
-        if (/asr/.test(s)) return "Asr";
-        if (/maghrib|magrib/.test(s)) return "Maghrib";
-        if (/isha|esha/.test(s)) return "Isha";
-        return "";
-    }
-
-    function parseClockToSecs(timeStr, hintKey) {
-        if (typeof timeStr === "number" && isFinite(timeStr)) {
-            if (timeStr >= 0 && timeStr < 86400) return Math.round(timeStr);
-            return null;
-        }
-        var m = String(timeStr || "").match(/(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AP]M))?/i);
-        if (!m) return null;
-        var hh = parseInt(m[1], 10);
-        var mm = parseInt(m[2], 10);
-        var ss = m[3] ? parseInt(m[3], 10) : 0;
-        var ap = (m[4] || "").toUpperCase();
-        if (ap === "PM" && hh < 12) hh += 12;
-        if (ap === "AM" && hh === 12) hh = 0;
-        if (!ap && hintKey) {
-            var hk = hintKey.toLowerCase();
-            if ((hk === "asr" || hk === "sunset" || hk === "maghrib" || hk === "isha") && hh < 12) hh += 12;
-            if ((hk === "zuhr" || hk === "zawal") && hh < 11) hh += 12;
-        }
-        if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
-        return hh * 3600 + mm * 60 + ss;
-    }
-
-    function formatSecs12h(secs) {
-        if (!isFinite(secs) || secs === null) return "";
-        var totalMins = Math.floor(((secs % 86400) + 86400) % 86400 / 60);
-        var h24 = Math.floor(totalMins / 60);
-        var m = totalMins % 60;
-        var ap = h24 >= 12 ? "PM" : "AM";
-        var h12 = h24 % 12;
-        if (h12 === 0) h12 = 12;
-        return h12 + ":" + String(m).padStart(2, "0") + " " + ap;
-    }
-
-    function formatRemainingHuman(totalSecs) {
-        if (!isFinite(totalSecs) || totalSecs < 0) return "--";
-        if (totalSecs < 60) return "1 min";
-        var totalMins = Math.ceil(totalSecs / 60);
-        var hrs = Math.floor(totalMins / 60);
-        var mins = totalMins % 60;
-        if (hrs > 0 && mins > 0) return hrs + (hrs === 1 ? " hr, " : " hrs, ") + mins + " min";
-        if (hrs > 0) return hrs + (hrs === 1 ? " hr" : " hrs");
-        return mins + " min";
-    }
-
-    function parseDurationTextToSecs(str) {
-        var s = String(str || "").trim();
-        if (!s) return -1;
-        var hms = s.match(/(\d{1,2}):(\d{2}):(\d{2})/);
-        if (hms) return parseInt(hms[1], 10) * 3600 + parseInt(hms[2], 10) * 60 + parseInt(hms[3], 10);
-        var hm = s.match(/(\d{1,2}):(\d{2})/);
-        if (hm && !/am|pm/i.test(s)) return parseInt(hm[1], 10) * 3600 + parseInt(hm[2], 10) * 60;
-        var hrsM = s.match(/(\d+)\s*(?:hrs?|hours?|h)\b/i);
-        var minM = s.match(/(\d+)\s*(?:mins?|minutes?|m)\b/i);
-        var secM = s.match(/(\d+)\s*(?:secs?|seconds?|s)\b/i);
-        if (hrsM || minM || secM) {
-            return (hrsM ? parseInt(hrsM[1], 10) * 3600 : 0) +
-                   (minM ? parseInt(minM[1], 10) * 60 : 0) +
-                   (secM ? parseInt(secM[1], 10) : 0);
-        }
-        return -1;
-    }
-
-    function extractScheduleDeep(obj, out, depth) {
-        if (!obj || typeof obj !== "object" || depth > 4) return;
-        var keyMap = [
-            { target: "fajr", rx: /^fajr$/i },
-            { target: "sunrise", rx: /^(sunrise|shuruq|shurooq|tulu)$/i },
-            { target: "ishraq", rx: /^ishraq$/i },
-            { target: "zawal", rx: /^(zawal|istiwa|midday)$/i },
-            { target: "zuhr", rx: /^(dhuhr|zuhr|zohr|duhr)$/i },
-            { target: "asr", rx: /^asr$/i },
-            { target: "sunset", rx: /^(sunset|ghurub)$/i },
-            { target: "maghrib", rx: /^(maghrib|magrib)$/i },
-            { target: "isha", rx: /^(isha|esha)$/i }
-        ];
-        var keys = Object.keys(obj);
-        for (var i = 0; i < keys.length; i++) {
-            var k = keys[i];
-            var v = obj[k];
-            if (typeof v === "string" || typeof v === "number") {
-                for (var j = 0; j < keyMap.length; j++) {
-                    if (keyMap[j].rx.test(k) && out[keyMap[j].target] == null) {
-                        var secs = parseClockToSecs(v, keyMap[j].target);
-                        if (secs !== null) out[keyMap[j].target] = secs;
-                    }
-                }
-            } else if (v && typeof v === "object" && !Array.isArray(v)) {
-                extractScheduleDeep(v, out, depth + 1);
-            }
-        }
-    }
-
-    function extractCoordsDeep(obj, out, depth) {
-        if (!obj || typeof obj !== "object" || depth > 3) return;
-        var keys = Object.keys(obj);
-        for (var i = 0; i < keys.length; i++) {
-            var k = keys[i];
-            var v = obj[k];
-            var num = typeof v === "number" ? v : parseFloat(v);
-            if (/^(lat|latitude)$/i.test(k) && isFinite(num) && Math.abs(num) <= 90 && out.lat === null) out.lat = num;
-            else if (/^(lng|lon|long|longitude)$/i.test(k) && isFinite(num) && Math.abs(num) <= 180 && out.lng === null) out.lng = num;
-            else if (v && typeof v === "object" && !Array.isArray(v)) extractCoordsDeep(v, out, depth + 1);
-        }
-    }
-
-    function computeAstronomicalSchedule(lat, lng, dateObj) {
-        var D2R = Math.PI / 180;
-        var R2D = 180 / Math.PI;
-        var y = dateObj.getFullYear();
-        var m = dateObj.getMonth() + 1;
-        var d = dateObj.getDate();
-        if (m <= 2) { y -= 1; m += 12; }
-        var A = Math.floor(y / 100);
-        var B = 2 - A + Math.floor(A / 4);
-        var jd = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d + B - 1524.5 - (lng / 360);
-
-        var D = jd - 2451545.0;
-        var g = (357.529 + 0.98560028 * D) % 360;
-        if (g < 0) g += 360;
-        var q = (280.459 + 0.98564736 * D) % 360;
-        if (q < 0) q += 360;
-        var L = (q + 1.915 * Math.sin(g * D2R) + 0.020 * Math.sin(2 * g * D2R)) % 360;
-        if (L < 0) L += 360;
-        var e = 23.439 - 0.00000036 * D;
-        var RA = Math.atan2(Math.cos(e * D2R) * Math.sin(L * D2R), Math.cos(L * D2R)) * R2D / 15;
-        RA = ((RA % 24) + 24) % 24;
-        var decl = Math.asin(Math.sin(e * D2R) * Math.sin(L * D2R)) * R2D;
-        var eqT = (q / 15) - RA;
-        if (eqT > 12) eqT -= 24;
-        if (eqT < -12) eqT += 24;
-
-        var tz = -dateObj.getTimezoneOffset() / 60;
-        var noon = 12 + tz - (lng / 15) - eqT;
-
-        function hourAngle(altDeg) {
-            var cosH = (Math.sin(altDeg * D2R) - Math.sin(lat * D2R) * Math.sin(decl * D2R)) /
-                       (Math.cos(lat * D2R) * Math.cos(decl * D2R));
-            if (cosH > 1) return 0;
-            if (cosH < -1) return 12;
-            return Math.acos(cosH) * R2D / 15;
-        }
-
-        var sunriseH = noon - hourAngle(-0.833);
-        var sunsetH = noon + hourAngle(-0.833);
-        var fajrH = noon - hourAngle(-18);
-        var ishaH = noon + hourAngle(-18);
-        var asrAlt = Math.atan(1 / (2 + Math.tan(Math.abs(lat - decl) * D2R))) * R2D;
-        var asrH = noon + hourAngle(asrAlt);
-
-        function hToSecs(h) {
-            return Math.round((((h % 24) + 24) % 24) * 3600);
-        }
-
-        return {
-            fajr: hToSecs(fajrH),
-            sunrise: hToSecs(sunriseH),
-            ishraq: hToSecs(sunriseH) + 15 * 60,
-            zawal: hToSecs(noon) - 10 * 60,
-            zuhr: hToSecs(noon) + 60,
-            asr: hToSecs(asrH),
-            sunset: hToSecs(sunsetH) - 15 * 60,
-            maghrib: hToSecs(sunsetH),
-            isha: hToSecs(ishaH)
-        };
-    }
-
-    function readPrayerSchedule() {
-        var sched = {};
-        var coords = { lat: null, lng: null };
-
-        var ptModal = document.getElementById("prayerTimesModal");
-        if (ptModal) {
-            var rows = ptModal.querySelectorAll("tr, .pt-row, .prayer-row, [data-prayer], li, div");
-            var labelMap = [
-                { key: "fajr", rx: /\bfajr\b/i },
-                { key: "sunrise", rx: /\b(sunrise|shuruq|tulu)\b/i },
-                { key: "ishraq", rx: /\bishraq\b/i },
-                { key: "zawal", rx: /\b(zawal|istiwa)\b/i },
-                { key: "zuhr", rx: /\b(dhuhr|zuhr|zohr)\b/i },
-                { key: "asr", rx: /\basr\b/i },
-                { key: "sunset", rx: /\b(sunset|ghurub)\b/i },
-                { key: "maghrib", rx: /\b(maghrib|magrib)\b/i },
-                { key: "isha", rx: /\b(isha|esha)\b/i }
-            ];
-            for (var r = 0; r < rows.length; r++) {
-                var row = rows[r];
-                if (row.children && row.children.length > 6) continue;
-                var txt = (row.textContent || "").replace(/\s+/g, " ").trim();
-                if (!txt || txt.length > 90) continue;
-                var tMatch = txt.match(/(\d{1,2}:\d{2}(?:\s*[AP]M)?)/i);
-                if (!tMatch) continue;
-                for (var j = 0; j < labelMap.length; j++) {
-                    if (labelMap[j].rx.test(txt) && sched[labelMap[j].key] == null) {
-                        var secs = parseClockToSecs(tMatch[1], labelMap[j].key);
-                        if (secs !== null) sched[labelMap[j].key] = secs;
-                    }
-                }
-            }
-        }
-
-        try {
-            var todayKey = todayDateKey();
-            var ownCached = JSON.parse(localStorage.getItem("awraad_tv_prayer_sched_v1") || "null");
-            if (ownCached && ownCached.date === todayKey && ownCached.sched) {
-                Object.keys(ownCached.sched).forEach(function(k) {
-                    if (sched[k] == null) sched[k] = ownCached.sched[k];
-                });
-            }
-            for (var lsIdx = 0; lsIdx < localStorage.length; lsIdx++) {
-                var lsKey = localStorage.key(lsIdx) || "";
-                if (lsKey.indexOf("awraad_tv_start_menu") === 0) continue;
-                var rawVal = localStorage.getItem(lsKey);
-                if (!rawVal) continue;
-                if (rawVal.charAt(0) === "{") {
-                    try {
-                        var parsed = JSON.parse(rawVal);
-                        if (sched.fajr == null || sched.maghrib == null) extractScheduleDeep(parsed, sched, 0);
-                        if (coords.lat === null || coords.lng === null) extractCoordsDeep(parsed, coords, 0);
-                    } catch (e2) {}
-                } else {
-                    var nVal = parseFloat(rawVal);
-                    if (/lat/i.test(lsKey) && isFinite(nVal) && Math.abs(nVal) <= 90 && coords.lat === null) coords.lat = nVal;
-                    if (/(lng|lon)/i.test(lsKey) && isFinite(nVal) && Math.abs(nVal) <= 180 && coords.lng === null) coords.lng = nVal;
-                }
-            }
-        } catch (e) {}
-
-        if (sched.fajr != null && sched.zuhr != null && sched.asr != null && sched.maghrib != null && sched.isha != null) {
-            try {
-                localStorage.setItem("awraad_tv_prayer_sched_v1", JSON.stringify({ date: todayDateKey(), sched: sched }));
-            } catch (e) {}
-            return sched;
-        }
-
-        var useLat = coords.lat !== null ? coords.lat : 17.3850;
-        var useLng = coords.lng !== null ? coords.lng : 78.4867;
-        var aKey = todayDateKey() + "_" + useLat.toFixed(3) + "_" + useLng.toFixed(3);
-        if (cachedAstroKey !== aKey || !cachedAstroSched) {
-            cachedAstroKey = aKey;
-            cachedAstroSched = computeAstronomicalSchedule(useLat, useLng, new Date());
-        }
-        return cachedAstroSched;
-    }
-
-    function computeNamazStatusFromSchedule(sched) {
-        var now = new Date();
-        var nowSecs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-
-        if (sched.sunrise != null) {
-            var sunriseEnd = (sched.ishraq != null && sched.ishraq > sched.sunrise && sched.ishraq - sched.sunrise <= 2400)
-                ? sched.ishraq : (sched.sunrise + 15 * 60);
-            if (nowSecs >= sched.sunrise && nowSecs < sunriseEnd) {
-                return { isForbidden: true, remSecs: sunriseEnd - nowSecs };
-            }
-        }
-
-        if (sched.zuhr != null) {
-            var zawalStart = (sched.zawal != null && sched.zawal < sched.zuhr && sched.zuhr - sched.zawal <= 1800)
-                ? sched.zawal : (sched.zuhr - 10 * 60);
-            if (nowSecs >= zawalStart && nowSecs < sched.zuhr) {
-                return { isForbidden: true, remSecs: sched.zuhr - nowSecs };
-            }
-        }
-
-        if (sched.maghrib != null) {
-            var sunsetStart = (sched.sunset != null && sched.sunset < sched.maghrib && sched.maghrib - sched.sunset <= 1800)
-                ? sched.sunset : (sched.maghrib - 15 * 60);
-            if (nowSecs >= sunsetStart && nowSecs < sched.maghrib) {
-                return { isForbidden: true, remSecs: sched.maghrib - nowSecs };
-            }
-        }
-
-        var fardList = [
-            { name: "Fajr", secs: sched.fajr },
-            { name: "Zuhr", secs: sched.zuhr },
-            { name: "Asr", secs: sched.asr },
-            { name: "Maghrib", secs: sched.maghrib },
-            { name: "Isha", secs: sched.isha }
-        ];
-
-        for (var i = 0; i < fardList.length; i++) {
-            if (fardList[i].secs > nowSecs) {
-                return {
-                    isForbidden: false,
-                    prayer: fardList[i].name,
-                    timeStr: formatSecs12h(fardList[i].secs),
-                    remSecs: fardList[i].secs - nowSecs
-                };
-            }
-        }
-
-        return {
-            isForbidden: false,
-            prayer: "Fajr",
-            timeStr: formatSecs12h(sched.fajr),
-            remSecs: (sched.fajr + 86400) - nowSecs
-        };
-    }
-
-    var WHITELIST_BODY_SEL = "#tvCompactSidebar, #tvHomeSplash, #tvStartMenuWrap, #tvStartMenuBackdrop, #tvBottomBar, .app-navbar, .continuous-frame, #awraadSideDrawer, #awraadDrawerBackdrop, #settingsModal, #tasbeehModal, #navWarningModal, #prayerTimesModal, #eventsModal, #bookmarksModal, #quickSearchModal, #colorPaletteModal, #hijriStepperModal, #resetAllConfirmModal, .pt-submodal, [role='dialog']";
-
-    function suppressStrayOverlaysAndSyncNamaz() {
-        var bodyKids = Array.from(document.body.children || []);
-        for (var b = 0; b < bodyKids.length; b++) {
-            var kid = bodyKids[b];
-            if (!kid || kid.nodeType !== 1 || kid.classList.contains("tv-hide-overlay")) continue;
-            if (kid.matches(WHITELIST_BODY_SEL)) continue;
-            var kst = window.getComputedStyle(kid);
-            if (kst.position === "fixed") {
-                var kTxt = (kid.textContent || "").replace(/\s+/g, " ").trim();
-                if (/makroo|makruh|forbidden|zawal|prohibited/i.test(kTxt) && kTxt.length < 120) {
-                    lastBadgeFallback.isForbidden = true;
-                    var ds = parseDurationTextToSecs(kTxt);
-                    if (ds >= 0) lastBadgeFallback.remSecs = ds;
-                } else {
-                    var km = kTxt.match(/\bto\s+(fajr|dhuhr|zuhr|zohr|asr|maghrib|magrib|isha|esha)\b\s*(.*)/i);
-                    if (km) {
-                        var kn = normalizeFardName(km[1]);
-                        if (kn) {
-                            lastBadgeFallback.isForbidden = false;
-                            lastBadgeFallback.prayer = kn;
-                            var rs = parseDurationTextToSecs(km[2] || kTxt);
-                            if (rs >= 0) lastBadgeFallback.remSecs = rs;
-                        }
-                    }
-                }
-                kid.classList.add("tv-hide-overlay");
-            }
-        }
-
-        var navEl = document.querySelector(".app-navbar");
-        if (navEl) {
-            var navNodes = navEl.querySelectorAll("div, span, a, button, p");
-            for (var n = 0; n < navNodes.length; n++) {
-                var nel = navNodes[n];
-                if (nel.classList.contains("tv-hide-overlay")) continue;
-                var nTxt = (nel.textContent || "").replace(/\s+/g, " ").trim();
-                if (!nTxt || nTxt.length > 90) continue;
-                var isPrayerPill =
-                    /\bto\s+(fajr|dhuhr|zuhr|zohr|asr|maghrib|magrib|isha|esha|sunrise|shuruq)\b/i.test(nTxt) ||
-                    /(?:fajr|dhuhr|zuhr|asr|maghrib|magrib|isha|sunrise|shuruq)\s*adhan\s*time/i.test(nTxt) ||
-                    /^to\s+\d+\s*(?:mins?|hrs?|m|h)/i.test(nTxt) ||
-                    /makroo|makruh|forbidden\s*time/i.test(nTxt);
-                if (isPrayerPill) {
-                    var targetHide = nel;
-                    while (targetHide.parentElement && targetHide.parentElement !== navEl) {
-                        var pTxt = (targetHide.parentElement.textContent || "").replace(/\s+/g, " ").trim();
-                        if (pTxt === nTxt) targetHide = targetHide.parentElement;
-                        else break;
-                    }
-                    if (/makroo|makruh|forbidden/i.test(nTxt)) {
-                        lastBadgeFallback.isForbidden = true;
-                        var nd = parseDurationTextToSecs(nTxt);
-                        if (nd >= 0) lastBadgeFallback.remSecs = nd;
-                    }
-                    targetHide.classList.add("tv-hide-overlay");
-                }
-            }
-        }
-
-        var drawerLine = document.getElementById("drawerPrayerDetailsLine");
-        if (drawerLine) {
-            var dlTxt = (drawerLine.textContent || "").replace(/\s+/g, " ").trim();
-            if (/makroo|makruh|forbidden|prohibited/i.test(dlTxt)) {
-                lastBadgeFallback.isForbidden = true;
-                var dls = parseDurationTextToSecs(dlTxt);
-                if (dls >= 0) lastBadgeFallback.remSecs = dls;
-            }
-        }
-
-        var nextEl = document.getElementById("tvNextNamazLabel");
-        var remEl = document.getElementById("tvRemainingNamazLabel");
-        if (!nextEl || !remEl) return;
-
-        var sched = readPrayerSchedule();
-        var info = computeNamazStatusFromSchedule(sched);
-
-        if (lastBadgeFallback.isForbidden && !info.isForbidden && lastBadgeFallback.remSecs >= 0) {
-            info = { isForbidden: true, remSecs: lastBadgeFallback.remSecs };
-        }
-
-        if (info.isForbidden) {
-            nextEl.classList.add("tv-nmz-forbidden");
-            nextEl.textContent = "Forbidden Time";
-            remEl.textContent = "Remaining " + formatRemainingHuman(info.remSecs);
-        } else {
-            nextEl.classList.remove("tv-nmz-forbidden");
-            nextEl.textContent = "Next Namaaz: " + info.prayer + (info.timeStr ? (" (" + info.timeStr + ")") : "");
-            remEl.textContent = "Remaining " + formatRemainingHuman(info.remSecs);
-        }
-    }
-
-    // ------------------------------------------
-    // 4. SHAJARA & AWRAAD SECTION MODE + APPLE PAGE MODE
-    // ------------------------------------------
-    var bookState = {
-        enabled: false,
-        sectionMode: false,
-        pausedForScroll: false,
-        pageIndex: 0,
-        totalPages: 1,
-        pageWidth: 0,
-        stride: 0,
-        dirSign: 1,
-        currentTx: 0,
-        gap: 32
-    };
-
-    var TOP_MODAL_SELECTORS = [
-        "#colorPaletteModal",
-        "#hijriStepperModal",
-        "#resetAllConfirmModal",
-        ".pt-submodal",
-        "#navWarningModal",
-        "#settingsModal",
-        "#tasbeehModal",
-        "#prayerTimesModal",
-        "#eventsModal",
-        "#bookmarksModal",
-        "#quickSearchModal"
-    ];
-
-    function isModalVisible(el) {
-        if (!el) return false;
-        if (el.id === "tasbeehModal" && el.classList.contains("tasbeeh-compact")) return false;
-        var st = window.getComputedStyle(el);
-        return st.display !== "none" && st.visibility !== "hidden" && parseFloat(st.opacity || "1") > 0;
-    }
-
-    function isAnyModalOpen() {
-        for (var i = 0; i < TOP_MODAL_SELECTORS.length; i++) {
-            var els = document.querySelectorAll(TOP_MODAL_SELECTORS[i]);
-            for (var j = 0; j < els.length; j++) {
-                if (isModalVisible(els[j])) return true;
-            }
-        }
-        return false;
-    }
-
-    function getOutermostModalScope(active) {
-        if (active && active.closest) {
-            for (var i = 0; i < TOP_MODAL_SELECTORS.length; i++) {
-                var m = active.closest(TOP_MODAL_SELECTORS[i]);
-                if (m && isModalVisible(m)) return m;
-            }
-            var dlg = active.closest("[role='dialog']");
-            if (dlg && isModalVisible(dlg)) return dlg;
-        }
-        for (var k = 0; k < TOP_MODAL_SELECTORS.length; k++) {
-            var openEl = document.querySelector(TOP_MODAL_SELECTORS[k]);
-            if (openEl && isModalVisible(openEl)) return openEl;
-        }
-        return document;
-    }
-
-    function isVisibleFocusable(node) {
-        if (!node || node.disabled || !node.isConnected) return false;
-        if (node.closest && node.closest(".tv-hide-overlay, .tv-hide-nav-cards, #awraadSideDrawer")) return false;
-        if (bookState.sectionMode && node.closest) {
-            var sec = node.closest(".shijra-section");
-            if (sec && !sec.classList.contains("tv-active-section")) return false;
-        }
-        var st = window.getComputedStyle(node);
-        var r = node.getBoundingClientRect();
-        return node.offsetParent !== null && st.visibility !== "hidden" && st.display !== "none" && r.width > 0 && r.height > 0 && r.left > -1000 && r.top > -1000;
-    }
-
-    // Top-Right Controls inside .app-navbar (Search, Dark Mode, Bookmark, etc.) ordered strictly Left -> Right visually
-    function enhanceNavbarControls() {
-        var nav = document.querySelector(".app-navbar");
-        if (!nav) return [];
-        var raw = Array.from(nav.querySelectorAll("button, a[href], [onclick], [role='button']"));
-        var valid = [];
-        for (var i = 0; i < raw.length; i++) {
-            var el = raw[i];
-            if (el.id === "openDrawerBtn" || el.closest(".tv-hide-overlay") || el.classList.contains("tv-hide-overlay")) continue;
-            if (!isVisibleFocusable(el)) continue;
-            el.classList.add("tv-nav-ctrl");
-            if (!el.hasAttribute("tabindex") || el.getAttribute("tabindex") === "-1") {
-                el.setAttribute("tabindex", "0");
-            }
-            valid.push(el);
-        }
-        valid.sort(function(a, b) {
-            return a.getBoundingClientRect().left - b.getBoundingClientRect().left;
-        });
-        return valid;
-    }
-
-    function focusFirstNavbarControl() {
-        var ctrls = enhanceNavbarControls();
-        if (ctrls.length > 0) {
-            ctrls[0].focus({ preventScroll: true });
-            return true;
-        }
-        return false;
-    }
-
-    // Save current page state BEFORE moving focus to Menu Bar or Top-Right Controls
-    function savePagePosition(currentFocusEl) {
-        var frame = document.querySelector(".continuous-frame");
-        if (frame && bookState.sectionMode) {
-            tvNavState.savedScrollTop = frame.scrollTop;
-        } else {
-            tvNavState.savedScrollTop = window.scrollY || 0;
-        }
-        var activeSec = document.querySelector(".shijra-section.tv-active-section");
-        if (activeSec && activeSec.id) {
-            tvNavState.savedSectionId = activeSec.id;
-        }
-        if (currentFocusEl && !currentFocusEl.closest("#tvCompactSidebar, #tvStartMenuWrap, .app-navbar, #tvBottomBar")) {
-            tvNavState.lastPageFocusEl = currentFocusEl;
-        }
-    }
-
-    // Scroll current page vertically without moving focus off Timer or into Menu Bar
-    function scrollCurrentPage(dir) {
-        var delta = dir > 0 ? 220 : -220;
-        var frame = document.querySelector(".continuous-frame");
-        if (frame && (bookState.sectionMode || frame.scrollHeight > frame.clientHeight + 8)) {
-            frame.scrollBy({ top: delta, behavior: "smooth" });
-            setTimeout(function() { tvNavState.savedScrollTop = frame.scrollTop; }, 160);
-        } else {
-            window.scrollBy({ top: delta, behavior: "smooth" });
-            setTimeout(function() { tvNavState.savedScrollTop = window.scrollY || 0; }, 160);
-        }
-    }
-
-    // Return focus to Current Page WITHOUT resetting Shajara to start or changing active section!
-    function returnFocusToCurrentPage() {
-        closeStartMenu(false);
-
-        if (document.body.classList.contains("tv-home-splash")) {
-            var splashBtn = document.getElementById("tvSplashStartBtn");
-            if (splashBtn && isVisibleFocusable(splashBtn)) {
-                splashBtn.focus({ preventScroll: true });
-                return true;
-            }
-            var mainBtn = document.getElementById("tvSbMainMenu");
-            if (mainBtn) mainBtn.focus({ preventScroll: true });
-            return false;
-        }
-
-        // 1. Restore active Shajara/Awraad section + exact previous scroll position (NEVER reset to top!)
-        if (bookState.sectionMode) {
-            var frame = document.querySelector(".continuous-frame");
-            if (tvNavState.savedSectionId) {
-                var savedSec = document.getElementById(tvNavState.savedSectionId);
-                if (savedSec && savedSec.classList.contains("shijra-section") && !savedSec.classList.contains("tv-active-section")) {
-                    document.querySelectorAll(".shijra-section").forEach(function(s) {
-                        var match = (s === savedSec);
-                        s.classList.toggle("tv-active-section", match);
-                        s.classList.toggle("active", match);
-                    });
-                }
-            }
-            if (frame && typeof tvNavState.savedScrollTop === "number") {
-                frame.scrollTop = tvNavState.savedScrollTop;
-            }
-
-            // Focus last page element (e.g. Timer Reset/Start/Min/Sec) WITHOUT scrolling it out of saved position
-            if (tvNavState.lastPageFocusEl && isVisibleFocusable(tvNavState.lastPageFocusEl)) {
-                tvNavState.lastPageFocusEl.focus({ preventScroll: true });
-                return true;
-            }
-
-            // Otherwise focus first Timer Reset button in active section, or .continuous-frame itself
-            var activeSec = document.querySelector(".shijra-section.tv-active-section");
-            if (activeSec) {
-                var card = activeSec.querySelector(".timer-card");
-                if (card) {
-                    var ordered = getOrderedTimerControls(card);
-                    if (ordered.length > 0) {
-                        ordered[0].focus({ preventScroll: true });
-                        tvNavState.lastPageFocusEl = ordered[0];
-                        return true;
-                    }
-                }
-            }
-
-            if (frame) {
-                if (!frame.hasAttribute("tabindex")) frame.setAttribute("tabindex", "-1");
-                frame.focus({ preventScroll: true });
-                return true;
-            }
-        }
-
-        // 2. Apple Page Mode (Dalail, Bashair, Usboo, Daily, Duas)
-        if (bookState.enabled && !bookState.sectionMode) {
-            var vp = document.getElementById("tvBookViewport");
-            if (vp) {
-                vp.focus({ preventScroll: true });
-                return true;
-            }
-        }
-
-        // 3. Fallback scrollable frame
-        var fallbackFrame = document.querySelector(".continuous-frame") || document.body;
-        if (fallbackFrame) {
-            if (!fallbackFrame.hasAttribute("tabindex")) fallbackFrame.setAttribute("tabindex", "-1");
-            fallbackFrame.focus({ preventScroll: true });
-            return true;
-        }
-        return false;
-    }
-
-    function focusMenuBar(fromEl) {
-        savePagePosition(fromEl || document.activeElement);
-        var btn = (tvNavState.savedSidebarBtn && isVisibleFocusable(tvNavState.savedSidebarBtn))
-            ? tvNavState.savedSidebarBtn
-            : document.getElementById("tvSbMainMenu");
-        if (btn) {
-            btn.focus({ preventScroll: true });
-            return true;
-        }
-        return false;
-    }
-
-    function activateShajaraOrAwraadSection(resetScroll) {
-        if (!isShajaraMultiSectionPage()) return false;
-
-        bookState.sectionMode = true;
-        bookState.enabled = false;
-        document.body.classList.add("tv-section-mode");
-        document.body.classList.remove("tv-book-active");
-
-        var rawHash = "";
-        try { rawHash = decodeURIComponent((window.location.hash || "").replace(/^#/, "")); } catch (e) { rawHash = (window.location.hash || "").replace(/^#/, ""); }
-
-        var targetSec = rawHash ? document.getElementById(rawHash) : null;
-        if (targetSec && !targetSec.classList.contains("shijra-section")) {
-            targetSec = targetSec.closest(".shijra-section") || targetSec;
-        }
-
-        if (!targetSec || targetSec.id === "index-menu" || targetSec.id === "top" || !targetSec.classList.contains("shijra-section")) {
-            targetSec = document.getElementById("qadriya") || document.querySelector(".shijra-section:not(#index-menu)");
-        }
-
-        var prevSecId = tvNavState.savedSectionId;
-        var changedSection = !!(targetSec && targetSec.id && targetSec.id !== prevSecId);
-
-        if (targetSec) {
-            document.querySelectorAll(".shijra-section").forEach(function(sec) {
-                var isTarget = (sec === targetSec);
-                sec.classList.toggle("tv-active-section", isTarget);
-                sec.classList.toggle("active", isTarget);
-            });
-            tvNavState.savedSectionId = targetSec.id || "";
-        }
-
-        if (resetScroll || changedSection) {
-            var frame = document.querySelector(".continuous-frame");
-            if (frame) {
-                frame.scrollTop = 0;
-                if (!frame.hasAttribute("tabindex")) frame.setAttribute("tabindex", "-1");
-            }
-            window.scrollTo(0, 0);
-            tvNavState.savedScrollTop = 0;
-            tvNavState.lastPageFocusEl = null;
-        }
-
-        enhanceTimerAndNumericInputs(targetSec || document);
-        enhanceTimerCardsOrder(targetSec || document);
-        return true;
-    }
-
-    function updatePageBarUI() {
-        var counter = document.getElementById("tvPageCounter");
-        var leftBtn = document.getElementById("tvPgLeftBtn");
-        var rightBtn = document.getElementById("tvPgRightBtn");
-        if (!counter) return;
-
-        counter.textContent = "Page " + (bookState.pageIndex + 1) + " / " + bookState.totalPages;
-        var nextLeft = bookState.pageIndex + bookState.dirSign;
-        var nextRight = bookState.pageIndex - bookState.dirSign;
-        if (leftBtn) leftBtn.disabled = (nextLeft < 0 || nextLeft >= bookState.totalPages);
-        if (rightBtn) rightBtn.disabled = (nextRight < 0 || nextRight >= bookState.totalPages);
-    }
-
-    function applyPageTransform(instant) {
-        if (bookState.sectionMode) return;
-        var track = document.getElementById("tvBookTrack");
-        var vp = document.getElementById("tvBookViewport");
-        if (!track || !vp) return;
-
-        bookState.currentTx = bookState.pageIndex * bookState.stride * bookState.dirSign;
-        if (instant) track.style.transition = "none";
-        track.style.transform = "translateX(" + bookState.currentTx + "px)";
-        if (instant) {
-            track.offsetHeight;
-            track.style.transition = "";
-        }
-        if (vp.scrollLeft !== 0) vp.scrollLeft = 0;
-        if (vp.scrollTop !== 0) vp.scrollTop = 0;
-        updatePageBarUI();
-    }
-
-    function goToPage(idx, instant) {
-        if (!bookState.enabled || bookState.sectionMode || bookState.pausedForScroll || document.body.classList.contains("tv-home-splash")) return;
-        var clamped = Math.max(0, Math.min(bookState.totalPages - 1, idx));
-        bookState.pageIndex = clamped;
-        applyPageTransform(!!instant);
-    }
-
-    function turnPageByDirection(side) {
-        if (!bookState.enabled || bookState.sectionMode || bookState.pausedForScroll || document.body.classList.contains("tv-home-splash")) return false;
-        var target = side === "left"
-            ? bookState.pageIndex + bookState.dirSign
-            : bookState.pageIndex - bookState.dirSign;
-        if (target < 0 || target >= bookState.totalPages) return false;
-        goToPage(target, false);
-        return true;
-    }
-
-    function getElementStartPageIndex(el) {
-        var vp = document.getElementById("tvBookViewport");
-        if (!vp || !el || !bookState.stride) return 0;
-        var vpRect = vp.getBoundingClientRect();
-        var vpCenter = (vpRect.left + vpRect.right) / 2;
-
-        var probe = el.querySelector("h1, h2, h3, .section-heading, .title-box, p") || el;
-        var rects = probe.getClientRects ? Array.from(probe.getClientRects()) : [];
-        var validRects = rects.filter(function(r) { return r.width > 0 && r.height > 0; });
-        if (validRects.length === 0) {
-            var br = probe.getBoundingClientRect();
-            if (br.width > 0 || br.height > 0) validRects = [br];
-        }
-        if (validRects.length === 0) return 0;
-
-        var minCol = Infinity;
-        for (var i = 0; i < validRects.length; i++) {
-            var r = validRects[i];
-            var rawCenter = (r.left + r.right) / 2 - bookState.currentTx;
-            var col = Math.round(Math.abs(rawCenter - vpCenter) / bookState.stride);
-            if (col < minCol) minCol = col;
-        }
-        if (!isFinite(minCol)) return 0;
-        return Math.max(0, Math.min(bookState.totalPages - 1, minCol));
-    }
-
-    function jumpToHashIfPresent(instant) {
-        if (!bookState.enabled || bookState.sectionMode || bookState.pausedForScroll || document.body.classList.contains("tv-home-splash")) return;
-        var rawHash = "";
-        try { rawHash = decodeURIComponent((window.location.hash || "").replace(/^#/, "")); } catch (e) { rawHash = (window.location.hash || "").replace(/^#/, ""); }
-        if (!rawHash) {
-            goToPage(0, !!instant);
-            return;
-        }
-        var target = document.getElementById(rawHash);
-        var track = document.getElementById("tvBookTrack");
-        if (target && track && track.contains(target)) {
-            goToPage(getElementStartPageIndex(target), !!instant);
-        } else {
-            goToPage(0, !!instant);
-        }
-    }
-
-    function recalcBookPages(instant) {
-        if (!bookState.enabled || bookState.sectionMode || bookState.pausedForScroll || document.body.classList.contains("tv-home-splash")) return;
-        var frame = document.querySelector(".continuous-frame");
-        var vp = document.getElementById("tvBookViewport");
-        var track = document.getElementById("tvBookTrack");
-        var sentinel = document.getElementById("tvBookEndSentinel");
-        if (!frame || !vp || !track || !sentinel) return;
-
-        var nav = document.querySelector(".app-navbar");
-        var navH = nav ? Math.ceil(nav.getBoundingClientRect().height) : 54;
-        var barH = 42;
-        var frameH = Math.max(260, window.innerHeight - navH - barH - 12);
-        frame.style.setProperty("--tv-frame-h", frameH + "px");
-
-        var vpW = Math.floor(vp.clientWidth);
-        var vpH = Math.floor(vp.clientHeight);
-        if (vpW < 100 || vpH < 100) return;
-
-        bookState.pageWidth = vpW;
-        bookState.stride = vpW + bookState.gap;
-        track.style.setProperty("--tv-page-w", vpW + "px");
-        track.style.setProperty("--tv-page-h", vpH + "px");
-
-        var vpRect = vp.getBoundingClientRect();
-        var vpCenter = (vpRect.left + vpRect.right) / 2;
-        var maxCol = 0;
-        var detectedSign = 0;
-
-        function sampleElement(el) {
-            if (!el || !el.getBoundingClientRect) return;
-            var r = el.getBoundingClientRect();
-            if (r.width <= 0 && r.height <= 0) return;
-            var rawCenter = (r.left + r.right) / 2 - bookState.currentTx;
-            var delta = rawCenter - vpCenter;
-            if (Math.abs(delta) > bookState.stride * 0.35 && detectedSign === 0) {
-                detectedSign = delta < 0 ? 1 : -1;
-            }
-            var col = Math.round(Math.abs(delta) / bookState.stride);
-            if (col > maxCol) maxCol = col;
-        }
-
-        sampleElement(sentinel);
-        var children = track.children;
-        for (var i = Math.max(0, children.length - 8); i < children.length; i++) {
-            sampleElement(children[i]);
-        }
-
-        if (detectedSign !== 0) bookState.dirSign = detectedSign;
-        bookState.totalPages = Math.max(1, maxCol + 1);
-        if (bookState.pageIndex >= bookState.totalPages) {
-            bookState.pageIndex = bookState.totalPages - 1;
-        }
-        applyPageTransform(!!instant);
-    }
-
-    var recalcTimer = null;
-    function scheduleBookRecalc(instant) {
-        if (recalcTimer) clearTimeout(recalcTimer);
-        recalcTimer = setTimeout(function() {
-            updateNavbarHeightVar();
-            recalcBookPages(!!instant);
-        }, 90);
-    }
-
-    function initContentReaderMode() {
-        if (document.body.classList.contains("tv-home-splash")) return;
-
-        // A. Shajara_e_Alaviyya.html -> Section Reader Mode
-        if (isShajaraMultiSectionPage()) {
-            activateShajaraOrAwraadSection(true);
-            setTimeout(function() {
-                // Only keep scroll at top during initial boot load (never override user scrolling later)
-                if (tvNavState.savedScrollTop === 0) {
-                    activateShajaraOrAwraadSection(false);
-                    var frameInit = document.querySelector(".continuous-frame");
-                    if (frameInit) frameInit.scrollTop = 0;
-                }
-                var activeSec = document.querySelector(".shijra-section.tv-active-section");
-                if (activeSec && (!document.activeElement || document.activeElement === document.body)) {
-                    var card = activeSec.querySelector(".timer-card");
-                    if (card) {
-                        var ordered = getOrderedTimerControls(card);
-                        if (ordered.length > 0) {
-                            ordered[0].focus({ preventScroll: true });
-                            tvNavState.lastPageFocusEl = ordered[0];
-                            return;
-                        }
-                    }
-                    var frameEl = document.querySelector(".continuous-frame");
-                    if (frameEl) {
-                        if (!frameEl.hasAttribute("tabindex")) frameEl.setAttribute("tabindex", "-1");
-                        frameEl.focus({ preventScroll: true });
-                    }
-                }
-            }, 340);
-            return;
-        }
-
-        // B. All other reading pages -> Apple Page Mode
-        var frame = document.querySelector(".continuous-frame");
-        if (!frame) return;
-
-        var vp = document.getElementById("tvBookViewport");
-        if (!vp) {
-            vp = document.createElement("div");
-            vp.id = "tvBookViewport";
-            vp.setAttribute("tabindex", "0");
-
-            var track = document.createElement("div");
-            track.id = "tvBookTrack";
-
-            var existingChildren = Array.from(frame.childNodes);
-            existingChildren.forEach(function(node) {
-                if (node.nodeType === 1) {
-                    var cls = (node.className || "").toString();
-                    var st = window.getComputedStyle(node);
-                    if (st.position === "fixed" || /modal|drawer|navbar/i.test(cls)) return;
-                }
-                track.appendChild(node);
-            });
-
-            var sentinel = document.createElement("div");
-            sentinel.id = "tvBookEndSentinel";
-            track.appendChild(sentinel);
-
-            vp.appendChild(track);
-            frame.appendChild(vp);
-
-            vp.addEventListener("scroll", function() {
-                if (vp.scrollLeft !== 0) vp.scrollLeft = 0;
-                if (vp.scrollTop !== 0) vp.scrollTop = 0;
-            });
-        }
-
-        ensureBottomBar();
-        bookState.enabled = true;
-        bookState.sectionMode = false;
-        if (!bookState.pausedForScroll) {
-            document.body.classList.add("tv-book-active");
-            document.body.classList.remove("tv-scroll-unlocked");
-        }
-
-        recalcBookPages(true);
-        jumpToHashIfPresent(true);
-        setTimeout(function() {
-            recalcBookPages(true);
-            jumpToHashIfPresent(true);
-            var vpEl = document.getElementById("tvBookViewport");
-            if (vpEl && (!document.activeElement || document.activeElement === document.body)) {
-                vpEl.focus({ preventScroll: true });
-            }
-        }, 420);
-
-        if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(function() {
-                recalcBookPages(true);
-                jumpToHashIfPresent(true);
-            });
-        }
-    }
-
-    function toggleBookModeForScroll() {
-        if (!bookState.enabled || bookState.sectionMode || document.body.classList.contains("tv-home-splash")) return;
-        bookState.pausedForScroll = !bookState.pausedForScroll;
-        document.body.classList.toggle("tv-book-active", !bookState.pausedForScroll);
-        document.body.classList.toggle("tv-scroll-unlocked", bookState.pausedForScroll);
-        var track = document.getElementById("tvBookTrack");
-        if (bookState.pausedForScroll) {
-            if (track) track.style.transform = "none";
-        } else {
-            scheduleBookRecalc(true);
-        }
-    }
-
-    window.addEventListener("resize", function() { scheduleBookRecalc(true); });
-    window.addEventListener("hashchange", function() {
-        setTimeout(function() {
-            ensureGreenSplashScreen();
-            if (!document.body.classList.contains("tv-home-splash")) {
-                if (isShajaraMultiSectionPage()) {
-                    activateShajaraOrAwraadSection(true);
-                    var activeSec = document.querySelector(".shijra-section.tv-active-section");
-                    var card = activeSec ? activeSec.querySelector(".timer-card") : null;
-                    if (card) {
-                        var ordered = getOrderedTimerControls(card);
-                        if (ordered.length > 0) {
-                            ordered[0].focus({ preventScroll: true });
-                            tvNavState.lastPageFocusEl = ordered[0];
-                        }
-                    }
-                } else {
-                    initContentReaderMode();
-                    jumpToHashIfPresent(false);
-                }
-            }
-        }, 50);
-    });
-
-    // ------------------------------------------
-    // 5. PURE ENGLISH NAMING + UNIFIED START MENU + ENGLISH SEARCH
-    // ------------------------------------------
-    var ENGLISH_LINK_RULES = [
-        { rx: /#qadriya|qadr|qadir|قادري|قادری/i, title: "Silsila e Qadria", sub: "Qadiri Spiritual Lineage" },
-        { rx: /#chishtiyya|chisht|چشت/i, title: "Silsila e Chishtiya", sub: "Chishti Spiritual Lineage" },
-        { rx: /#akbariya|akbar|uwais|owais|اکبر|اویس/i, title: "Silsila e Akbariya", sub: "Akbari Uwaisi Lineage" },
-        { rx: /#rozana|rozana|روزانہ|روزمرہ/i, title: "Rozana Awraad", sub: "Daily Litanies & Practices" },
-        { rx: /#fajr-maghrib|fajr.*maghrib|maghrib.*fajr|فجر.*مغرب|مغرب.*فجر/i, title: "Fajr & Maghrib Adhkar", sub: "Post-Fajr & Maghrib Litanies" },
-        { rx: /#har-namaz|har\s*nama?az|ہر\s*نماز|پانچوں\s*نماز/i, title: "Har Namaaz Adhkar", sub: "After Every Obligatory Prayer" },
-        { rx: /#haftawari|hafta?wari|ہفت(?:ہ)?\s*واری|اعمال.*ہفت/i, title: "Haftwari Amaal", sub: "Weekly Litanies & Practices" },
-        { rx: /#main-intro|ibtida|تعارف|ابتدائی/i, title: "Introduction (Taaruf)", sub: "Opening Words & Introduction" },
-        { rx: /#fazeelat-tareeqa|شجرہ\s*پڑھنے\s*کا\s*طریقہ/i, title: "Method & Virtues of Shajara", sub: "How to Recite Shajara e Alaviyya" },
-        { rx: /#asnaad|asnad|اسناد/i, title: "Asnad of Dalail ul Khairat", sub: "Chains of Transmission" },
-        { rx: /#irshadaat|irshad|mureed|ارشادات|مرید/i, title: "Irshadaat for Mureed", sub: "Instructions for Disciples" },
-        { rx: /#khidmat|hidayat|murshid|ہدایات|مرشد/i, title: "Hidayat e Murshid", sub: "Guidance on Service & Company" },
-        { rx: /#salaam|سلام/i, title: "Salaam", sub: "Salutations upon the Master" },
-        { rx: /daily\.html/i, title: "Daily Schedule & Malfooz", sub: "Daily Awraad Schedule" },
-        { rx: /bada.?dalail|bad.?dalail|آغاز\s*دلائل|بدء\s*دلائل/i, title: "Dua Bada Dalail ul Khairat", sub: "Opening Supplication of Dalail" },
-        { rx: /iftitah|افتتاح/i, title: "Dua e Iftitah", sub: "Opening Supplication" },
-        { rx: /asma.*husna|أسماء\s*الله|اسماء\s*الحسنی/i, title: "Asma ul Husna", sub: "99 Beautiful Names of Allah" },
-        { rx: /asma.*nabi|أسماء\s*النبي|اسماء\s*النبی/i, title: "Asma un Nabi", sub: "Blessed Names of the Prophet" },
-        { rx: /hizb8|الثامن|ہشتم/i, title: "Hizb 8 — Monday (Final)", sub: "Dalail ul Khairat (Completion)" },
-        { rx: /hizb1|monday|ithnain|الأول|پیر|اول/i, title: "Hizb 1 — Monday", sub: "Dalail ul Khairat (Monday)" },
-        { rx: /tuesday|thalatha|الثاني|منگل|دوم/i, title: "Hizb 2 — Tuesday", sub: "Dalail ul Khairat (Tuesday)" },
-        { rx: /wednesday|arbia|الثالث|بدھ|سوم/i, title: "Hizb 3 — Wednesday", sub: "Dalail ul Khairat (Wednesday)" },
-        { rx: /thursday|khamees|الرابع|جمعرات|چہارم/i, title: "Hizb 4 — Thursday", sub: "Dalail ul Khairat (Thursday)" },
-        { rx: /friday|jumuah|الخامس|جمعہ|پنجم/i, title: "Hizb 5 — Friday", sub: "Dalail ul Khairat (Friday)" },
-        { rx: /saturday|sabt|السادس|ہفتہ|ششم/i, title: "Hizb 6 — Saturday", sub: "Dalail ul Khairat (Saturday)" },
-        { rx: /sunday|ahad|السابع|اتوار|ہفتم/i, title: "Hizb 7 — Sunday", sub: "Dalail ul Khairat (Sunday)" },
-        { rx: /khatam|khitam|الختام|اختتام/i, title: "Dua e Khatam", sub: "Closing Supplication" },
-        { rx: /fatiha|faatiha|الفاتحة|فاتحہ/i, title: "Tareeqa e Fatiha", sub: "Method of Reciting Al-Fatihah" },
-        { rx: /yuqrau|aqeeb|عقب|بعد\s*الاوراد/i, title: "Dua After Awraad", sub: "Closing Prayer After Litanies" },
-        { rx: /bashair|بشائر/i, title: "Bashair ul Khairat", sub: "Glad Tidings of Salawat" },
-        { rx: /usboo|أسبوع/i, title: "Usboo e Shareef", sub: "Weekly Salawat & Adhkar" },
-        { rx: /malfooz|ملفوظات/i, title: "Malfoozat e Bahrul Irfan", sub: "Spiritual Discourses" },
-        { rx: /tajweed|تجوید|تجويد/i, title: "Tajweed Guide", sub: "Rules of Quranic Pronunciation" },
-        { rx: /eesal|sawab|ایصال/i, title: "Eesal e Sawab", sub: "Method of Conveying Reward" },
-        { rx: /shajara|shijra|شجرہ|شجرة/i, title: "Shajara e Alaviyya", sub: "Spiritual Lineage & Awraad" },
-        { rx: /muqaddima|مقدم/i, title: "Muqaddima e Awraad", sub: "Introduction to the Litanies" }
-    ];
-
-    function humanizeHrefToEnglish(href) {
-        var hashPart = (href || "").split("#")[1] || "";
-        var clean = hashPart || ((href || "").split("#")[0].split("/").pop() || "");
-        clean = clean.replace(/\.html$/i, "").replace(/_Locked/ig, "").replace(/[_-]+/g, " ").trim();
-        if (!clean) return "Section";
-        return clean.replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
-    }
-
-    function stripNonEnglish(str) {
-        return (str || "")
-            .replace(/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]+/g, " ")
-            .replace(/[()\[\]—–|·•-]+\s*$/g, "")
-            .replace(/^\s*[()\[\]—–|·•-]+/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-    }
-
-    function toEnglishMenuLabels(rawTitle, rawSub, href) {
-        var combined = (rawTitle + " " + rawSub + " " + href).trim();
-        for (var i = 0; i < ENGLISH_LINK_RULES.length; i++) {
-            if (ENGLISH_LINK_RULES[i].rx.test(combined)) {
-                return { title: ENGLISH_LINK_RULES[i].title, sub: ENGLISH_LINK_RULES[i].sub };
-            }
-        }
-        var enTitle = stripNonEnglish(rawTitle);
-        var enSub = stripNonEnglish(rawSub);
-        if (!enTitle) enTitle = humanizeHrefToEnglish(href);
-        if (enSub && enSub.toLowerCase() === enTitle.toLowerCase()) enSub = "";
-        return { title: enTitle, sub: enSub };
-    }
-
-    function enhanceQuickSearchModal() {
-        var modal = document.getElementById("quickSearchModal");
-        if (!modal || !isModalVisible(modal)) return;
-
-        modal.querySelectorAll("h1, h2, h3, .ux-modal-title, [class*='title' i]").forEach(function(h) {
-            if (h.closest("#quickSearchResults")) return;
-            var txt = (h.textContent || "").trim();
-            if (/[\u0600-\u06FF]/.test(txt)) {
-                h.textContent = stripNonEnglish(txt) || "Quick Search";
-            }
-        });
-
-        var qInp = document.getElementById("quickSearchInput");
-        if (qInp && /[\u0600-\u06FF]/.test(qInp.getAttribute("placeholder") || "")) {
-            qInp.setAttribute("placeholder", "Search sections, Awraad, Shajara, Dalail...");
-        }
-
-        var resultsBox = document.getElementById("quickSearchResults");
-        if (resultsBox) {
-            var rows = resultsBox.querySelectorAll("a[href], button, [onclick], [data-href], .ux-search-item, .search-result-item, li");
-            rows.forEach(function(item) {
-                if (item.querySelector("a[href], button")) return;
-                if (item.dataset.tvSearchClean === "1" && !/[\u0600-\u06FF]/.test(item.textContent || "")) return;
-
-                var rawHref = item.getAttribute("href") || item.getAttribute("data-href") || item.getAttribute("onclick") || "";
-                var rawText = (item.innerText || item.textContent || "").replace(/\s+/g, " ").trim();
-                if (!rawText) return;
-
-                var en = toEnglishMenuLabels(rawText, "", rawHref);
-                item.classList.add("tv-search-row", "tv-focus-ctrl");
-                item.setAttribute("tabindex", "0");
-                item.dataset.tvSearchClean = "1";
-
-                item.innerHTML =
-                    '<span class="tv-sm-ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>' +
-                    '<span class="tv-sm-text">' +
-                        '<span class="tv-sm-title"></span>' +
-                        (en.sub ? '<span class="tv-sm-sub"></span>' : '') +
-                    '</span>' +
-                    '<span class="tv-sm-arrow">›</span>';
-
-                var tNode = item.querySelector(".tv-sm-title");
-                if (tNode) tNode.textContent = en.title;
-                var sNode = item.querySelector(".tv-sm-sub");
-                if (sNode && en.sub) sNode.textContent = en.sub;
-            });
-
-            resultsBox.querySelectorAll("h4, h5, .search-category, .ux-search-group, .ux-group-title").forEach(function(gh) {
-                if (gh.closest(".tv-search-row")) return;
-                var gt = (gh.textContent || "").trim();
-                if (/[\u0600-\u06FF]/.test(gt)) {
-                    var enG = toEnglishMenuLabels(gt, "", "");
-                    gh.textContent = enG.title || stripNonEnglish(gt) || "Results";
-                }
-            });
-        }
-
-        if (modal.dataset.tvSearchObs !== "1") {
-            modal.dataset.tvSearchObs = "1";
-            var obsTarget = resultsBox || modal;
-            var sObs = new MutationObserver(function() {
-                setTimeout(enhanceQuickSearchModal, 30);
-            });
-            sObs.observe(obsTarget, { childList: true, subtree: true });
-            modal.addEventListener("input", function() {
-                setTimeout(enhanceQuickSearchModal, 45);
-            }, true);
-        }
-    }
-
-    var startMenuState = {
-        open: false,
-        mode: "",
-        triggerBtn: null,
-        col2Items: [],
-        col2ActiveIdx: -1,
-        col3Items: [],
-        hoverTimer: null
-    };
-
-    var CATEGORY_ICONS = {
-        shajara: '<path d="M12 3v18"/><path d="M12 8c-3 0-5-1.5-6-3.5"/><path d="M12 12c3 0 5-1.5 6-3.5"/><path d="M12 16c-3 0-5-1.5-6-3.5"/>',
-        awraad: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5v-13z"/><path d="M8 7h8M8 11h8M8 15h5"/>',
-        intro: '<circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/>',
-        dalail: '<polygon points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.7 5.8 21 7 14.1 2 9.3 8.9 8.3 12 2"/>',
-        bashair: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
-        guide: '<path d="M5 4h11a2 2 0 0 1 2 2v13H7a2 2 0 0 1-2-2V4z"/><path d="M9 9h6M9 13h4"/>',
-        more: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
-        home: '<path d="M3 10.5L12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/>'
-    };
-
-    function normalizeHrefForCache(rawHref) {
-        var href = (rawHref || "").trim();
-        if (!href || href === "#" || href.indexOf("javascript:") === 0) return "";
-        if (href.indexOf("#") === 0) {
-            var fname = (window.location.pathname || "").split("/").pop() || "index.html";
-            if (fname.indexOf(".html") === -1) fname = "index.html";
-            return "./" + fname + href;
-        }
-        return href;
-    }
-
-    function navigateToHref(href) {
-        if (!href) return;
-        closeStartMenu(false);
-
-        var curFile = ((window.location.pathname || "").split("/").pop() || "index.html").toLowerCase();
-        if (curFile.indexOf(".html") === -1) curFile = "index.html";
-        var hashIdx = href.indexOf("#");
-        var targetPath = (hashIdx === -1 ? href : href.slice(0, hashIdx)).replace(/^\.\//, "").toLowerCase();
-        var targetHash = hashIdx === -1 ? "" : href.slice(hashIdx);
-
-        if ((!targetPath || targetPath === curFile) && targetHash) {
-            if (isIndexPage() && targetHash.toLowerCase() !== "#main-menu") {
-                document.body.classList.remove("tv-home-splash");
-            }
-            window.location.hash = targetHash;
-            setTimeout(function() {
-                if (isShajaraMultiSectionPage()) {
-                    activateShajaraOrAwraadSection(true);
-                    var activeSec = document.querySelector(".shijra-section.tv-active-section");
-                    var card = activeSec ? activeSec.querySelector(".timer-card") : null;
-                    if (card) {
-                        var ordered = getOrderedTimerControls(card);
-                        if (ordered.length > 0) {
-                            ordered[0].focus({ preventScroll: true });
-                            tvNavState.lastPageFocusEl = ordered[0];
-                        }
-                    }
-                } else {
-                    initContentReaderMode();
-                    jumpToHashIfPresent(false);
-                }
-            }, 50);
-            return;
-        }
-        window.location.href = href;
-    }
-
-    function extractLinkInfo(a) {
-        var rawText = (a.innerText || a.textContent || "").replace(/\s+/g, " ").trim();
-        var href = normalizeHrefForCache(a.getAttribute("href") || "");
-        var en = toEnglishMenuLabels(rawText, "", href);
-        return { title: en.title, sub: en.sub, href: href };
-    }
-
-    var SHAJARA_ITEMS = [
-        { title: "Silsila e Qadria", sub: "Qadiri Spiritual Lineage", href: "./Shajara_e_Alaviyya.html#qadriya" },
-        { title: "Silsila e Chishtiya", sub: "Chishti Spiritual Lineage", href: "./Shajara_e_Alaviyya.html#chishtiyya" },
-        { title: "Silsila e Akbariya", sub: "Akbari Uwaisi Lineage", href: "./Shajara_e_Alaviyya.html#akbariya" }
-    ];
-
-    var AWRAAD_ITEMS = [
-        { title: "Rozana", sub: "Daily Awraad & Litanies", href: "./Shajara_e_Alaviyya.html#rozana" },
-        { title: "Fajr / Maghrib", sub: "Post-Fajr & Maghrib Adhkar", href: "./Shajara_e_Alaviyya.html#fajr-maghrib" },
-        { title: "Har Namaaz", sub: "After Every Obligatory Prayer", href: "./Shajara_e_Alaviyya.html#har-namaz" },
-        { title: "Haftwari", sub: "Weekly Litanies & Practices", href: "./Shajara_e_Alaviyya.html#haftawari" }
-    ];
-
-    function collectLinksFromEl(container) {
-        if (!container) return [];
-        var list = [];
-        var seen = new Set();
-        container.querySelectorAll("a[href]").forEach(function(a) {
-            if (a.closest("#tvCompactSidebar, #tvStartMenuWrap, #tvBottomBar, #tvHomeSplash")) return;
-            var rawTxt = (a.textContent || "").trim();
-            if (/الرجوع|فهرس|back\s*to\s*index/i.test(rawTxt)) return;
-            var info = extractLinkInfo(a);
-            if (!info.href || !info.title) return;
-            if (/index\.html(?:#main-menu)?$/i.test(info.href)) return;
-            var key = info.href.replace(/^\.\//, "").toLowerCase();
-            if (seen.has(key)) return;
-            seen.add(key);
-            list.push(info);
-        });
-        return list;
-    }
-
-    function buildFullStartMenuTree() {
-        var subMenus = [
-            { icon: "shajara", title: "Shajara", sub: "Shajara e Alaviyya", items: SHAJARA_ITEMS },
-            { icon: "awraad", title: "Awraad", sub: "Daily & Periodic Litanies", items: AWRAAD_ITEMS }
-        ];
-
-        var knownSections = [
-            { id: "menu-intro", icon: "intro", title: "Muqaddima e Awraad", sub: "Introduction & Etiquette", rx: /muqaddima|fatiha|ibtida|tajweed|intro|مقدم|فاتح|ابتدائی|تجوید/i },
-            { id: "menu-dalail", icon: "dalail", title: "Dalail ul Khairat", sub: "Salawat & Daily Hizb", rx: /dalail|hizb|asma|دلائل|حزب|اسماء/i },
-            { id: "menu-bashair", icon: "bashair", title: "Bashair ul Khairat", sub: "Glad Tidings of Salawat", rx: /bashair|بشائر/i }
-        ];
-
-        var drawer = document.getElementById("awraadSideDrawer");
-        var capturedIds = { "menu-shijara": true };
-        var capturedHrefs = new Set();
-
-        subMenus.forEach(function(sm) {
-            sm.items.forEach(function(it) {
-                if (it.href) capturedHrefs.add(it.href.replace(/^\.\//, "").toLowerCase());
-            });
-        });
-
-        knownSections.forEach(function(sec) {
-            capturedIds[sec.id] = true;
-            var el = document.getElementById(sec.id);
-            var items = collectLinksFromEl(el).filter(function(it) {
-                return !capturedHrefs.has(it.href.replace(/^\.\//, "").toLowerCase());
-            });
-            if (items.length === 0 && drawer) {
-                items = collectLinksFromEl(drawer).filter(function(it) {
-                    return !capturedHrefs.has(it.href.replace(/^\.\//, "").toLowerCase()) && sec.rx.test(it.title + " " + it.sub + " " + it.href);
-                });
-            }
-            if (items.length > 0) {
-                items.forEach(function(it) { capturedHrefs.add(it.href.replace(/^\.\//, "").toLowerCase()); });
-                subMenus.push({ icon: sec.icon, title: sec.title, sub: sec.sub, items: items });
-            }
-        });
-
-        var shijaraSec = document.getElementById("menu-shijara");
-        var extraShajara = collectLinksFromEl(shijaraSec).filter(function(it) {
-            return !capturedHrefs.has(it.href.replace(/^\.\//, "").toLowerCase());
-        });
-        if (extraShajara.length > 0) {
-            extraShajara.forEach(function(it) { capturedHrefs.add(it.href.replace(/^\.\//, "").toLowerCase()); });
-            subMenus.push({ icon: "guide", title: "Irshadaat & Guide", sub: "Spiritual Guidance", items: extraShajara });
-        }
-
-        document.querySelectorAll(".index-section").forEach(function(secEl) {
-            if (secEl.id && capturedIds[secEl.id]) return;
-            var items = collectLinksFromEl(secEl).filter(function(it) {
-                return !capturedHrefs.has(it.href.replace(/^\.\//, "").toLowerCase());
-            });
-            if (items.length === 0) return;
-            var head = secEl.querySelector(".section-heading, h2, h3, .title-main");
-            var rawLabel = head ? (head.textContent || "").replace(/\s+/g, " ").trim() : "";
-            var enHead = toEnglishMenuLabels(rawLabel, "", items[0].href);
-            items.forEach(function(it) { capturedHrefs.add(it.href.replace(/^\.\//, "").toLowerCase()); });
-            subMenus.push({ icon: "more", title: enHead.title || "More Sections", sub: enHead.sub || "Additional Litanies", items: items });
-        });
-
-        if (drawer) {
-            var extras = collectLinksFromEl(drawer).filter(function(it) {
-                return !capturedHrefs.has(it.href.replace(/^\.\//, "").toLowerCase()) && /\.html/i.test(it.href);
-            });
-            if (extras.length > 0) {
-                subMenus.push({ icon: "more", title: "More Pages", sub: "Additional Sections", items: extras });
-            }
-        }
-
-        try {
-            if (isIndexPage() && subMenus.length >= 3) {
-                localStorage.setItem("awraad_tv_start_menu_en_v6", JSON.stringify(subMenus));
-            } else if (subMenus.length <= 2) {
-                var cached = JSON.parse(localStorage.getItem("awraad_tv_start_menu_en_v6") || "null");
-                if (Array.isArray(cached) && cached.length > subMenus.length) {
-                    subMenus = cached;
-                }
-            }
-        } catch (e) {}
-
-        if (!isIndexPage()) {
-            subMenus = subMenus.concat([
-                { icon: "home", title: "Home Screen", sub: "Return to Splash Screen", href: "./index.html", isDirect: true, sepBefore: true }
-            ]);
-        }
-
-        return subMenus;
-    }
-
-    function ensureStartMenuDOM() {
-        var wrap = document.getElementById("tvStartMenuWrap");
-        if (wrap) return wrap;
-
-        var backdrop = document.createElement("div");
-        backdrop.id = "tvStartMenuBackdrop";
-        backdrop.className = "print-none";
-        backdrop.addEventListener("click", function() { closeStartMenu(true); });
-        document.body.appendChild(backdrop);
-
-        wrap = document.createElement("div");
-        wrap.id = "tvStartMenuWrap";
-        wrap.className = "print-none";
-        wrap.innerHTML =
-            '<div id="tvSmCol2" class="tv-sm-panel" role="menu">' +
-                '<div class="tv-sm-head">' +
-                    '<div class="tv-sm-head-left">' +
-                        '<span class="tv-sm-head-dot"></span>' +
-                        '<span id="tvSmCol2Title" class="tv-sm-head-title">Main Menu</span>' +
-                    '</div>' +
-                    '<span id="tvSmCol2Badge" class="tv-sm-head-badge">Menu</span>' +
-                '</div>' +
-                '<div id="tvSmCol2List" class="tv-sm-list"></div>' +
-                '<div class="tv-sm-foot"><span>&#9650;&#9660; Select</span><span>&#9654; Next</span><span>&#9664; Back</span></div>' +
-            '</div>' +
-            '<div id="tvSmCol3" class="tv-sm-panel" role="menu">' +
-                '<div class="tv-sm-head">' +
-                    '<div class="tv-sm-head-left">' +
-                        '<span class="tv-sm-head-dot"></span>' +
-                        '<span id="tvSmCol3Title" class="tv-sm-head-title">Sub-Menu</span>' +
-                    '</div>' +
-                    '<span id="tvSmCol3Badge" class="tv-sm-head-badge">0</span>' +
-                '</div>' +
-                '<div id="tvSmCol3List" class="tv-sm-list"></div>' +
-                '<div class="tv-sm-foot"><span>OK Open</span><span>&#9654; Page</span><span>&#9664; Back</span></div>' +
-            '</div>';
-        document.body.appendChild(wrap);
-        return wrap;
-    }
-
-    function createMenuRow(item, opts) {
-        opts = opts || {};
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "tv-sm-row";
-
-        var ico = document.createElement("span");
-        ico.className = "tv-sm-ico";
-        ico.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + (CATEGORY_ICONS[opts.iconKey] || CATEGORY_ICONS.awraad) + '</svg>';
-        btn.appendChild(ico);
-
-        var textWrap = document.createElement("span");
-        textWrap.className = "tv-sm-text";
-
-        var titleEl = document.createElement("span");
-        titleEl.className = "tv-sm-title";
-        titleEl.textContent = item.title;
-        textWrap.appendChild(titleEl);
-
-        if (item.sub) {
-            var subEl = document.createElement("span");
-            subEl.className = "tv-sm-sub";
-            subEl.textContent = item.sub;
-            textWrap.appendChild(subEl);
-        }
-
-        btn.appendChild(textWrap);
-
-        if (opts.hasChildren) {
-            var rightWrap = document.createElement("span");
-            rightWrap.className = "tv-sm-right";
-
-            if (opts.count > 0) {
-                var cnt = document.createElement("span");
-                cnt.className = "tv-sm-count";
-                cnt.textContent = String(opts.count);
-                rightWrap.appendChild(cnt);
-            }
-
-            var arr = document.createElement("span");
-            arr.className = "tv-sm-arrow";
-            arr.textContent = "›";
-            rightWrap.appendChild(arr);
-
-            btn.appendChild(rightWrap);
-        }
-
-        return btn;
-    }
-
-    function clearHoverTimer() {
-        if (startMenuState.hoverTimer) {
-            clearTimeout(startMenuState.hoverTimer);
-            startMenuState.hoverTimer = null;
-        }
-    }
-
-    function hideCol3() {
-        var col3 = document.getElementById("tvSmCol3");
-        var col3List = document.getElementById("tvSmCol3List");
-        if (col3) col3.classList.remove("open");
-        if (col3List) col3List.innerHTML = "";
-        startMenuState.col3Items = [];
-    }
-
-    function positionCol3NearRow(rowEl) {
-        var col3 = document.getElementById("tvSmCol3");
-        if (!col3) return;
-
-        var topPx = 8;
-        if (rowEl && rowEl.getBoundingClientRect) {
-            var r = rowEl.getBoundingClientRect();
-            topPx = Math.max(8, Math.round(r.top - 10));
-        }
-
-        col3.style.marginTop = topPx + "px";
-        requestAnimationFrame(function() {
-            var cRect = col3.getBoundingClientRect();
-            var maxBottom = window.innerHeight - 50;
-            if (cRect.bottom > maxBottom) {
-                var adjusted = Math.max(8, topPx - (cRect.bottom - maxBottom));
-                col3.style.marginTop = Math.round(adjusted) + "px";
-            }
-        });
-    }
-
-    function renderCol3ForSubMenu(subMenu, parentIdx, rowEl, focusFirstItem) {
-        clearHoverTimer();
-        var col3 = document.getElementById("tvSmCol3");
-        var col3Title = document.getElementById("tvSmCol3Title");
-        var col3Badge = document.getElementById("tvSmCol3Badge");
-        var col3List = document.getElementById("tvSmCol3List");
-        var col2List = document.getElementById("tvSmCol2List");
-        if (!col3 || !col3List) return;
-
-        startMenuState.col2ActiveIdx = parentIdx;
-        if (col2List) {
-            Array.from(col2List.querySelectorAll(".tv-sm-row")).forEach(function(row, idx) {
-                row.classList.toggle("tv-sm-selected", idx === parentIdx);
-            });
-        }
-
-        var items = (subMenu && Array.isArray(subMenu.items)) ? subMenu.items : [];
-        startMenuState.col3Items = items;
-
-        if (items.length === 0) {
-            hideCol3();
-            return;
-        }
-
-        col3Title.textContent = subMenu.title || "Sub-Menu";
-        if (col3Badge) col3Badge.textContent = items.length + (items.length === 1 ? " Item" : " Items");
-        col3List.innerHTML = "";
-
-        items.forEach(function(it) {
-            var row = createMenuRow(it, { iconKey: subMenu.icon || "awraad", hasChildren: false });
-            row.addEventListener("click", function() {
-                navigateToHref(it.href);
-            });
-            col3List.appendChild(row);
-        });
-
-        col3.classList.add("open");
-        positionCol3NearRow(rowEl);
-
-        if (focusFirstItem) {
-            setTimeout(function() {
-                var first = col3List.querySelector(".tv-sm-row");
-                if (first) first.focus();
-            }, 25);
-        }
-    }
-
-    function scheduleCol3Cascade(subMenu, parentIdx, rowEl) {
-        clearHoverTimer();
-        var col2List = document.getElementById("tvSmCol2List");
-        startMenuState.col2ActiveIdx = parentIdx;
-        if (col2List) {
-            Array.from(col2List.querySelectorAll(".tv-sm-row")).forEach(function(r, j) {
-                r.classList.toggle("tv-sm-selected", j === parentIdx);
-            });
-        }
-        if (!subMenu || !Array.isArray(subMenu.items) || subMenu.items.length === 0) {
-            hideCol3();
-            return;
-        }
-        startMenuState.hoverTimer = setTimeout(function() {
-            if (!startMenuState.open) return;
-            renderCol3ForSubMenu(subMenu, parentIdx, rowEl, false);
-        }, 120);
-    }
-
-    function openStartMenu(mode, triggerBtn, focusCol2) {
-        clearHoverTimer();
-        ensureStartMenuDOM();
-        var backdrop = document.getElementById("tvStartMenuBackdrop");
-        var wrap = document.getElementById("tvStartMenuWrap");
-        var col2 = document.getElementById("tvSmCol2");
-        var col2Title = document.getElementById("tvSmCol2Title");
-        var col2Badge = document.getElementById("tvSmCol2Badge");
-        var col2List = document.getElementById("tvSmCol2List");
-
-        document.querySelectorAll("#tvCompactSidebar .tv-sb-btn").forEach(function(b) {
-            b.classList.toggle("tv-sb-active", b === triggerBtn);
-        });
-
-        startMenuState.open = true;
-        startMenuState.mode = mode;
-        startMenuState.triggerBtn = triggerBtn || null;
-        startMenuState.col2ActiveIdx = -1;
-        col2List.innerHTML = "";
-        hideCol3();
-
-        var col2Top = 8;
-        if (mode !== "main" && triggerBtn && triggerBtn.getBoundingClientRect) {
-            col2Top = Math.max(8, Math.min(window.innerHeight - 360, Math.round(triggerBtn.getBoundingClientRect().top - 6)));
-        }
-        col2.style.marginTop = col2Top + "px";
-
-        var skipFirstAutoFocusCascade = (mode === "main");
-
-        if (mode === "shajara" || mode === "awraad") {
-            col2Title.textContent = mode === "shajara" ? "Shajara" : "Awraad";
-            var directItems = mode === "shajara" ? SHAJARA_ITEMS : AWRAAD_ITEMS;
-            if (col2Badge) col2Badge.textContent = directItems.length + " Items";
-            startMenuState.col2Items = directItems;
-
-            directItems.forEach(function(it, idx) {
-                var row = createMenuRow(it, { iconKey: mode, hasChildren: false });
-                row.addEventListener("focus", function() {
-                    startMenuState.col2ActiveIdx = idx;
-                    Array.from(col2List.querySelectorAll(".tv-sm-row")).forEach(function(r, j) {
-                        r.classList.toggle("tv-sm-selected", j === idx);
-                    });
-                });
-                row.addEventListener("click", function() {
-                    navigateToHref(it.href);
-                });
-                col2List.appendChild(row);
-            });
-        } else {
-            col2Title.textContent = "Main Menu";
-            var tree = buildFullStartMenuTree();
-            if (col2Badge) col2Badge.textContent = tree.length + " Sections";
-            startMenuState.col2Items = tree;
-
-            tree.forEach(function(subMenu, idx) {
-                if (subMenu.sepBefore) {
-                    var sep = document.createElement("div");
-                    sep.className = "tv-sm-sep";
-                    col2List.appendChild(sep);
-                }
-                var hasKids = !subMenu.isDirect && Array.isArray(subMenu.items) && subMenu.items.length > 0;
-                var row = createMenuRow(subMenu, {
-                    iconKey: subMenu.icon || "more",
-                    hasChildren: hasKids,
-                    count: hasKids ? subMenu.items.length : 0
-                });
-
-                row.addEventListener("mouseenter", function() {
-                    skipFirstAutoFocusCascade = false;
-                    scheduleCol3Cascade(subMenu, idx, row);
-                });
-                row.addEventListener("focus", function() {
-                    if (skipFirstAutoFocusCascade && idx === 0) {
-                        skipFirstAutoFocusCascade = false;
-                        startMenuState.col2ActiveIdx = 0;
-                        row.classList.add("tv-sm-selected");
-                        return;
-                    }
-                    skipFirstAutoFocusCascade = false;
-                    scheduleCol3Cascade(subMenu, idx, row);
-                });
-                row.addEventListener("click", function() {
-                    if (subMenu.isDirect && subMenu.href) {
-                        navigateToHref(subMenu.href);
-                    } else if (hasKids) {
-                        renderCol3ForSubMenu(subMenu, idx, row, true);
-                    }
-                });
-
-                col2List.appendChild(row);
-            });
-        }
-
-        backdrop.classList.add("open");
-        wrap.classList.add("open");
-
-        if (focusCol2 !== false) {
-            setTimeout(function() {
-                var firstRow = col2List.querySelector(".tv-sm-row");
-                if (firstRow) firstRow.focus();
-            }, 30);
-        }
-    }
-
-    function closeStartMenu(restoreFocus) {
-        clearHoverTimer();
-        if (!startMenuState.open) return;
-        startMenuState.open = false;
-        var backdrop = document.getElementById("tvStartMenuBackdrop");
-        var wrap = document.getElementById("tvStartMenuWrap");
-        if (backdrop) backdrop.classList.remove("open");
-        if (wrap) wrap.classList.remove("open");
-        hideCol3();
-
-        document.querySelectorAll("#tvCompactSidebar .tv-sb-btn.tv-sb-active").forEach(function(b) {
-            b.classList.remove("tv-sb-active");
-        });
-
-        if (restoreFocus && startMenuState.triggerBtn) {
-            startMenuState.triggerBtn.focus({ preventScroll: true });
-        }
-    }
-
-    // ------------------------------------------
-    // 6. TIMER CONTROLS: EXACT SEQUENCE (Reset -> Start -> Minutes -> Seconds) + FOCUS LOCK
-    // ------------------------------------------
-    function stepNumericOrTimerInput(inp, dir) {
-        if (!inp) return;
-        var raw = String(inp.value || "").trim();
-
-        if (/^\d{1,2}:\d{2}(?::\d{2})?$/.test(raw)) {
-            var parts = raw.split(":").map(function(n) { return parseInt(n, 10) || 0; });
-            var totalSecs = parts.length === 3
-                ? parts[0] * 3600 + parts[1] * 60 + parts[2]
-                : parts[0] * 60 + parts[1];
-            var deltaSecs = parts.length === 3 ? 60 : (totalSecs >= 120 ? 60 : 15);
-            totalSecs = Math.max(0, totalSecs + dir * deltaSecs);
-            if (parts.length === 3) {
-                var h = Math.floor(totalSecs / 3600);
-                var m = Math.floor((totalSecs % 3600) / 60);
-                var s = totalSecs % 60;
-                inp.value = String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
-            } else {
-                var m2 = Math.floor(totalSecs / 60);
-                var s2 = totalSecs % 60;
-                inp.value = String(m2).padStart(2, "0") + ":" + String(s2).padStart(2, "0");
-            }
-        } else {
-            var step = parseFloat(inp.step || "1") || 1;
-            var min = inp.min !== "" ? parseFloat(inp.min) : 0;
-            var max = inp.max !== "" ? parseFloat(inp.max) : 99999;
-            var cur = parseFloat(raw);
-            if (isNaN(cur)) cur = min;
-            var next = Math.min(max, Math.max(min, cur + dir * step));
-            inp.value = String(Math.round(next * 100) / 100);
-        }
-
-        inp.dispatchEvent(new Event("input", { bubbles: true }));
-        inp.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-
-    function isTimerOrNumericInput(inp) {
-        if (!inp || inp.tagName !== "INPUT") return false;
-        if (inp.closest("#tvCompactSidebar, #tvStartMenuWrap, #tvBottomBar, #tvHomeSplash, #quickSearchModal")) return false;
-        if (inp.id === "ursSearchInput" || inp.id === "quickSearchInput") return false;
-
-        var type = (inp.getAttribute("type") || "text").toLowerCase();
-        if (type === "hidden" || type === "checkbox" || type === "radio" || type === "range" || type === "color" || type === "search" || type === "email" || type === "password") return false;
-
-        if (inp.closest(".timer-card, .timer-inputs")) return true;
-
-        var parentTxt = (inp.parentElement && inp.parentElement.textContent ? inp.parentElement.textContent : "").slice(0, 80);
-        var meta = [
-            inp.id || "",
-            inp.name || "",
-            inp.className || "",
-            inp.getAttribute("placeholder") || "",
-            inp.getAttribute("aria-label") || "",
-            parentTxt
-        ].join(" ").toLowerCase();
-
-        if (/search|query|city|location|country|address|email/i.test(inp.id + " " + inp.name + " " + (inp.getAttribute("placeholder") || ""))) return false;
-
-        var val = String(inp.value || "").trim();
-        return type === "number" || type === "tel" || type === "time" ||
-            /timer|time|min|sec|hour|hr|target|count|tasbeeh|delay|interval|duration|offset|hijri|adjust|custom|limit|goal|speed|countdown|alarm|repeat/i.test(meta) ||
-            /^\d+(?::\d{2})*$/.test(val);
-    }
-
-    function wrapSingleTimerInput(inp) {
-        if (!isTimerOrNumericInput(inp)) return null;
-
-        if ((inp.getAttribute("type") || "").toLowerCase() === "time") {
-            try { inp.setAttribute("type", "text"); } catch (e) {}
-        }
-
-        inp.setAttribute("readonly", "readonly");
-        inp.setAttribute("inputmode", "none");
-        inp.setAttribute("tabindex", "-1");
-
-        var wrap = inp.parentElement;
-        if (wrap && wrap.classList.contains("tv-stepper-wrap")) {
-            wrap.setAttribute("tabindex", "-1");
-            return wrap;
-        }
-
-        wrap = document.createElement("div");
-        wrap.className = "tv-stepper-wrap";
-        wrap.setAttribute("tabindex", "-1");
-
-        var downBtn = document.createElement("button");
-        downBtn.type = "button";
-        downBtn.className = "tv-step-btn tv-step-down";
-        downBtn.setAttribute("tabindex", "0");
-        downBtn.setAttribute("aria-label", "Decrease");
-        downBtn.innerHTML = "&#9660;";
-        downBtn.addEventListener("click", function(ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            stepNumericOrTimerInput(inp, -1);
-            downBtn.focus({ preventScroll: true });
-            tvNavState.lastPageFocusEl = downBtn;
-        });
-
-        var upBtn = document.createElement("button");
-        upBtn.type = "button";
-        upBtn.className = "tv-step-btn tv-step-up";
-        upBtn.setAttribute("tabindex", "0");
-        upBtn.setAttribute("aria-label", "Increase");
-        upBtn.innerHTML = "&#9650;";
-        upBtn.addEventListener("click", function(ev) {
-            ev.preventDefault();
-            ev.stopPropagation();
-            stepNumericOrTimerInput(inp, 1);
-            upBtn.focus({ preventScroll: true });
-            tvNavState.lastPageFocusEl = upBtn;
-        });
-
-        inp.parentNode.insertBefore(wrap, inp);
-        wrap.appendChild(downBtn);
-        wrap.appendChild(inp);
-        wrap.appendChild(upBtn);
-        return wrap;
-    }
-
-    function enhanceTimerAndNumericInputs(root) {
-        var container = root || document;
-        var inputs = container.querySelectorAll('input[type="number"], input[type="tel"], input[type="time"], input[type="text"], input:not([type])');
-        inputs.forEach(function(inp) {
-            wrapSingleTimerInput(inp);
-        });
-    }
-
-    // Tag Reset, Start, Minutes, Seconds inside every .timer-card so visual & D-Pad order are ALWAYS: Reset -> Start -> Minutes -> Seconds
-    function enhanceTimerCardsOrder(root) {
-        var scope = root || document;
-        var cards = scope.querySelectorAll(".timer-card");
-        cards.forEach(function(card) {
-            var btnBox = card.querySelector(".timer-buttons");
-            if (btnBox) {
-                btnBox.querySelectorAll("button").forEach(function(b) {
-                    var hay = ((b.textContent || "") + " " + (b.id || "") + " " + (b.className || "") + " " + (b.getAttribute("onclick") || "")).toLowerCase();
-                    if (/reset|ری\s*سیٹ|دوبارہ/i.test(hay)) {
-                        b.classList.add("tv-timer-reset");
-                        b.classList.remove("tv-timer-start");
-                    } else if (/start|pause|resume|stop|شروع|روک/i.test(hay)) {
-                        b.classList.add("tv-timer-start");
-                        b.classList.remove("tv-timer-reset");
-                    }
-                });
-            }
-
-            var inpBox = card.querySelector(".timer-inputs");
-            if (inpBox) {
-                var wraps = Array.from(inpBox.querySelectorAll(".tv-stepper-wrap"));
-                wraps.forEach(function(w, idx) {
-                    var inp = w.querySelector("input");
-                    var group = w;
-                    while (group.parentElement && group.parentElement !== inpBox) {
-                        group = group.parentElement;
-                    }
-                    var hay = [
-                        inp ? (inp.id || "") : "",
-                        inp ? (inp.name || "") : "",
-                        inp ? (inp.placeholder || "") : "",
-                        group.textContent || ""
-                    ].join(" ").toLowerCase();
-
-                    if (/sec|سیکنڈ/i.test(hay) && !/min|منٹ/i.test(hay)) {
-                        group.classList.add("tv-timer-sec-group");
-                        group.classList.remove("tv-timer-min-group");
-                    } else if (/min|منٹ/i.test(hay) && !/sec|سیکنڈ/i.test(hay)) {
-                        group.classList.add("tv-timer-min-group");
-                        group.classList.remove("tv-timer-sec-group");
-                    } else if (idx === 0) {
-                        group.classList.add("tv-timer-min-group");
-                        group.classList.remove("tv-timer-sec-group");
-                    } else {
-                        group.classList.add("tv-timer-sec-group");
-                        group.classList.remove("tv-timer-min-group");
-                    }
-                });
-            }
-        });
-    }
-
-    // Returns exact ordered focusable controls for a .timer-card:
-    // [ Reset, Start, (any extra button), Minutes ▼, Minutes ▲, Seconds ▼, Seconds ▲ ]
-    function getOrderedTimerControls(card) {
-        if (!card) return [];
-        enhanceTimerAndNumericInputs(card);
-        enhanceTimerCardsOrder(card);
-
-        var out = [];
-        function addIfValid(el) {
-            if (el && isVisibleFocusable(el) && out.indexOf(el) === -1) out.push(el);
-        }
-
-        var btnBox = card.querySelector(".timer-buttons");
-        if (btnBox) {
-            var allBtns = Array.from(btnBox.querySelectorAll("button"));
-            allBtns.filter(function(b) { return b.classList.contains("tv-timer-reset"); }).forEach(addIfValid);
-            allBtns.filter(function(b) { return b.classList.contains("tv-timer-start"); }).forEach(addIfValid);
-            allBtns.forEach(addIfValid);
-        }
-
-        var inpBox = card.querySelector(".timer-inputs");
-        if (inpBox) {
-            var minGroups = Array.from(inpBox.querySelectorAll(".tv-timer-min-group"));
-            var secGroups = Array.from(inpBox.querySelectorAll(".tv-timer-sec-group"));
-            var addGroupBtns = function(g) {
-                addIfValid(g.querySelector(".tv-step-down"));
-                addIfValid(g.querySelector(".tv-step-up"));
-            };
-            minGroups.forEach(addGroupBtns);
-            secGroups.forEach(addGroupBtns);
-            // Fallback for any untagged stepper inside timer-inputs
-            inpBox.querySelectorAll(".tv-step-btn").forEach(addIfValid);
-        }
-
-        return out;
-    }
-
-    function isTimerControl(el) {
-        if (!el || el.nodeType !== 1) return false;
-        if (el.closest("#tvCompactSidebar, #tvStartMenuWrap, #tvBottomBar, #tvHomeSplash")) return false;
-        if (el.classList.contains("tv-step-btn") || el.closest(".tv-stepper-wrap, .timer-card, .timer-buttons, .timer-inputs")) return true;
-        return false;
-    }
-
-    var timerFocusLockUntil = 0;
-
-    function lockTimerFocus(clickedBtn) {
-        if (!clickedBtn || !isTimerControl(clickedBtn)) return;
-        var card = clickedBtn.closest(".timer-card") || clickedBtn.closest("#tasbeehModal") || clickedBtn.parentElement;
-        var frame = document.querySelector(".continuous-frame");
-        var savedScroll = frame ? frame.scrollTop : 0;
-        var activeSec = document.querySelector(".shijra-section.tv-active-section");
-        timerFocusLockUntil = Date.now() + 700;
-
-        function keepFocusAndView() {
-            if (activeSec && !activeSec.classList.contains("tv-active-section")) {
-                activeSec.classList.add("tv-active-section", "active");
-            }
-            if (frame && Math.abs(frame.scrollTop - savedScroll) > 40) {
-                frame.scrollTop = savedScroll;
-            }
-
-            var cur = document.activeElement;
-            var escaped = !cur || cur === document.body || cur === document.documentElement ||
-                (cur.closest && cur.closest("#tvCompactSidebar"));
-
-            if (!escaped && card && card.contains(cur) && isVisibleFocusable(cur)) {
-                tvNavState.lastPageFocusEl = cur;
-                return;
-            }
-
-            if (isVisibleFocusable(clickedBtn)) {
-                clickedBtn.focus({ preventScroll: true });
-                tvNavState.lastPageFocusEl = clickedBtn;
-                return;
-            }
-            if (card && card.classList.contains("timer-card")) {
-                var ordered = getOrderedTimerControls(card);
-                if (ordered.length > 0) {
-                    ordered[0].focus({ preventScroll: true });
-                    tvNavState.lastPageFocusEl = ordered[0];
-                    return;
-                }
-            }
-            if (card) {
-                var fallback = Array.from(card.querySelectorAll("button:not([disabled]), .tv-step-btn")).filter(isVisibleFocusable);
-                if (fallback.length > 0) {
-                    fallback[0].focus({ preventScroll: true });
-                    tvNavState.lastPageFocusEl = fallback[0];
-                }
-            }
-        }
-
-        setTimeout(keepFocusAndView, 0);
-        setTimeout(keepFocusAndView, 40);
-        setTimeout(keepFocusAndView, 140);
-        setTimeout(keepFocusAndView, 320);
-        setTimeout(keepFocusAndView, 550);
-    }
-
-    document.addEventListener("click", function(e) {
-        var btn = e.target && e.target.closest ? e.target.closest("button, [role='button'], .tv-step-btn") : e.target;
-        if (btn && isTimerControl(btn)) {
-            lockTimerFocus(btn);
-        }
-    }, true);
-
-    // Anti-Trap Focus Guard: blocks hidden/off-screen traps & saves page focus state cleanly
-    document.addEventListener("focusin", function(e) {
-        var el = e.target;
-        if (!el || el === document || el === window) return;
-
-        // 1. Block accidental sidebar jump during Timer Start/Reset lock
-        if (Date.now() < timerFocusLockUntil && el.closest && el.closest("#tvCompactSidebar")) {
-            el.blur();
-            return;
-        }
-
-        // 2. Redirect plain Timer inputs directly to their ▲ stepper button
-        if (el.tagName === "INPUT" && isTimerOrNumericInput(el)) {
-            var wrap = wrapSingleTimerInput(el);
-            if (wrap) {
-                el.blur();
-                var upBtn = wrap.querySelector(".tv-step-up") || wrap.querySelector(".tv-step-btn");
-                if (upBtn) {
-                    upBtn.focus({ preventScroll: true });
-                    tvNavState.lastPageFocusEl = upBtn;
-                }
-            }
-            return;
-        }
-
-        // 3. Never allow focus to remain trapped inside hidden / off-screen / quarantined elements
-        if (el.closest && (el.closest(".tv-hide-overlay, .tv-hide-nav-cards, #awraadSideDrawer") || (bookState.sectionMode && el.closest(".shijra-section") && !el.closest(".shijra-section.tv-active-section")))) {
-            el.blur();
-            returnFocusToCurrentPage();
-            return;
-        }
-
-        // 4. Remember last active sidebar button or last page element
-        if (el.closest && el.closest("#tvCompactSidebar")) {
-            tvNavState.savedSidebarBtn = el;
-        } else if (el.closest && el.closest(".continuous-frame") && !isAnyModalOpen()) {
-            tvNavState.lastPageFocusEl = el;
-        }
-    }, true);
-
-    // ------------------------------------------
-    // 7. COMPACT SIDEBAR, MODALS & FOCUS NAVIGATION
-    // ------------------------------------------
-    function findTarget(patterns, preferDrawer) {
-        var drawer = document.getElementById("awraadSideDrawer");
-        var scopes = preferDrawer
-            ? (drawer ? [drawer, document] : [document])
-            : [document, drawer].filter(Boolean);
-
-        for (var s = 0; s < scopes.length; s++) {
-            var list = scopes[s].querySelectorAll("a, button, [onclick], [role='button']");
-            for (var i = 0; i < list.length; i++) {
-                var el = list[i];
-                if (el.closest("#tvCompactSidebar, #tvStartMenuWrap, #tvBottomBar, #tvHomeSplash")) continue;
-                if (!preferDrawer && s === 0 && drawer && drawer.contains(el)) continue;
-                var hay = [
-                    el.textContent || "",
-                    el.id || "",
-                    el.className || "",
-                    el.getAttribute("title") || "",
-                    el.getAttribute("aria-label") || "",
-                    el.getAttribute("onclick") || "",
-                    el.getAttribute("href") || ""
-                ].join(" ").toLowerCase();
-                for (var p = 0; p < patterns.length; p++) {
-                    if (patterns[p].test(hay)) return el;
-                }
-            }
-        }
-        return null;
-    }
-
-    function hideDuplicateMobileRail() {
-        var keywords = ["home", "shajara", "awraad", "tasbeeh", "namaz", "settings"];
-        Array.from(document.body.children).forEach(function(el) {
-            if (!el || el.id === "tvCompactSidebar" || el.id === "awraadSideDrawer" || el.id === "tvStartMenuWrap" || el.id === "tvStartMenuBackdrop" || el.id === "tvBottomBar" || el.id === "tvHomeSplash") return;
-            var txt = (el.textContent || "").toLowerCase();
-            if (txt.length < 25 || txt.length > 220) return;
-            var hits = 0;
-            for (var i = 0; i < keywords.length; i++) {
-                if (txt.indexOf(keywords[i]) !== -1) hits++;
-            }
-            if (hits >= 4) el.classList.add("tv-hide-mobile-rail");
-        });
-    }
-
-    function buildCompactSidebar() {
-        if (document.getElementById("tvCompactSidebar")) return;
-
-        var items = [
-            {
-                id: "tvSbMainMenu",
-                menuMode: "main",
-                label: "Main Menu",
-                svg: '<rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/>',
-                action: function(btn) {
-                    if (startMenuState.open && startMenuState.mode === "main") closeStartMenu(true);
-                    else openStartMenu("main", btn, true);
-                }
-            },
-            {
-                label: "Search",
-                svg: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    var el = document.getElementById("navSearchBtn") || document.getElementById("openQuickSearchDrawerBtn") || findTarget([/search/i], false);
-                    if (el) el.click();
-                    setTimeout(function() {
-                        prepareOpenModals();
-                        enhanceQuickSearchModal();
-                    }, 100);
-                }
-            },
-            {
-                menuMode: "shajara",
-                label: "Shajara",
-                svg: '<path d="M5 4h11a2 2 0 0 1 2 2v13H7a2 2 0 0 1-2-2V4z"/><path d="M9 8h6M9 12h6"/>',
-                action: function(btn) {
-                    if (startMenuState.open && startMenuState.mode === "shajara") closeStartMenu(true);
-                    else openStartMenu("shajara", btn, true);
-                }
-            },
-            {
-                menuMode: "awraad",
-                label: "Awraad",
-                svg: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
-                action: function(btn) {
-                    if (startMenuState.open && startMenuState.mode === "awraad") closeStartMenu(true);
-                    else openStartMenu("awraad", btn, true);
-                }
-            },
-            {
-                label: "Live Events",
-                svg: '<rect x="2" y="6" width="14" height="12" rx="2"/><polygon points="22 8 16 12 22 16 22 8"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    var el = findTarget([/live|meet/i], true);
-                    if (el) el.click();
-                }
-            },
-            {
-                label: "Calendar",
-                svg: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    var el = findTarget([/\burs\b|calendar/i], true);
-                    if (el) el.click();
-                    setTimeout(prepareOpenModals, 120);
-                }
-            },
-            {
-                label: "Tasbeeh",
-                svg: '<circle cx="12" cy="5" r="2"/><circle cx="18" cy="9" r="2"/><circle cx="17" cy="16" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="7" cy="16" r="2"/><circle cx="6" cy="9" r="2"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    var el = findTarget([/tasbeeh/i], true);
-                    if (el) el.click();
-                    setTimeout(prepareOpenModals, 120);
-                }
-            },
-            {
-                label: "Scroll",
-                svg: '<path d="M7 7l5 5 5-5"/><path d="M7 13l5 5 5-5"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    toggleBookModeForScroll();
-                    var el = findTarget([/auto-?scroll|scroll/i], true);
-                    if (el) el.click();
-                }
-            },
-            {
-                label: "Namaaz",
-                svg: '<path d="M12 3c-2.5 3-5 5-5 8v9h10v-9c0-3-2.5-5-5-8z"/><path d="M4 20h16"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    var el = document.getElementById("openPrayerTimesBtn") || findTarget([/prayer|namaz|namaaz|salat/i], true);
-                    if (el) el.click();
-                    setTimeout(prepareOpenModals, 120);
-                }
-            },
-            {
-                label: "Settings",
-                svg: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/>',
-                action: function() {
-                    closeStartMenu(false);
-                    var el = findTarget([/setting|display.*font/i], true);
-                    if (el) el.click();
-                    setTimeout(prepareOpenModals, 120);
-                }
-            }
-        ];
-
-        var nav = document.createElement("nav");
-        nav.id = "tvCompactSidebar";
-        nav.setAttribute("aria-label", "TV Compact Sidebar");
-
-        items.forEach(function(item) {
-            var btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "tv-sb-btn";
-            if (item.id) btn.id = item.id;
-            if (item.menuMode) btn.dataset.menuMode = item.menuMode;
-            btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + item.svg + '</svg><span class="tv-sb-lbl">' + item.label + '</span>';
-            btn.addEventListener("click", function() { item.action(btn); });
-            nav.appendChild(btn);
-        });
-
-        document.body.appendChild(nav);
-    }
-
-    function arrangeSettingsModal() {
-        var modal = document.getElementById("settingsModal");
-        if (!modal) return;
-        var bodyEl = modal.querySelector(".settings-body");
-        if (!bodyEl) return;
-
-        if (!bodyEl.querySelector(".tv-settings-grid")) {
-            var children = Array.from(bodyEl.children);
-            if (children.length >= 4) {
-                var slider = document.getElementById("arabicFontSizeSlider");
-                var splitIdx = -1;
-                if (slider) {
-                    var sliderIdx = children.findIndex(function(ch) {
-                        return ch === slider || ch.contains(slider);
-                    });
-                    if (sliderIdx > 0) {
-                        var prev = children[sliderIdx - 1];
-                        var isTitle = prev && (prev.classList.contains("settings-section-title") || /arabic\s*font\s*size/i.test(prev.textContent || ""));
-                        splitIdx = isTitle ? sliderIdx - 1 : sliderIdx;
-                    }
-                }
-                if (splitIdx <= 0) splitIdx = Math.ceil(children.length / 2);
-
-                var grid = document.createElement("div");
-                grid.className = "tv-settings-grid";
-                var colL = document.createElement("div");
-                colL.className = "tv-settings-col tv-settings-col-left";
-                var colR = document.createElement("div");
-                colR.className = "tv-settings-col tv-settings-col-right";
-
-                children.forEach(function(ch, i) {
-                    if (i < splitIdx) colL.appendChild(ch);
-                    else colR.appendChild(ch);
-                });
-
-                grid.appendChild(colL);
-                grid.appendChild(colR);
-                bodyEl.appendChild(grid);
-            }
-        }
-
-        if (modal.dataset.tvBookHook !== "1") {
-            modal.dataset.tvBookHook = "1";
-            modal.addEventListener("input", function() { scheduleBookRecalc(true); }, true);
-            modal.addEventListener("change", function() { scheduleBookRecalc(true); }, true);
-        }
-
-        modal.querySelectorAll('input[type="range"]').forEach(function(slider) {
-            var wrap = slider.parentElement;
-            if (!wrap || !wrap.classList.contains("tv-slider-wrap")) {
-                wrap = document.createElement("div");
-                wrap.className = "tv-slider-wrap";
-                wrap.setAttribute("role", "slider");
-                wrap.setAttribute("tabindex", "0");
-                slider.parentNode.insertBefore(wrap, slider);
-                wrap.appendChild(slider);
-            }
-            slider.setAttribute("tabindex", "-1");
-        });
-
-        modal.querySelectorAll('input[type="checkbox"], input[type="color"]').forEach(function(inp) {
-            var lbl = inp.closest("label") || (inp.id ? modal.querySelector('label[for="' + inp.id + '"]') : null);
-            if (lbl) {
-                lbl.classList.add("tv-focus-ctrl");
-                lbl.setAttribute("tabindex", "0");
-                lbl.setAttribute("role", "button");
-                inp.setAttribute("tabindex", "-1");
-            }
-        });
-
-        modal.querySelectorAll("#openHijriCorrectionRow, .settings-nav-row, [class*='color-btn' i], [class*='swatch' i]").forEach(function(el) {
-            if (/^(BUTTON|A|INPUT|SELECT)$/.test(el.tagName)) return;
-            el.classList.add("tv-focus-ctrl");
-            el.setAttribute("tabindex", "0");
-            el.setAttribute("role", "button");
-        });
-    }
-
-    function enhanceOtherModals() {
-        TOP_MODAL_SELECTORS.forEach(function(sel) {
-            var listM = document.querySelectorAll(sel);
-            listM.forEach(function(m) {
-                var isVisible = isModalVisible(m);
-                m.querySelectorAll(".tasbeeh-close, .tasbeeh-minimize, [onclick], [role='button'], [class*='btn' i], [class*='preset' i], [class*='chip' i], [class*='tab' i]").forEach(function(el) {
-                    if (/^(BUTTON|A|INPUT|SELECT)$/.test(el.tagName)) return;
-                    if (el.classList.contains("tv-stepper-wrap") || el.classList.contains("tv-slider-wrap")) return;
-                    if (el.querySelector("button, a, input, select, .tv-step-btn")) return;
-                    el.classList.add("tv-focus-ctrl");
-                    el.setAttribute("tabindex", "0");
-                    if (!el.getAttribute("role")) el.setAttribute("role", "button");
-                });
-                if (isVisible) {
-                    m.querySelectorAll("div, span, li, label").forEach(function(el) {
-                        if (el.classList.contains("tv-focus-ctrl") || el.classList.contains("tv-stepper-wrap") || el.classList.contains("tv-slider-wrap")) return;
-                        if (el.querySelector("button, a, input, select, .tv-step-btn, .tv-focus-ctrl")) return;
-                        var r = el.getBoundingClientRect();
-                        if (r.width <= 0 || r.height <= 0 || r.height > 120) return;
-                        var cst = window.getComputedStyle(el);
-                        if (cst.cursor === "pointer") {
-                            el.classList.add("tv-focus-ctrl");
-                            el.setAttribute("tabindex", "0");
-                            if (!el.getAttribute("role")) el.setAttribute("role", "button");
-                        }
-                    });
-                }
-            });
-        });
-    }
-
-    function checkModalCloseRecovery() {
-        var nowOpen = isAnyModalOpen();
-        if (tvNavState.wasModalOpen && !nowOpen) {
-            var cur = document.activeElement;
-            var lost = !cur || cur === document.body || cur === document.documentElement || !isVisibleFocusable(cur) ||
-                (cur.closest && cur.closest("#tvCompactSidebar"));
-            if (lost && !document.body.classList.contains("tv-home-splash")) {
-                returnFocusToCurrentPage();
-            }
-        }
-        tvNavState.wasModalOpen = nowOpen;
-    }
-
-    function prepareOpenModals() {
-        arrangeSettingsModal();
-        enhanceOtherModals();
-        enhanceQuickSearchModal();
-        enhanceNavbarControls();
-        enhanceTimerAndNumericInputs(document);
-        enhanceTimerCardsOrder(document);
-        suppressStrayOverlaysAndSyncNamaz();
-        checkModalCloseRecovery();
-    }
-
-    function getScopeFocusables(active) {
-        var scope = isAnyModalOpen()
-            ? getOutermostModalScope(active)
-            : (document.querySelector(".shijra-section.tv-active-section") || document.querySelector(".continuous-frame") || document);
-        return Array.from(scope.querySelectorAll(
-            '.tv-slider-wrap[tabindex="0"], .tv-step-btn[tabindex="0"], .tv-focus-ctrl[tabindex="0"], select:not([disabled]), button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]):not([tabindex="-1"])'
-        )).filter(function(node) {
-            if (node.closest("#tvCompactSidebar, #tvBottomBar") && scope !== document) return false;
-            return isVisibleFocusable(node);
-        });
-    }
-
-    function moveFocusInScope(active, delta) {
-        var list = getScopeFocusables(active);
-        var idx = list.indexOf(active);
-        if (idx === -1) return false;
-        var nextIdx = idx + delta;
-        if (nextIdx >= 0 && nextIdx < list.length) {
-            list[nextIdx].focus();
-            list[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
-            return true;
-        }
-        return false;
-    }
-
-    function moveFocusVertical(active, dir) {
-        var list = getScopeFocusables(active);
-        if (list.length < 2) return false;
-
-        var curWrap = active.closest(".tv-stepper-wrap") || active;
-        var curRect = curWrap.getBoundingClientRect();
-        var curCx = (curRect.left + curRect.right) / 2;
-
-        var candidates = [];
-        for (var i = 0; i < list.length; i++) {
-            var node = list[i];
-            if (node === active || curWrap.contains(node)) continue;
-            var r = node.getBoundingClientRect();
-            if (dir > 0) {
-                if (r.top >= curRect.bottom - 4) {
-                    var dy = r.top - curRect.bottom;
-                    var dx = Math.abs(((r.left + r.right) / 2) - curCx);
-                    candidates.push({ node: node, score: dy * 4 + dx });
-                }
-            } else {
-                if (r.bottom <= curRect.top + 4) {
-                    var dyUp = curRect.top - r.bottom;
-                    var dxUp = Math.abs(((r.left + r.right) / 2) - curCx);
-                    candidates.push({ node: node, score: dyUp * 4 + dxUp });
-                }
-            }
-        }
-
-        if (candidates.length > 0) {
-            candidates.sort(function(a, b) { return a.score - b.score; });
-            var best = candidates[0].node;
-            best.focus();
-            best.scrollIntoView({ block: "nearest", behavior: "smooth" });
-            return true;
-        }
-        return false;
-    }
-
-    function adjustSlider(wrap, dir) {
-        var slider = wrap.querySelector('input[type="range"]');
-        if (!slider) return;
-        var step = parseFloat(slider.step || "1");
-        var min = parseFloat(slider.min !== "" ? slider.min : "0");
-        var max = parseFloat(slider.max !== "" ? slider.max : "100");
-        var cur = parseFloat(slider.value || "0");
-        var dec = (slider.step && slider.step.indexOf(".") !== -1) ? slider.step.split(".")[1].length : 0;
-        var next = Math.min(max, Math.max(min, cur + dir * step));
-        slider.value = dec ? next.toFixed(dec) : String(Math.round(next));
-        slider.dispatchEvent(new Event("input", { bubbles: true }));
-        slider.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-
-    // ------------------------------------------
-    // 8. UNIFIED TV REMOTE D-PAD NAVIGATION ENGINE (ENTIRE APP)
-    //
-    // Guaranteed Paths:
-    //   Reset -> Right -> Start -> Right -> Minutes -> Right -> Seconds
-    //   Seconds -> Left -> Minutes -> Left -> Start -> Left -> Reset -> Left -> Menu Bar
-    //   Timer Controls -> Up / Down -> Current Page Vertical Scroll (NO focus jump)
-    //   Menu Bar -> Up / Down -> Menu Options
-    //   Menu Options -> Right -> Sub-Menu / Top-Right Controls -> Right -> Current Page (preserves section & scroll!)
-    //   Top-Right Controls (Search / Dark Mode / Bookmark): Left/Right across controls, Left edge -> Menu Bar, Right edge / Down / Back -> Current Page
-    // ------------------------------------------
-    window.addEventListener("keydown", function(e) {
-        var key = e.key;
-        var code = e.keyCode || e.which;
-        var isDown = key === "ArrowDown" || key === "Down" || code === 40 || code === 20;
-        var isUp = key === "ArrowUp" || key === "Up" || code === 38 || code === 19;
-        var isLeft = key === "ArrowLeft" || key === "Left" || code === 37 || code === 21;
-        var isRight = key === "ArrowRight" || key === "Right" || code === 39 || code === 22;
-        var isOk = key === "Enter" || key === " " || code === 13 || code === 23 || code === 66;
-        var isBack = key === "Escape" || key === "GoBack" || key === "BrowserBack" || code === 27 || code === 4;
-
-        var active = document.activeElement;
-
-        // A. Start Menu Level 3 (Sub-Menu Items)
-        var col3 = active && active.closest ? active.closest("#tvSmCol3") : null;
-        if (col3 && startMenuState.open) {
-            if (isDown || isUp) {
-                var rows3 = Array.from(col3.querySelectorAll(".tv-sm-row"));
-                var i3 = rows3.indexOf(active);
-                if (i3 !== -1) {
-                    var n3 = isDown ? i3 + 1 : i3 - 1;
-                    if (n3 >= 0 && n3 < rows3.length) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        rows3[n3].focus();
-                        rows3[n3].scrollIntoView({ block: "nearest", behavior: "smooth" });
-                    }
-                }
-                return;
-            }
-            if (isRight) {
-                // Escape smoothly from Sub-Menu -> Top-Right Controls -> Current Page
-                e.preventDefault();
-                e.stopPropagation();
-                closeStartMenu(false);
-                if (!focusFirstNavbarControl()) returnFocusToCurrentPage();
-                return;
-            }
-            if (isLeft || isBack) {
-                e.preventDefault();
-                e.stopPropagation();
-                var rows2 = Array.from(document.querySelectorAll("#tvSmCol2List .tv-sm-row"));
-                var parentRow = rows2[startMenuState.col2ActiveIdx] || rows2[0];
-                if (parentRow) parentRow.focus();
-                return;
-            }
-            return;
-        }
-
-        // B. Start Menu Level 2 (Menu Categories / Direct Options)
-        var col2 = active && active.closest ? active.closest("#tvSmCol2") : null;
-        if (col2 && startMenuState.open) {
-            if (isDown || isUp) {
-                var rows2 = Array.from(col2.querySelectorAll(".tv-sm-row"));
-                var i2 = rows2.indexOf(active);
-                if (i2 !== -1) {
-                    var n2 = isDown ? i2 + 1 : i2 - 1;
-                    if (n2 >= 0 && n2 < rows2.length) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        rows2[n2].focus();
-                        rows2[n2].scrollIntoView({ block: "nearest", behavior: "smooth" });
-                    }
-                }
-                return;
-            }
-            if (isRight) {
-                e.preventDefault();
-                e.stopPropagation();
-                var rows2All = Array.from(col2.querySelectorAll(".tv-sm-row"));
-                var curIdx = rows2All.indexOf(active);
-                var subMenu = startMenuState.col2Items[curIdx];
-                if (subMenu && !subMenu.isDirect && Array.isArray(subMenu.items) && subMenu.items.length > 0) {
-                    renderCol3ForSubMenu(subMenu, curIdx, active, true);
-                } else {
-                    // Leaf option (e.g., Shajara/Awraad flyout): Right -> Top-Right Controls -> Current Page
-                    closeStartMenu(false);
-                    if (!focusFirstNavbarControl()) returnFocusToCurrentPage();
-                }
-                return;
-            }
-            if (isLeft || isBack) {
-                e.preventDefault();
-                e.stopPropagation();
-                closeStartMenu(true);
-                return;
-            }
-            return;
-        }
-
-        if (isBack && startMenuState.open) {
-            e.preventDefault();
-            e.stopPropagation();
-            closeStartMenu(true);
-            return;
-        }
-
-        // C. Level 1 Menu Bar (#tvCompactSidebar)
-        var sb = active && active.closest ? active.closest("#tvCompactSidebar") : null;
-        if (sb) {
-            if (isDown || isUp) {
-                var btns = Array.from(sb.querySelectorAll(".tv-sb-btn"));
-                var idx = btns.indexOf(active);
-                if (idx !== -1) {
-                    var nextIdx = isDown ? idx + 1 : idx - 1;
-                    if (nextIdx >= 0 && nextIdx < btns.length) {
-                        e.preventDefault();
-                        btns[nextIdx].focus();
-                        btns[nextIdx].scrollIntoView({ block: "nearest", behavior: "smooth" });
-                    }
-                }
-                return;
-            }
-            if (isRight) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (active.dataset && active.dataset.menuMode) {
-                    // Sub-menu buttons (Main Menu / Shajara / Awraad) open their sub-menu on Right
-                    openStartMenu(active.dataset.menuMode, active, true);
-                    return;
-                }
-                // All other Menu Bar options (Search, Live Events, Calendar, Tasbeeh, Scroll, Namaaz, Settings):
-                // Right -> Top-Right Controls (Search / Dark Mode / Bookmark) -> Current Page!
-                if (!focusFirstNavbarControl()) {
-                    returnFocusToCurrentPage();
-                }
-                return;
-            }
-            if (isBack && !document.body.classList.contains("tv-home-splash")) {
-                e.preventDefault();
-                e.stopPropagation();
-                returnFocusToCurrentPage();
-                return;
-            }
-            return;
-        }
-
-        // D. Top-Right Controls in .app-navbar (Search, Dark Mode, Bookmark)
-        var inNavbar = active && active.closest ? active.closest(".app-navbar") : null;
-        if (inNavbar && !isAnyModalOpen()) {
-            var navCtrls = enhanceNavbarControls();
-            var nIdx = navCtrls.indexOf(active);
-
-            if (isLeft) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (nIdx > 0) {
-                    navCtrls[nIdx - 1].focus({ preventScroll: true });
-                } else {
-                    focusMenuBar(null);
-                }
-                return;
-            }
-            if (isRight) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (nIdx !== -1 && nIdx < navCtrls.length - 1) {
-                    navCtrls[nIdx + 1].focus({ preventScroll: true });
-                } else {
-                    // Rightmost Top-Right Control -> Right -> Current Page (preserves Shajara section & scroll!)
-                    returnFocusToCurrentPage();
-                }
-                return;
-            }
-            if (isDown || isBack) {
-                e.preventDefault();
-                e.stopPropagation();
-                returnFocusToCurrentPage();
-                return;
-            }
-            if (isUp) {
-                e.preventDefault();
-                return;
-            }
-            return;
-        }
-
-        // E. Timer Controls (.timer-card) — Exact Left/Right Sequence:
-        //    Menu Bar <- Reset <-> Start <-> Minutes (▼ <-> ▲) <-> Seconds (▼ <-> ▲)
-        //    Up / Down -> Vertical Page Scroll ONLY (never changes Timer focus or Menu!)
-        var timerCard = active && active.closest ? active.closest(".timer-card") : null;
-        if (timerCard && !isAnyModalOpen()) {
-            if (isOk) {
-                lockTimerFocus(active);
-                return;
-            }
-            if (isUp || isDown) {
-                e.preventDefault();
-                e.stopPropagation();
-                scrollCurrentPage(isDown ? 1 : -1);
-                return;
-            }
-            if (isLeft || isRight) {
-                e.preventDefault();
-                e.stopPropagation();
-                var ordered = getOrderedTimerControls(timerCard);
-                var tIdx = ordered.indexOf(active);
-                if (tIdx === -1 && ordered.length > 0) {
-                    ordered[0].focus({ preventScroll: true });
-                    tvNavState.lastPageFocusEl = ordered[0];
-                    return;
-                }
-                if (isRight) {
-                    if (tIdx < ordered.length - 1) {
-                        ordered[tIdx + 1].focus({ preventScroll: true });
-                        tvNavState.lastPageFocusEl = ordered[tIdx + 1];
-                    }
-                    return;
-                }
-                if (isLeft) {
-                    if (tIdx > 0) {
-                        ordered[tIdx - 1].focus({ preventScroll: true });
-                        tvNavState.lastPageFocusEl = ordered[tIdx - 1];
-                    } else {
-                        // Reset button + Left Arrow -> Focus Menu Bar (keeping page state saved!)
-                        focusMenuBar(active);
-                    }
-                    return;
-                }
-            }
-            if (isBack) {
-                e.preventDefault();
-                e.stopPropagation();
-                focusMenuBar(active);
-                return;
-            }
-        }
-
-        // F. Modal Stepper Controls (e.g. Tasbeeh modal target/timer)
-        if (active && isTimerControl(active) && isAnyModalOpen()) {
-            if (isOk) {
-                lockTimerFocus(active);
-                return;
-            }
-            if (isLeft || isRight) {
-                e.preventDefault();
-                e.stopPropagation();
-                moveFocusInScope(active, isRight ? 1 : -1);
-                return;
-            }
-            if (isDown || isUp) {
-                e.preventDefault();
-                e.stopPropagation();
-                moveFocusVertical(active, isDown ? 1 : -1);
-                return;
-            }
-        }
-
-        // G. Plain inputs inside modals escape cleanly on Up/Down
-        if (active && active.tagName === "INPUT" && isAnyModalOpen()) {
-            var itype = (active.getAttribute("type") || "text").toLowerCase();
-            if (itype !== "range" && (isDown || isUp)) {
-                e.preventDefault();
-                e.stopPropagation();
-                moveFocusVertical(active, isDown ? 1 : -1);
-                return;
-            }
-        }
-
-        // H. Wrapped Slider Controls (Settings Modal)
-        if (active && active.classList && active.classList.contains("tv-slider-wrap")) {
-            if (isLeft || isRight) {
-                e.preventDefault();
-                e.stopPropagation();
-                adjustSlider(active, isRight ? 1 : -1);
-                return;
-            }
-            if (isDown || isUp) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!moveFocusVertical(active, isDown ? 1 : -1)) {
-                    moveFocusInScope(active, isDown ? 1 : -1);
-                }
-                return;
-            }
-        }
-
-        // I. Custom Focusable Controls (OK Button)
-        if (isOk && active && active.classList && active.classList.contains("tv-focus-ctrl")) {
-            e.preventDefault();
-            var inner = active.querySelector("input");
-            if (inner) inner.click();
-            else active.click();
-            return;
-        }
-
-        // J. Shajara & Awraad Section Reader Mode (when focus is on page body/frame outside Timer)
-        if (bookState.sectionMode && !startMenuState.open && !isAnyModalOpen()) {
-            if (isUp || isDown) {
-                e.preventDefault();
-                e.stopPropagation();
-                scrollCurrentPage(isDown ? 1 : -1);
-                return;
-            }
-            if (isLeft || isBack) {
-                e.preventDefault();
-                e.stopPropagation();
-                focusMenuBar(active);
-                return;
-            }
-            if (isRight) {
-                var activeSec = document.querySelector(".shijra-section.tv-active-section");
-                var cardR = activeSec ? activeSec.querySelector(".timer-card") : null;
-                if (cardR) {
-                    var ordR = getOrderedTimerControls(cardR);
-                    if (ordR.length > 0) {
-                        e.preventDefault();
-                        ordR[0].focus({ preventScroll: true });
-                        tvNavState.lastPageFocusEl = ordR[0];
-                        return;
-                    }
-                }
-                if (focusFirstNavbarControl()) {
-                    e.preventDefault();
-                    return;
-                }
-            }
-        }
-
-        // K. Home Splash Screen
-        if (document.body.classList.contains("tv-home-splash") && !startMenuState.open && !isAnyModalOpen()) {
-            if (isLeft) {
-                e.preventDefault();
-                focusMenuBar(null);
-                return;
-            }
-            if (isUp) {
-                e.preventDefault();
-                if (!focusFirstNavbarControl()) focusMenuBar(null);
-                return;
-            }
-            if (isRight && active && active.id === "tvSplashStartBtn") {
-                e.preventDefault();
-                if (!focusFirstNavbarControl()) {
-                    var mainBtnS = document.getElementById("tvSbMainMenu");
-                    if (mainBtnS) openStartMenu("main", mainBtnS, true);
-                }
-                return;
-            }
-        }
-
-        // L. Apple Page Mode (All other reading pages: Dalail Hizbs, Bashair, Usboo, Duas, Daily)
-        if (bookState.enabled && !bookState.sectionMode && !bookState.pausedForScroll && !document.body.classList.contains("tv-home-splash") && !startMenuState.open && !isAnyModalOpen()) {
-            var isInput = active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName);
-            var isBtn = active && (active.tagName === "BUTTON" || active.classList.contains("tv-step-btn"));
-
-            if (!isInput && !isBtn) {
-                if (isLeft) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!turnPageByDirection("left")) {
-                        // At left page boundary -> optional clean exit to Menu Bar
-                        focusMenuBar(active);
-                    }
-                    return;
-                }
-                if (isRight) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    turnPageByDirection("right");
-                    return;
-                }
-                if (isUp) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    savePagePosition(active);
-                    if (!focusFirstNavbarControl()) focusMenuBar(active);
-                    return;
-                }
-                if (isBack) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    focusMenuBar(active);
-                    return;
-                }
-            }
-        }
-    }, true);
-
-    var clickEnhTimer = null;
-    document.addEventListener("click", function(e) {
-        var btn = e.target && e.target.closest ? e.target.closest("button, .tv-step-btn") : null;
-        if (btn && isTimerControl(btn)) return;
-        if (clickEnhTimer) clearTimeout(clickEnhTimer);
-        clickEnhTimer = setTimeout(prepareOpenModals, 120);
-    }, true);
-
-    function initTv() {
-        document.body.classList.add("awraad-tv");
-        updateNavbarHeightVar();
-        buildCompactSidebar();
-        ensureBottomBar();
-        hideDuplicateMobileRail();
-        enhanceNavbarControls();
-
-        if (isIndexPage()) {
-            buildFullStartMenuTree();
-            ensureGreenSplashScreen();
-        }
-
-        prepareOpenModals();
-        if (!document.body.classList.contains("tv-home-splash")) {
-            initContentReaderMode();
-        } else {
-            setTimeout(function() {
-                var mainBtn = document.getElementById("tvSbMainMenu");
-                if (mainBtn && !isAnyModalOpen()) mainBtn.focus();
-            }, 220);
-        }
-
-        setInterval(suppressStrayOverlaysAndSyncNamaz, 1000);
-
-        var obsTimer = null;
-        var bodyObs = new MutationObserver(function(mutations) {
-            var hasRelevantChange = false;
-            for (var i = 0; i < mutations.length; i++) {
-                var m = mutations[i];
-                if (m.target && m.target.closest && m.target.closest(".timer-card, .zikr-display")) continue;
-                if (m.type === "childList" && (m.addedNodes.length > 0 || m.removedNodes.length > 0)) {
-                    if (m.target === document.body || (m.target.id && /modal|search/i.test(m.target.id))) {
-                        hasRelevantChange = true;
-                        break;
-                    }
-                }
-                if (m.type === "attributes" && m.target && m.target.id && /modal/i.test(m.target.id)) {
-                    hasRelevantChange = true;
-                    break;
-                }
-            }
-            if (!hasRelevantChange) return;
-
-            if (obsTimer) clearTimeout(obsTimer);
-            obsTimer = setTimeout(function() {
-                hideDuplicateMobileRail();
-                if (isIndexPage()) {
-                    hideAllHomeNavCards();
-                    ensureGreenSplashScreen();
-                }
-                prepareOpenModals();
-            }, 140);
-        });
-        bodyObs.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
-    }
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", function() {
-            initTv();
-            setTimeout(prepareOpenModals, 400);
-        });
-    } else {
-        initTv();
-        setTimeout(prepareOpenModals, 400);
-    }
-})();
-
-// ==========================================
-// PART 21: PERSISTENT APK UPDATE NOTIFICATION (ALL OLD & CONFLICTED PACKAGE ID APKS)
+// PART 20: UNIFIED MOBILE MAIN-SCREEN SCROLL LOCK ENGINE (TASBEEH EXEMPT)
 // ==========================================
 (function() {
-    var REQUIRED_NATIVE_VER = 2;
-    var OFFICIAL_PACKAGE_ID = 'com.awraad.nooriya';
-    var APK_DOWNLOAD_URL = 'https://github.com/hashmisyedsalahuddin-hash/awraad-app/releases/latest/download/Awraad-e-Alaviya-Nooriya.apk';
-    var NOTIF_DAILY_KEY = 'awraad_upd_sysnotif_day_v' + REQUIRED_NATIVE_VER;
+    let isLocked = false;
+    let lockedScrollY = 0;
+    let touchStartY = 0;
 
-    function isTvEnvironment() {
-        var ua = navigator.userAgent || '';
-        if (/\b(TV|Android TV|GoogleTV|SMART-TV|SmartTV|BRAVIA|AFT[A-Z0-9]+|MIBOX|SHIELD|Leanback|CrKey)\b/i.test(ua)) return true;
-        return Boolean(document.body && document.body.classList.contains('awraad-tv'));
-    }
+    // Pop-ups & Menus that MUST lock Main Screen scrolling (Tasbeeh is strictly EXEMPT)
+    const LOCK_TARGETS = [
+        '#awraadSideDrawer.open',
+        '#awraadShortcutRail.open',
+        '#eventsModal.show',
+        '#prayerTimesModal.show',
+        '#settingsModal.show',
+        '.pt-submodal.show',
+        '.palette-modal.show',
+        '.hijri-stepper-modal.show',
+        '#resetAllConfirmModal.show',
+        '#bookmarksModal.show',
+        '#quickSearchModal.show',
+        '#navWarningModal.show'
+    ];
 
-    function isSocialInAppBrowser() {
-        var ua = navigator.userAgent || '';
-        return /(FBAN|FBAV|Instagram|Line\/|Twitter|Snapchat|MicroMessenger|WhatsApp)/i.test(ua);
-    }
+    // Inner containers allowed to scroll smoothly while Main Screen is locked
+    const SCROLLABLE_INNER_SELECTOR =
+        '#awraadSideDrawer .drawer-body, ' +
+        '#awraadShortcutRail, ' +
+        '#eventsModal .events-body, ' +
+        '#prayerTimesModal .prayer-card, ' +
+        '#settingsModal .settings-card, ' +
+        '.pt-submodal .pt-checklist, ' +
+        '.palette-modal .palette-shades, ' +
+        '.palette-modal .palette-primaries, ' +
+        '.ux-modal .ux-modal-body';
 
-    function isAndroidApkWebView() {
-        var ua = navigator.userAgent || '';
-        if (!/android/i.test(ua)) return false;
-        if (isSocialInAppBrowser()) return false;
-
-        try {
-            var cap = window.Capacitor;
-            if (cap) {
-                var isNative = (typeof cap.isNativePlatform === 'function') ? cap.isNativePlatform() : Boolean(cap.isNative);
-                var plat = (typeof cap.getPlatform === 'function') ? cap.getPlatform() : 'android';
-                if (isNative && (!plat || plat === 'android')) return true;
-            }
-        } catch (e) {}
-
-        if (/\bwv\b/i.test(ua)) return true;
-        if (/AwraadNative\//i.test(ua)) return true;
+    function shouldLockMainScreen() {
+        for (let i = 0; i < LOCK_TARGETS.length; i++) {
+            if (document.querySelector(LOCK_TARGETS[i])) return true;
+        }
         return false;
     }
 
-    function isOfficialStoreInstall() {
-        if (window.__AWRAAD_STORE_INSTALL === true) return true;
-        return /\bAwraadStore\b/i.test(navigator.userAgent || '');
+    function applyLock() {
+        if (isLocked) return;
+        lockedScrollY = Math.max(0, Math.round(window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0));
+        isLocked = true;
+        document.documentElement.classList.add('awraad-menu-scroll-lock');
+        document.body.classList.add('awraad-menu-scroll-lock');
+        document.body.style.top = (-lockedScrollY) + 'px';
     }
 
-    function getInstalledNativeVersion() {
-        var m = (navigator.userAgent || '').match(/AwraadNative\/(\d+)/i);
-        if (m && m[1]) return parseInt(m[1], 10) || 0;
-        if (typeof window.__AWRAAD_NATIVE_VER === 'number') return window.__AWRAAD_NATIVE_VER;
-        return 1;
+    function releaseLock() {
+        if (!isLocked) return;
+        isLocked = false;
+        document.documentElement.classList.remove('awraad-menu-scroll-lock');
+        document.body.classList.remove('awraad-menu-scroll-lock');
+        document.body.style.top = '';
+        window.scrollTo(0, lockedScrollY);
     }
 
-    function getDetectedPackageId(callback) {
-        var ua = navigator.userAgent || '';
-        var mUa = ua.match(/AwraadPkg\/([a-zA-Z0-9._]+)/i);
-        if (mUa && mUa[1]) {
-            callback(mUa[1]);
+    function syncScrollLock() {
+        if (shouldLockMainScreen()) applyLock();
+        else releaseLock();
+    }
+
+    window.awraadSyncScrollLock = syncScrollLock;
+
+    // Prevent touch/swipe gestures inside Menu Bar, Calendar, Events, Prayer Times, Settings from leaking to Main Screen
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches && e.touches.length === 1) {
+            touchStartY = e.touches[0].clientY;
+        }
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!isLocked) return;
+        if (!e.touches || e.touches.length !== 1) return;
+        const tgt = e.target;
+        // Tasbeeh interactions are always exempt
+        if (tgt && tgt.closest && tgt.closest('#tasbeehModal, #tasbeehMinimized')) return;
+
+        const scrollBox = tgt && tgt.closest ? tgt.closest(SCROLLABLE_INNER_SELECTOR) : null;
+        if (!scrollBox) {
+            if (e.cancelable) e.preventDefault();
             return;
         }
-        try {
-            var capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
-            if (capApp && typeof capApp.getInfo === 'function') {
-                capApp.getInfo().then(function(info) {
-                    callback((info && info.id) ? String(info.id) : '');
-                }).catch(function() {
-                    callback('');
-                });
-                return;
-            }
-        } catch (e) {}
-        callback('');
-    }
-
-    function sendSystemUpdateNotificationOnceDaily(detectedPkg) {
-        try {
-            var todayStr = new Date().toISOString().slice(0, 10);
-            if (localStorage.getItem(NOTIF_DAILY_KEY) === todayStr) return;
-            var LN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
-            if (!LN || typeof LN.checkPermissions !== 'function') return;
-
-            LN.checkPermissions().then(function(perm) {
-                if (!perm || perm.display !== 'granted') return;
-                localStorage.setItem(NOTIF_DAILY_KEY, todayStr);
-                var bodyTxt = (detectedPkg && detectedPkg !== OFFICIAL_PACKAGE_ID)
-                    ? 'Aap purana Package ID version use kar rahe hain. Naya Awraad APK download karke install karein (purani app uninstall kar dein).'
-                    : 'Awraad e Alaviya Nooriya ka naya updated APK available hai. App khol kar Download Update par tap karein.';
-                LN.schedule({
-                    notifications: [{
-                        id: 69980,
-                        title: 'Updated Awraad APK Available',
-                        body: bodyTxt,
-                        schedule: { at: new Date(Date.now() + 2500) }
-                    }]
-                }).catch(function() {});
-            }).catch(function() {});
-        } catch (e) {}
-    }
-
-    function mountPersistentUpdateBar(detectedPkg, isConflictedPkg) {
-        if (document.getElementById('awraadApkUpdateBanner')) return;
-        if (!document.body) return;
-
-        var descText = isConflictedPkg
-            ? 'Aap purana (Conflicted Package ID) APK use kar rahe hain. Naya updated APK download karke install karein aur purani app uninstall kar dein.'
-            : 'Naya updated Awraad APK available hai. Download karke install karein — agar "Package Conflict" aaye ya 2 icons dikhein to purani app uninstall karke install karein.';
-
-        var bar = document.createElement('div');
-        bar.id = 'awraadApkUpdateBanner';
-        bar.className = 'apk-update-banner apk-update-persistent print-none';
-        bar.setAttribute('dir', 'ltr');
-        bar.setAttribute('role', 'alert');
-        bar.setAttribute('aria-live', 'polite');
-        bar.innerHTML =
-            '<div class="apk-upd-header-row">' +
-                '<span class="apk-upd-badge">UPDATE REQUIRED</span>' +
-                '<span class="apk-upd-title">Updated APK Available</span>' +
-            '</div>' +
-            '<div class="apk-upd-desc">' + descText + '</div>' +
-            '<div class="apk-upd-actions">' +
-                '<a id="awraadApkUpdBtn" class="apk-upd-btn-primary" href="' + APK_DOWNLOAD_URL + '" target="_blank" rel="noopener noreferrer">Download &amp; Install Updated APK</a>' +
-            '</div>';
-
-        document.body.appendChild(bar);
-        document.body.classList.add('apk-upd-bar-active');
-
-        requestAnimationFrame(function() {
-            bar.classList.add('show');
-        });
-
-        sendSystemUpdateNotificationOnceDaily(detectedPkg);
-    }
-
-    function evaluateAndShowUpdateNotice() {
-        if (!isAndroidApkWebView() || isTvEnvironment() || isOfficialStoreInstall()) return;
-
-        var nativeVer = getInstalledNativeVersion();
-        getDetectedPackageId(function(pkgId) {
-            var isConflictedPkg = Boolean(pkgId && pkgId.toLowerCase() !== OFFICIAL_PACKAGE_ID);
-            var isOutdatedNative = nativeVer < REQUIRED_NATIVE_VER;
-
-            if (nativeVer >= REQUIRED_NATIVE_VER) return;
-            if (isOutdatedNative || isConflictedPkg) {
-                mountPersistentUpdateBar(pkgId, isConflictedPkg);
-            }
-        });
-    }
-
-    function bootApkUpdater() {
-        if (!isAndroidApkWebView() || isTvEnvironment()) return;
-        var tries = 0;
-        function waitAfterSplash() {
-            tries++;
-            if (document.getElementById('awraadSplashScreen') && tries < 30) {
-                setTimeout(waitAfterSplash, 500);
-                return;
-            }
-            setTimeout(evaluateAndShowUpdateNotice, 600);
+        const maxScroll = scrollBox.scrollHeight - scrollBox.clientHeight;
+        if (maxScroll <= 1) {
+            if (e.cancelable) e.preventDefault();
+            return;
         }
-        waitAfterSplash();
+        const dy = e.touches[0].clientY - touchStartY;
+        const atTop = scrollBox.scrollTop <= 0;
+        const atBottom = scrollBox.scrollTop >= maxScroll - 1;
+        if ((atTop && dy > 0) || (atBottom && dy < 0)) {
+            if (e.cancelable) e.preventDefault();
+        }
+    }, { passive: false, capture: true });
+
+    // Apply persisted Always-on-Top body class immediately on boot
+    function bootUnifiedMobileState() {
+        const aotOn = localStorage.getItem('app_tasbeeh_always_on_top') === 'true';
+        document.body.classList.toggle('awraad-aot-enabled', aotOn);
+        syncScrollLock();
+
+        if (typeof MutationObserver !== 'undefined') {
+            const mo = new MutationObserver(() => syncScrollLock());
+            mo.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+        }
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bootApkUpdater);
+        document.addEventListener('DOMContentLoaded', bootUnifiedMobileState);
     } else {
-        bootApkUpdater();
+        bootUnifiedMobileState();
     }
 })();
