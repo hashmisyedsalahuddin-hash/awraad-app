@@ -1288,6 +1288,31 @@ jobs:
 
       - name: Configure Transparent Bottom Nav Bar & Native Bounce Fix
         run: |
+          # 1. Ensure AppTheme.NoActionBar keeps bottom nav bar visible & translucent (never fullscreen-hidden)
+          for STY in android/app/src/main/res/values/styles.xml android/app/src/main/res/values-night/styles.xml; do
+            if [ -f "$STY" ]; then
+              node -e '
+                const fs = require("fs");
+                const p = process.argv[1];
+                let xml = fs.readFileSync(p, "utf8");
+                xml = xml.replace(/<style\s+name="AppTheme\.NoActionBar"[\s\S]*?<\/style>/, [
+                  "    <style name=\"AppTheme.NoActionBar\" parent=\"Theme.AppCompat.DayNight.NoActionBar\">",
+                  "        <item name=\"windowActionBar\">false</item>",
+                  "        <item name=\"windowNoTitle\">true</item>",
+                  "        <item name=\"android:background\">@null</item>",
+                  "        <item name=\"android:windowFullscreen\">false</item>",
+                  "        <item name=\"android:windowDrawsSystemBarBackgrounds\">true</item>",
+                  "        <item name=\"android:windowTranslucentNavigation\">false</item>",
+                  "        <item name=\"android:statusBarColor\">#0c3b2e</item>",
+                  "        <item name=\"android:navigationBarColor\">#38000000</item>",
+                  "    </style>"
+                ].join("\n"));
+                fs.writeFileSync(p, xml, "utf8");
+              ' "$STY"
+            fi
+          done
+
+          # 2. Write MainActivity.java: Always-Visible Opacity-Transparent Bottom Nav Bar + Seamless Top Status Bar + No Scroll Bounce
           MAIN_JAVA=$(find android/app/src/main/java -name "MainActivity.java" | head -n 1)
           if [ -z "$MAIN_JAVA" ]; then
             echo "❌ MainActivity.java not found!"
@@ -1304,6 +1329,7 @@ jobs:
           import android.view.Window;
           import android.view.WindowManager;
           import android.webkit.WebView;
+          import androidx.core.view.ViewCompat;
           import androidx.core.view.WindowCompat;
           import androidx.core.view.WindowInsetsCompat;
           import androidx.core.view.WindowInsetsControllerCompat;
@@ -1313,13 +1339,14 @@ jobs:
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  applyTransparentNavBar();
+                  applyPermanentTransparentNavBar();
+                  setupTopInsetOnly();
               }
 
               @Override
               public void onResume() {
                   super.onResume();
-                  applyTransparentNavBar();
+                  applyPermanentTransparentNavBar();
                   if (this.bridge != null && this.bridge.getWebView() != null) {
                       WebView wv = this.bridge.getWebView();
                       wv.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -1330,20 +1357,36 @@ jobs:
               public void onWindowFocusChanged(boolean hasFocus) {
                   super.onWindowFocusChanged(hasFocus);
                   if (hasFocus) {
-                      applyTransparentNavBar();
+                      applyPermanentTransparentNavBar();
                   }
               }
 
-              private void applyTransparentNavBar() {
+              private void setupTopInsetOnly() {
+                  final View contentView = findViewById(android.R.id.content);
+                  if (contentView == null) return;
+                  contentView.setBackgroundColor(Color.parseColor("#0c3b2e"));
+                  ViewCompat.setOnApplyWindowInsetsListener(contentView, (v, insets) -> {
+                      int topInset = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+                      // Top padded cleanly below status bar (zero navbar overlap); bottom = 0 so reading content flows behind transparent nav bar
+                      v.setPadding(0, topInset, 0, 0);
+                      return insets;
+                  });
+                  ViewCompat.requestApplyInsets(contentView);
+              }
+
+              private void applyPermanentTransparentNavBar() {
                   Window window = getWindow();
                   if (window == null) return;
 
-                  // Edge-to-edge layout: content draws behind a transparent bottom navigation bar
+                  // Draw content edge-to-edge behind a permanently visible translucent bottom navigation bar
                   WindowCompat.setDecorFitsSystemWindows(window, false);
-                  window.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+                  window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN
+                          | WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+                          | WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
                   window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
-                  // Subtle translucent glass tint so Back/Home/App-Switch buttons are transparent & clearly visible
-                  window.setNavigationBarColor(Color.parseColor("#2E000000"));
+
+                  // Exact translucent dark-glass opacity style over page content (white ||| O < buttons always clearly visible)
+                  window.setNavigationBarColor(Color.parseColor("#38000000"));
                   window.setStatusBarColor(Color.parseColor("#0c3b2e"));
 
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -1351,26 +1394,25 @@ jobs:
                   }
 
                   View decorView = window.getDecorView();
+                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+                      // Android 9/10: Keep BOTH bars permanently visible (NO HIDE_NAVIGATION / NO IMMERSIVE_STICKY) while drawing behind bottom nav bar
+                      decorView.setSystemUiVisibility(
+                              View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                                      | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                      | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                      );
+                  }
+
                   WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, decorView);
                   if (controller != null) {
-                      // Bottom navigation bar ALWAYS visible & transparent (zero swipe struggle!)
-                      controller.show(WindowInsetsCompat.Type.navigationBars());
-                      // Keep top status bar cleanly hidden for full-screen reading
-                      controller.hide(WindowInsetsCompat.Type.statusBars());
-                      controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-                      // Crisp white icons over translucent glass tint (readable in Light & Dark modes)
+                      controller.show(WindowInsetsCompat.Type.statusBars() | WindowInsetsCompat.Type.navigationBars());
+                      controller.setAppearanceLightStatusBars(false);
                       controller.setAppearanceLightNavigationBars(false);
-                  } else {
-                      int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                              | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                              | View.SYSTEM_UI_FLAG_FULLSCREEN;
-                      decorView.setSystemUiVisibility(flags);
                   }
               }
           }
           JAVA_EOF
-          echo "✅ MainActivity.java updated for transparent always-visible bottom nav bar"
-          head -n 5 "$MAIN_JAVA"
+          echo "✅ MainActivity.java & styles.xml updated: permanent opacity-transparent bottom nav bar"
       - name: Compile Android APK
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
