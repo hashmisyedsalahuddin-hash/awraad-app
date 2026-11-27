@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ur">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>تَفْصِيْلُ قَوَاعِدِ التَّجْوِيْدِ - Tajweed Rules Guide</title>
+    
+    <!-- External CSS File -->
+    <script src="theme-preload.js"></script>
+    <link href="./Tajweed_Style.css" rel="stylesheet"/>
+    
+    <style>
+        .guide-container {
+            max-width: 950px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: 'Amiri', serif;
+        }
+        
+        /* Language Specific Directions & Alignments */
+        .lang-ur { direction: rtl; text-align: right; }
+        .lang-en { direction: ltr; text-align: left; }
+        
+        .intro-box {
+            background-color: var(--card-bg, #fff);
+            border: 2px solid var(--border-color, #d4af37);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+        }
+        
+        .lang-ur .intro-box { text-align: center; }
+        .lang-en .intro-box { text-align: left; }
+        
+        .intro-box p {
+            font-size: 19px;
+            line-height: 1.8;
+            color: var(--text-color, #333);
+        }
+        .lang-en .intro-box p {
+            font-family: Arial, sans-serif;
+            font-size: 17px;
+        }
+
+        .rule-card {
+            background-color: var(--card-bg, #fff);
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .lang-ur .rule-card { border-right: 5px solid #d4af37; }
+        .lang-en .rule-card { border-left: 5px solid #d4af37; }
+        
+        .rule-header {
+            background-color: rgba(212, 175, 55, 0.1);
+            padding: 12px 20px;
+            font-size: 22px;
+            font-weight: bold;
+            color: #8c6d23;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .rule-body {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            padding: 20px;
+        }
+        @media (min-width: 768px) {
+            .rule-body { grid-template-columns: 1.5fr 1fr; }
+        }
+        
+        .rule-desc {
+            font-size: 20px;
+            line-height: 2.0;
+            color: var(--text-color, #333);
+        }
+        .lang-en .rule-desc { 
+            font-family: Arial, sans-serif; 
+            font-size: 17px; 
+            line-height: 1.6;
+        }
+
+        .rule-examples {
+            background-color: rgba(0, 0, 0, 0.02);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            justify-content: center;
+            border: 1px dashed #ccc;
+        }
+        
+        /* Arabic text inside examples will ALWAYS stay RTL */
+        .example-item {
+            font-size: 26px;
+            text-align: center;
+            direction: rtl !important;
+            font-family: 'Amiri', serif;
+        }
+        .example-note { font-size: 16px; color: #555; }
+        .lang-en .example-note { font-family: Arial, sans-serif; font-size: 14px; }
+
+        .badge-purple { color: #800080; font-weight: bold; }
+        .badge-blue { color: #0000FF; font-weight: bold; }
+        .badge-gray { color: #808080; font-weight: bold; }
+        .badge-pink { color: #FF1493; font-weight: bold; }
+        .badge-bold { font-weight: bold; color: #b30000; }
+        .badge-green { color: #008000; font-weight: bold; }
+        
+        /* Custom Iqlaab Meem Styling */
+        .iqlaab-meem {
+            color: #d32f2f;
+            position: relative;
+            top: -0.5em;
+            font-size: 0.65em;
+            font-weight: bold;
+            margin: 0 1px;
+        }
+
+        .back-to-main-index { margin-top: 30px; margin-bottom: 20px; }
+        .lang-ur .back-to-main-index { text-align: right; }
+        .lang-en .back-to-main-index { text-align: left; }
+        
+        .back-to-main-index a {
+            text-decoration: none;
+            color: #8c6d23;
+            font-size: 22px;
+            font-weight: bold;
+        }
+        .lang-ur .back-to-main-index a { font-family: 'Amiri', serif; }
+        .lang-en .back-to-main-index a { font-family: Arial, sans-serif; font-size: 18px; }
+
+    </style>
+  <link rel="stylesheet" href="universal-nav-scroll.css">
+  <link rel="stylesheet" href="daily-theme-ui.css">
+</head>
+<body>
+
+<div class="continuous-frame" id="top">
+    <div class="continuous-inner">
+
+        <div class="guide-container">
+            
+            <!-- ======================================================= -->
+            <!-- 1. URDU VERSION CONTAINER                               -->
+            <!-- ======================================================= -->
+            <div class="lang-content lang-ur" style="display: block;">
+                
+                <div class="intro-box no-tajweed">
+                    <div class="section-heading" style="margin-top: 0; font-size: 24px;">تَفْصِيْلُ قَوَاعِدِ التَّجْوِيْدِ</div>
+                    <p>
+                        دلائل الخیرات شریف اور دیگر اوراد کو قواعدِ تجوید کی مکمل رعایت کے ساتھ پڑھنے کے لیے اس نسخے میں مخصوص رنگوں (Color Codes) کا اہتمام کیا گیا ہے۔ تاکہ قاری بغیر کسی ہچکچاہٹ کے <span dir="ltr" style="display: inline-block;">100%</span> درست اور معیاری تلاوت کر سکے۔
+                    </p>
+                </div>
+
+                <!-- 1. MADD E LAAZIM -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١. مدِ لازم - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر حروفِ مدہ (ا، و، ی) کے فوراً بعد <b>اسی کلمے</b> میں اصلی سکون (جزم) یا تشدید آ جائے، تو اسے مدِ لازم کہتے ہیں۔<br><br>
+                            <b>مقدار:</b> اسے 3 سے 5 الف کی مقدار کے برابر کھینچ کر پڑھا جاتا ہے۔ اسکرپٹ میں اسے <span class="badge-purple">جامنی رنگ (Purple)</span> سے نمایاں کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">الضَّ<span class="badge-purple">آلِّ</span>يْنَ <span class="example-note">(تشدید)</span></div>
+                            <div class="example-item">كَ<span class="badge-purple">آفَّ</span>ةً <span class="example-note">(تشدید)</span></div>
+                            <div class="example-item"><span class="badge-purple">آلْ</span>آنَ <span class="example-note">(اصلی سکون)</span></div>
+                            <div class="example-item"><span class="badge-purple">قٓ</span> <span class="example-note">(اصلی سکون)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. MADD E MUTTASIL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٢. مدِ متصل - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> جب حروفِ مدہ کے فوراً بعد ہمزہ (ء) <b>اسی کلمے (ایک ہی لفظ)</b> کے اندر آ جائے تو مدِ متصل لاگو ہوتا ہے۔<br><br>
+                            <b>مقدار:</b> اسے 2 سے 4 الف کی مقدار تک کھینچ کر پڑھنا واجب ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">جَ<span class="badge-purple">آ</span>ءَ</div>
+                            <div class="example-item">مَ<span class="badge-purple">آ</span>ءً</div>
+                            <div class="example-item">شَ<span class="badge-purple">آ</span>ءَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. MADD E MUNFASIL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٣. مدِ منفصل - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> جب حروفِ مدہ کے فوراً بعد ہمزہ <b>اگلے کلمے (دوسرے لفظ)</b> کے شروع میں آئے تو اسے مدِ منفصل کہتے ہیں۔<br><br>
+                            <b>مقدار:</b> اسے بھی 2 سے 4 الف کے برابر کھینچ کر پڑھا جاتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">لَ<span class="badge-purple">آ</span> إِلٰهَ إِلَّا اللّٰهُ</div>
+                            <div class="example-item">بِمَ<span class="badge-purple">آ</span> أَنْزَلْتَ</div>
+                            <div class="example-item">إِنَّ<span class="badge-purple">آ</span> أَعْطَيْنَاكَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. MADD E SILA SUGHRA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٤. مدِ صلہ صغریٰ</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر ہائے ضمیر (ہ) سے پہلے والا حرف متحرک (زبر، زیر، پیش والا) ہو اور اس کے فوراً بعد والا حرف ساکن یا ہمزہ نہ ہو، تو اسے مدِ صلہ صغریٰ کہتے ہیں۔ اسے کھڑی حرکات کے ساتھ ظاہر کیا جاتا ہے۔<br><br>
+                            <b>مقدار:</b> اسے 1 الف کے برابر کھینچا جاتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">بِ<span class="badge-purple">هٖ</span> كَثِيْرًا</div>
+                            <div class="example-item">لَ<span class="badge-purple">هٗ</span> مَا</div>
+                            <div class="example-item">إِنَّ<span class="badge-purple">هٗ</span> كَانَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. HAA-E-ZAMEER BILA SILA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٥. ہائے ضمیر بلا صلہ</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر ہائے ضمیر (ہ) سے پہلے یا بعد والے حرف پر سکون یا تشدید آ جائے، تو مدِ صلہ لاگو نہیں ہوگا۔ اس صورت میں ہائے ضمیر کو معمول کی حرکت کے ساتھ، بغیر کھینچے پڑھا جائے گا۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِنْ<span class="badge-bold">هُ</span> <span class="example-note">(ماقبل سکون)</span></div>
+                            <div class="example-item">عَلَيْ<span class="badge-bold">هِ</span> السَّلَامُ <span class="example-note">(ماقبل و مابعد سکون)</span></div>
+                            <div class="example-item">لَ<span class="badge-bold">هُ</span> الْمُلْكُ <span class="example-note">(مابعد سکون)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. MADD E SILA KABEER -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٦. مدِ صلہ کبریٰ - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر ہائے ضمیر (ہ) سے پہلے والا حرف متحرک ہو اور اس کے فوراً بعد اگلے کلمے کے شروع میں ہمزہ آ جائے، تو یہ مدِ صلہ کبریٰ کہلاتا ہے۔ اس پر کھڑی حرکت اور مد دونوں لگائے جاتے ہیں۔<br><br>
+                            <b>مقدار:</b> اسے 2 سے 4 الف تک کھینچا جاتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">وَّرَسُوْلُهٗ<span class="badge-purple">ٓ</span> إِلٰى</div>
+                            <div class="example-item">أَهْلُهٗ<span class="badge-purple">ٓ</span> أَحَدٌ</div>
+                            <div class="example-item">اٰيَاتِهٖ<span class="badge-purple">ٓ</span> أَضَآءَتْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. LAFZ ANA (أَنَا) -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٧. لفظ "أَنَا" کا قاعدہ</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> قرآن و حدیث میں لفظ "أَنَا" (جس کا معنی 'میں' ہے) کا الف وصل کی صورت (یعنی روانی سے پڑھتے وقت) سائلنٹ (Silent) رہتا ہے۔ یہ الف صرف اسی صورت میں پڑھا جاتا ہے جب اس لفظ پر وقف (اسٹاپ) کیا جائے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">أَنَ<span class="badge-bold">ا</span> عَبْدُكَ</div>
+                            <div class="example-item">أَنَ<span class="badge-bold">ا</span> رَبُّكُمْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. ZAA'ID YAA (KHADA ZABAR) -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٨. زائد یاء پر کھڑا زبر</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر کسی لفظ کے آخر میں الف مقصورہ (زائد ی) ہو، اس سے پہلے حرف پر زبر ہو، اور اس کے بعد وصل (ملا کر پڑھنے) کی کوئی صورت نہ بن رہی ہو، تو وہاں روانی کے لیے کھڑا زبر لگایا جاتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">عَ<span class="badge-bold">لٰى</span> كُلِّ</div>
+                            <div class="example-item">إِ<span class="badge-bold">لٰى</span> رَبِّهِمْ</div>
+                            <div class="example-item">عِيْ<span class="badge-bold">سٰى</span> رُوْحِكَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. ZAA'ID YAA WITH WASL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٩. زائد یاء اور حالتِ وصل</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر زائد یاء (الف مقصورہ) کے فوراً بعد اگلا حرف ساکن یا مشدد آ جائے، تو ملا کر پڑھنے (وصل) کی وجہ سے مد کی آواز گر جاتی ہے۔ اس لیے یہاں کھڑے زبر کی بجائے عام زبر استعمال ہوتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">عَلَ<span class="badge-bold">ى ال</span>نَّبِيِّ</div>
+                            <div class="example-item">إِلَ<span class="badge-bold">ى السَّ</span>مَآءِ</div>
+                            <div class="example-item">مُنْتَهَ<span class="badge-bold">ى الْ</span>أَبَدِ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. IDGHAM MA GHUNNA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٠. ادغام مع الغنہ - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> نون ساکن یا تنوین کے بعد اگر حروف 'ي، ن، م، و' (ینمو) میں سے کوئی حرف آ جائے، تو انہیں آپس میں ملا کر غنہ (ناک میں آواز) کے ساتھ پڑھا جاتا ہے۔ اسکرپٹ میں انہیں <span class="badge-blue">نیلے (Blue)</span> رنگ سے واضح کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-blue">نْ وَّ</span>لَدِ</div>
+                            <div class="example-item">سِرَاجً<span class="badge-blue">ا وَّ</span>هَّاجًا</div>
+                            <div class="example-item">قَوْلً<span class="badge-blue">ا مِّ</span>نْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 11. IDGHAM BILA GHUNNA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١١. ادغام بلا غنہ - <span style="color:#808080;">Gray</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> نون ساکن یا تنوین کے بعد اگر 'ل' یا 'ر' آ جائے، تو نون کی آواز کو مکمل ختم کر کے اگلے حرف سے ملاتے ہیں، اور اس میں بالکل غنہ نہیں کیا جاتا۔ اسے <span class="badge-gray">سرمئی (Gray)</span> رنگ سے ظاہر کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-gray">نْ رَّ</span>بِّهِمْ</div>
+                            <div class="example-item">غَفُوْرٌ<span class="badge-gray"> رَّ</span>حِيْمٌ</div>
+                            <div class="example-item">خَيْرٌ<span class="badge-gray"> لَّ</span>كُمْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 12. IZHAAR E MUTLAQ -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٢. إظهارِ مطلق</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر نون ساکن کے بعد 'و' یا 'ي' ایک ہی کلمے کے اندر آ جائیں، تو ادغام نہیں ہوتا۔ اسے بغیر غنہ کے، صاف ظاہر کر کے (إظهار) پڑھا جاتا ہے۔ پورے قرآنِ مجید میں اس کی صرف چار مثالیں ہیں۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">دُ<span class="badge-bold">نْيَ</span>ا</div>
+                            <div class="example-item">بُ<span class="badge-bold">نْيَ</span>انٌ</div>
+                            <div class="example-item">قِ<span class="badge-bold">نْوَ</span>انٌ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 13. IKHFA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٣. اخفاء - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> نون ساکن یا تنوین کے بعد 15 حروفِ اخفاء (ت، ث، ج، د، ذ، ز، س، ش، ص، ض، ط، ظ، ف، ق، ك) میں سے کوئی حرف آ جائے، تو نون کی آواز کو ناک میں چھپا کر گنگناہٹ کے ساتھ پڑھتے ہیں۔ اسے <span class="badge-blue">نیلے (Blue)</span> رنگ میں دکھایا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">أَ<span class="badge-blue">نْ</span>زَلْتَ</div>
+                            <div class="example-item">عِ<span class="badge-blue">نْ</span>دَكَ</div>
+                            <div class="example-item">مِ<span class="badge-blue">نْ</span> قَبْلِ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 14. IKHFA E SHAFAWI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٤. اخفائے شفوی - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> میم ساکن (مْ) کے فوراً بعد اگر حرف 'ب' آ جائے، تو میم کی آواز کو ہونٹوں کے ذریعے چھپا کر غنہ کے ساتھ پڑھتے ہیں۔ اسے اخفائے شفوی کہتے ہیں۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">هُمْ<span class="badge-blue"> بِ</span>ارِزُوْنَ</div>
+                            <div class="example-item">تَرْمِيْهِمْ<span class="badge-blue"> بِ</span>حِجَارَةٍ</div>
+                            <div class="example-item">يَعْتَصِمْ<span class="badge-blue"> بِ</span>اللّٰهِ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 15. IDGHAM E SHAFAWI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٥. ادغامِ شفوی - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> میم ساکن کے فوراً بعد اگر دوسرا 'م' آ جائے، تو پہلے میم کو دوسرے میں مکمل طور پر ضم (Merge) کر دیا جاتا ہے۔ اس ملاپ کی وجہ سے دوسرے میم پر تشدید ( ّ ) آ جاتی ہے اور غنہ کیا جاتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">عَلَيْهِ<span class="badge-blue">مْ مَّ</span>دَدًا</div>
+                            <div class="example-item">لَهُ<span class="badge-blue">مْ مَّ</span>غْفِرَةٌ</div>
+                            <div class="example-item">إِلَيْهِ<span class="badge-blue">مْ مَّ</span>رْجِعُكُمْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 16. IQLAAB -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٦. اقلاب - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> نون ساکن یا تنوین کے بعد حرف 'ب' آ جائے تو نون کی آواز 'م' (میم) میں تبدیل ہو جاتی ہے اور غنہ کے ساتھ پڑھی جاتی ہے۔ اسے سہولت کے لیے چھوٹے سرخ میم (ۢ) سے ظاہر کیا جاتا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-blue">نْ</span><span class="iqlaab-meem">ۢ</span><span class="badge-blue"> بَ</span>عْدِ</div>
+                            <div class="example-item">أَ<span class="badge-blue">نْ</span><span class="iqlaab-meem">ۢ</span><span class="badge-blue">بِ</span>يَآءِ</div>
+                            <div class="example-item">سَمِيْعٌ<span class="iqlaab-meem">ۢ</span><span class="badge-blue"> بَ</span>صِيْرٌ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 17. IZHAAR E HALQI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٧. إظهارِ حلقی</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> نون ساکن یا تنوین کے بعد حروفِ حلقی (ء، ه، ع، ح، غ، خ) میں سے کوئی حرف آ جائے تو غنہ نہیں ہوگا۔ نون کی آواز بالکل صاف ظاہر کر کے پڑھی جائے گی تاکہ حروف آپس میں مل نہ جائیں۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-bold">نْ خَ</span>وْفٍ <span class="example-note">(نون ساکن)</span></div>
+                            <div class="example-item">عَذَا<span class="badge-bold">بٌ أَ</span>لِيْمٌ <span class="example-note">(تنوین)</span></div>
+                            <div class="example-item">عَلِيْ<span class="badge-bold">مٌ حَ</span>كِيْمٌ <span class="example-note">(تنوین)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 18. NOON E QUTNI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٨. نون قطنی - <span style="color:#FF1493;">Pink</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> تنوین والے لفظ کے فوراً بعد اگر ہمزۃ الوصل (ایسا الف جو روانی میں پڑھا نہ جائے) آ جائے، تو تنوین کے نون ساکن کو زیر (کسرہ) دے کر پڑھا جاتا ہے تاکہ تلاوت کا تسلسل برقرار رہے۔ اسے چھوٹے <span class="badge-pink">گلابی (Pink)</span> نون سے نمایاں کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مُحَمَّدِ <span class="wasl-wrapper">ا<span class="noon-qutni" style="color: #FF1493;">نِ</span></span>لنَّبِيِّ</div>
+                            <div class="example-item">قَوْمِ <span class="wasl-wrapper">ا<span class="noon-qutni" style="color: #FF1493;">نِ</span></span>لَّذِيْنَ</div>
+                            <div class="example-item">فَضِيْلَةَ <span class="wasl-wrapper">ا<span class="noon-qutni" style="color: #FF1493;">نِ</span></span>لَّذِيْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 19. QALQALAH -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">١٩. حروفِ قلقلہ</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> ق، ط، ب، ج، د (قطب جد)۔ جب یہ حروف ساکن (جزم والے) ہوں، تو انہیں پڑھتے وقت مخرج میں ہلکی سی جنبش پیدا ہوتی ہے، جس سے آواز پلٹ کر (Echo ہو کر) سنائی دیتی ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">يَ<span class="badge-bold">قْ</span>بَلُ</div>
+                            <div class="example-item">أَ<span class="badge-bold">بْ</span>صَارِهِمْ</div>
+                            <div class="example-item">تَ<span class="badge-bold">جْ</span>عَلْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 20. MUSTALIYA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٢٠. حروفِ مستعلیہ</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> خ، ص، ض، غ، ط، ق، ظ (خص ضغط قظ) کو حروفِ مستعلیہ کہتے ہیں۔ یہ حروف ہمیشہ بھاری اور موٹی آواز (پُر) کے ساتھ پڑھے جاتے ہیں، خواہ ان پر زبر، زیر یا پیش ہو۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item"><span class="badge-bold">خَ</span>لَ<span class="badge-bold">قْ</span>تَ</div>
+                            <div class="example-item"><span class="badge-bold">صِ</span>رَا<span class="badge-bold">طَ</span></div>
+                            <div class="example-item"><span class="badge-bold">طَ</span>هِّرْ</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 21. RAA TAFKHEEM -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٢١. راءِ تفخیم (Púr)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر راء پر زبر یا پیش ہو، یا راء ساکن ہو اور اس سے ماقبل حرف پر زبر یا پیش ہو، تو راء موٹی (پُر) پڑھی جائے گی۔ اسے <span class="badge-bold">سرخ</span> رنگ سے ظاہر کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">يَا <span class="badge-bold">رَ</span>حْمٰنُ <span class="example-note">(متحرک زبر)</span></div>
+                            <div class="example-item">غَفُوْ<span class="badge-bold">رُ</span>كَ <span class="example-note">(متحرک پیش)</span></div>
+                            <div class="example-item">فِي الْأَ<span class="badge-bold">رْ</span>ضِ <span class="example-note">(ساکن، ماقبل زبر)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 22. RAA TARQEEQ -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٢٢. راءِ ترقیق (Baareek)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر راء کے نیچے زیر ہو، یا راء ساکن ہو اور اس سے ماقبل حرف کے نیچے اصلی زیر ہو، تو راء باریک (ترقیق) پڑھی جائے گی۔ اسے <span class="badge-green">سبز</span> رنگ سے نمایاں کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">اَلْكَ<span class="badge-green">رِ</span>يْمُ <span class="example-note">(متحرک زیر)</span></div>
+                            <div class="example-item">وَفِ<span class="badge-green">رْ</span>عَوْنَ <span class="example-note">(ساکن، ماقبل زیر)</span></div>
+                            <div class="example-item">وَاسْتَغْفِ<span class="badge-green">رْ</span>هُ <span class="example-note">(ساکن، ماقبل زیر)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 23. LAAM JALAALAT TAFKHEEM -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٢٣. لامِ جلالت کی تفخیم</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر لفظِ "اللّٰه" سے پہلے والے حرف پر زبر یا پیش ہو، تو اسمِ جلالت کے لام کو موٹا (پُر) کر کے پڑھا جاتا ہے۔ اسے <span class="badge-bold">سرخ</span> رنگ سے ظاہر کیا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">خَتَمَ <span class="badge-bold">اللّٰهُ</span> عَلٰى <span class="example-note">(ماقبل زبر)</span></div>
+                            <div class="example-item">نَصْرُ <span class="badge-bold">اللّٰهِ</span> وَالْفَتْحُ <span class="example-note">(ماقبل پیش)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 24. LAAM JALAALAT TARQEEQ -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">٢٤. لامِ جلالت کی ترقیق</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>قاعدہ:</b> اگر لفظِ "اللّٰه" سے پہلے والے حرف کے نیچے زیر ہو، تو اسمِ جلالت کے لام کو نرمی سے باریک پڑھا جاتا ہے۔ پروجیکٹ میں اس قاعدے کو بغیر کسی رنگ کے نارمل فونٹ میں ہی رکھا گیا ہے، البتہ یہاں سمجھانے کی غرض سے اسے <span class="badge-green">سبز (Green)</span> رنگ میں دکھایا گیا ہے۔
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">بِسْمِ <span class="badge-green">اللّٰهِ</span> الرَّحْمٰنِ الرَّحِيْمِ</div>
+                            <div class="example-item">فِيْ دِيْنِ <span class="badge-green">اللّٰهِ</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="back-to-main-index print-link">
+                    <a href="Index.html#main-menu">⬆ الرُّجُوْعُ إِلَى الْفِهْرِسِ</a>
+                </div>
+
+            </div>
+
+            <!-- ======================================================= -->
+            <!-- 2. ENGLISH VERSION CONTAINER                            -->
+            <!-- ======================================================= -->
+            <div class="lang-content lang-en" style="display: none;">
+                
+                <div class="intro-box no-tajweed">
+                    <div class="section-heading" style="margin-top: 0; font-size: 24px; text-align: left;">Tajweed Rules Guide</div>
+                    <p>
+                        This edition incorporates specific color codes and precise harakaat to facilitate reading Dalail-ul-Khairaat strictly according to the rules of Tajweed. This ensures complete peace of mind that your recitation is <span dir="ltr" style="display: inline-block;">100%</span> accurate and standard.
+                    </p>
+                </div>
+
+                <!-- 1. MADD E LAAZIM -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">1. Madd-e-Laazim - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If a Madd letter (Alif, Waw, Yaa) is immediately followed by an original sukoon (jazm) or tashdeed <b>within the same word</b>, Madd-e-Laazim applies.<br><br>
+                            <b>Duration:</b> It must be elongated for 3 to 5 Alifs. In the script, it is highlighted in <span class="badge-purple">Purple</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">الضَّ<span class="badge-purple">آلِّ</span>يْنَ <span class="example-note">(Tashdeed)</span></div>
+                            <div class="example-item">كَ<span class="badge-purple">آفَّ</span>ةً <span class="example-note">(Tashdeed)</span></div>
+                            <div class="example-item"><span class="badge-purple">آلْ</span>آنَ <span class="example-note">(Original Sukoon)</span></div>
+                            <div class="example-item"><span class="badge-purple">قٓ</span> <span class="example-note">(Original Sukoon)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. MADD E MUTTASIL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">2. Madd-e-Muttasil - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> When a Madd letter is immediately followed by a Hamzah (ء) <b>within the same word</b>, Madd-e-Muttasil occurs.<br><br>
+                            <b>Duration:</b> It is mandatory to elongate this for 2 to 4 Alifs.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">جَ<span class="badge-purple">آ</span>ءَ</div>
+                            <div class="example-item">مَ<span class="badge-purple">آ</span>ءً</div>
+                            <div class="example-item">شَ<span class="badge-purple">آ</span>ءَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. MADD E MUNFASIL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">3. Madd-e-Munfasil - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> When a Madd letter is followed by a Hamzah that appears at the <b>beginning of the very next word</b>, Madd-e-Munfasil occurs.<br><br>
+                            <b>Duration:</b> It is also elongated for 2 to 4 Alifs.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">لَ<span class="badge-purple">آ</span> إِلٰهَ إِلَّا اللّٰهُ</div>
+                            <div class="example-item">بِمَ<span class="badge-purple">آ</span> أَنْزَلْتَ</div>
+                            <div class="example-item">إِنَّ<span class="badge-purple">آ</span> أَعْطَيْنَاكَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. MADD E SILA KHALIIL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">4. Madd-e-Sila Sughra</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter preceding Haa-e-Zameer (the pronoun 'Ha') has a vowel, and the following letter is neither saakin nor a Hamzah, it is called Madd-e-Sila Sughra. It is marked with standing vowels.<br><br>
+                            <b>Duration:</b> Elongated for exactly 1 Alif.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">بِ<span class="badge-purple">هٖ</span> كَثِيْرًا</div>
+                            <div class="example-item">لَ<span class="badge-purple">هٗ</span> مَا</div>
+                            <div class="example-item">إِنَّ<span class="badge-purple">هٗ</span> كَانَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. HAA-E-ZAMEER BILA SILA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">5. Haa-e-Zameer Bila Sila</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter before or after Haa-e-Zameer carries a sukoon or tashdeed, the Madd-e-Sila rule is voided. The letter 'Ha' is then pronounced normally without any elongation.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِنْ<span class="badge-bold">هُ</span> <span class="example-note">(Preceding Sukoon)</span></div>
+                            <div class="example-item">عَلَيْ<span class="badge-bold">هِ</span> السَّلَامُ <span class="example-note">(Preceding & Following Sukoon)</span></div>
+                            <div class="example-item">لَ<span class="badge-bold">هُ</span> الْمُلْكُ <span class="example-note">(Following Sukoon)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. MADD E SILA KABEER -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">6. Madd-e-Sila Kabeer - <span style="color:#800080;">Purple</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter preceding Haa-e-Zameer is mutaharrik and the first letter of the following word is a Hamzah, Madd-e-Sila Kabeer is applied. It is marked with a madd sign over the standing vowel.<br><br>
+                            <b>Duration:</b> Elongated for 2 to 4 Alifs.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">وَّرَسُوْلُهٗ<span class="badge-purple">ٓ</span> إِلٰى</div>
+                            <div class="example-item">أَهْلُهٗ<span class="badge-purple">ٓ</span> أَحَدٌ</div>
+                            <div class="example-item">اٰيَاتِهٖ<span class="badge-purple">ٓ</span> أَضَآءَتْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. LAFZ ANA (أَنَا) -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">7. Rule of "Anaa" (أَنَا)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> In the word "Anaa" (meaning 'I'), the ending Alif remains silent during continuous recitation (wasl). It is pronounced exclusively when you stop (waqf) on the word.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">أَنَ<span class="badge-bold">ا</span> عَبْدُكَ</div>
+                            <div class="example-item">أَنَ<span class="badge-bold">ا</span> رَبُّكُمْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. ZAA'ID YAA (KHADA ZABAR) -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">8. Zaa'id Yaa (Khada Zabar)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> When a word ends with an extra 'Yaa' (Alif Maqsura) preceded by a fatha, and is not connected to a joining saakin or mushaddad letter, a standing fatha (khada zabar) is applied for flow.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">عَ<span class="badge-bold">لٰى</span> كُلِّ</div>
+                            <div class="example-item">إِ<span class="badge-bold">لٰى</span> رَبِّهِمْ</div>
+                            <div class="example-item">عِيْ<span class="badge-bold">سٰى</span> رُوْحِكَ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. ZAA'ID YAA WITH WASL -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">9. Zaa'id Yaa with Wasl</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the extra 'Yaa' is immediately followed by a joining letter (saakin or mushaddad), the elongation is dropped. Hence, a normal fatha is used instead of a standing fatha.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">عَلَ<span class="badge-bold">ى ال</span>نَّبِيِّ</div>
+                            <div class="example-item">إِلَ<span class="badge-bold">ى السَّ</span>مَآءِ</div>
+                            <div class="example-item">مُنْتَهَ<span class="badge-bold">ى الْ</span>أَبَدِ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 10. IDGHAM MA GHUNNA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">10. Idgham Ma'a Ghunnah - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Noon Saakin or Tanween is followed by any of the letters <b>ي, ن, م, or و (Yanmoo)</b>, they merge and are pronounced with nasalization (ghunnah). Both letters are highlighted in <span class="badge-blue">Blue</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-blue">نْ وَّ</span>لَدِ</div>
+                            <div class="example-item">سِرَاجً<span class="badge-blue">ا وَّ</span>هَّاجًا</div>
+                            <div class="example-item">قَوْلً<span class="badge-blue">ا مِّ</span>نْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 11. IDGHAM BILA GHUNNA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">11. Idgham Bila Ghunnah - <span style="color:#808080;">Gray</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Noon Saakin or Tanween is followed by <b>ل or ر</b>, the noon sound is entirely dropped and merged into the following letter without any nasalization (ghunnah). This is indicated in <span class="badge-gray">Gray</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-gray">نْ رَّ</span>بِّهِمْ</div>
+                            <div class="example-item">غَفُوْرٌ<span class="badge-gray"> رَّ</span>حِيْمٌ</div>
+                            <div class="example-item">خَيْرٌ<span class="badge-gray"> لَّ</span>كُمْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 12. IZHAAR E MUTLAQ -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">12. Izhaar e Mutlaq</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Noon Saakin is followed by <b>و or ي</b> within the exact same word, merging (idgham) does not happen. The noon is pronounced clearly. There are only four instances of this in the Quran.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">دُ<span class="badge-bold">نْيَ</span>ا</div>
+                            <div class="example-item">بُ<span class="badge-bold">نْيَ</span>انٌ</div>
+                            <div class="example-item">قِ<span class="badge-bold">نْوَ</span>انٌ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 13. IKHFA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">13. Ikhfa - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Noon Saakin or Tanween is followed by any of the 15 Ikhfa letters (<b>ت، ث، ج، د، ذ، ز، س، ش، ص، ض، ط، ظ، ف، ق، ك</b>), the noon sound is hidden in the nasal cavity with a light ghunnah.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">أَ<span class="badge-blue">نْ</span>زَلْتَ</div>
+                            <div class="example-item">عِ<span class="badge-blue">نْ</span>دَكَ</div>
+                            <div class="example-item">مِ<span class="badge-blue">نْ</span> قَبْلِ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 14. IKHFA E SHAFAWI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">14. Ikhfa-e-Shafawi - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Meem Saakin (مْ) is immediately followed by the letter <b>'ب'</b>, the Meem sound is concealed in the lips and pronounced with ghunnah. This is highlighted in <span class="badge-blue">Blue</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">هُمْ<span class="badge-blue"> بِ</span>ارِزُوْنَ</div>
+                            <div class="example-item">تَرْمِيْهِمْ<span class="badge-blue"> بِ</span>حِجَارَةٍ</div>
+                            <div class="example-item">يَعْتَصِمْ<span class="badge-blue"> بِ</span>اللّٰهِ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 15. IDGHAM E SHAFAWI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">15. Idgham-e-Shafawi - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Meem Saakin is followed by another <b>'م'</b>, the first Meem merges completely into the second. This creates a tashdeed on the second Meem and is read with ghunnah.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">عَلَيْهِ<span class="badge-blue">مْ مَّ</span>دَدًا</div>
+                            <div class="example-item">لَهُ<span class="badge-blue">مْ مَّ</span>غْفِرَةٌ</div>
+                            <div class="example-item">إِلَيْهِ<span class="badge-blue">مْ مَّ</span>رْجِعُكُمْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 16. IQLAAB -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">16. Iqlaab - <span style="color:#0000FF;">Blue</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Noon Saakin or Tanween is followed by <b>'ب'</b>, the noon sound converts into a Meem sound with ghunnah. This is indicated by a small superscript Meem (ۢ) in <span style="color: red; font-weight: bold;">Red</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-blue">نْ</span><span class="iqlaab-meem">ۢ</span><span class="badge-blue"> بَ</span>عْدِ</div>
+                            <div class="example-item">أَ<span class="badge-blue">نْ</span><span class="iqlaab-meem">ۢ</span><span class="badge-blue">بِ</span>يَآءِ</div>
+                            <div class="example-item">سَمِيْعٌ<span class="iqlaab-meem">ۢ</span><span class="badge-blue"> بَ</span>صِيْرٌ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 17. IZHAAR E HALQI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">17. Izhaar-e-Halqi</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If Noon Saakin or Tanween is followed by any of the throat letters (ء، ه، ع، ح، غ، خ), ghunnah is strictly prohibited. The noon sound must be pronounced sharply and clearly.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مِ<span class="badge-bold">نْ خَ</span>وْفٍ <span class="example-note">(Noon Saakin)</span></div>
+                            <div class="example-item">عَذَا<span class="badge-bold">بٌ أَ</span>لِيْمٌ <span class="example-note">(Tanween)</span></div>
+                            <div class="example-item">عَلِيْ<span class="badge-bold">مٌ حَ</span>كِيْمٌ <span class="example-note">(Tanween)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 18. NOON E QUTNI -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">18. Noon-e-Qutni - <span style="color:#FF1493;">Pink</span></div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If a word ending in Tanween is followed by a silent joining Alif (Hamzat-ul-Wasl), the hidden Noon Saakin of the Tanween is given a kasra (zer) to connect smoothly with the next word. It is represented by a <span class="badge-pink">Pink</span> noon.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">مُحَمَّدِ <span class="wasl-wrapper">ا<span class="noon-qutni" style="color: #FF1493;">نِ</span></span>لنَّبِيِّ</div>
+                            <div class="example-item">قَوْمِ <span class="wasl-wrapper">ا<span class="noon-qutni" style="color: #FF1493;">نِ</span></span>لَّذِيْنَ</div>
+                            <div class="example-item">فَضِيْلَةَ <span class="wasl-wrapper">ا<span class="noon-qutni" style="color: #FF1493;">نِ</span></span>لَّذِيْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 19. QALQALAH -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">19. Huroof e Qalqalah</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> When the letters ق، ط، ب، ج، د (Qutub Jadd) are saakin, they are pronounced with a slight echoing or bouncing effect from their articulation point.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">يَ<span class="badge-bold">قْ</span>بَلُ</div>
+                            <div class="example-item">أَ<span class="badge-bold">بْ</span>صَارِهِمْ</div>
+                            <div class="example-item">تَ<span class="badge-bold">جْ</span>عَلْ</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 20. MUSTALIYA -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">20. Huroof e Musta'liya</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> The letters خ، ص، ض، غ، ط، ق، ظ are known as Huroof-e-Musta'liya. They are permanently pronounced with a full, heavy, and thick tone regardless of their vowels.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item"><span class="badge-bold">خَ</span>لَ<span class="badge-bold">قْ</span>تَ</div>
+                            <div class="example-item"><span class="badge-bold">صِ</span>رَا<span class="badge-bold">طَ</span></div>
+                            <div class="example-item"><span class="badge-bold">طَ</span>هِّرْ</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 21. RAA TAFKHEEM -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">21. Raa Tafkheem (Heavy)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter Raa carries a fatha or damma, or if it is saakin and preceded by a fatha or damma, it must be pronounced with a heavy, thick tone (Tafkheem). Highlighted in <span class="badge-bold">Red</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">يَا <span class="badge-bold">رَ</span>حْمٰنُ <span class="example-note">(Mutaharrik Zabar)</span></div>
+                            <div class="example-item">غَفُوْ<span class="badge-bold">رُ</span>كَ <span class="example-note">(Mutaharrik Pesh)</span></div>
+                            <div class="example-item">فِي الْأَ<span class="badge-bold">رْ</span>ضِ <span class="example-note">(Saakin, Preceding Zabar)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 22. RAA TARQEEQ -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">22. Raa Tarqeeq (Light)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter Raa carries a kasra, or if it is saakin and preceded by an original kasra, it must be pronounced with a light, thin tone (Tarqeeq). Highlighted in <span class="badge-green">Green</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">اَلْكَ<span class="badge-green">رِ</span>يْمُ <span class="example-note">(Mutaharrik Kasra)</span></div>
+                            <div class="example-item">وَفِ<span class="badge-green">رْ</span>عَوْنَ <span class="example-note">(Saakin, Preceding Kasra)</span></div>
+                            <div class="example-item">وَاسْتَغْفِ<span class="badge-green">رْ</span>هُ <span class="example-note">(Saakin, Preceding Kasra)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 23. LAAM JALAALAT TAFKHEEM -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">23. Lafz-e-Allah (Heavy)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter immediately preceding the word "Allah" carries a fatha or damma, the Laam in "Allah" is pronounced heavily and fully. Highlighted in <span class="badge-bold">Red</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">خَتَمَ <span class="badge-bold">اللّٰهُ</span> عَلٰى <span class="example-note">(Preceding Zabar)</span></div>
+                            <div class="example-item">نَصْرُ <span class="badge-bold">اللّٰهِ</span> وَالْفَتْحُ <span class="example-note">(Preceding Pesh)</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 24. LAAM JALAALAT TARQEEQ -->
+                <div class="rule-card no-tajweed">
+                    <div class="rule-header">24. Lafz-e-Allah (Light)</div>
+                    <div class="rule-body">
+                        <div class="rule-desc">
+                            <b>Rule:</b> If the letter immediately preceding the word "Allah" carries a kasra, the Laam in "Allah" is pronounced lightly and softly. In the actual script, this is kept in the normal font without any specific color, but for the sake of explanation here, it is highlighted in <span class="badge-green">Green</span>.
+                        </div>
+                        <div class="rule-examples">
+                            <div class="example-item">بِسْمِ <span class="badge-green">اللّٰهِ</span> الرَّحْمٰنِ الرَّحِيْمِ</div>
+                            <div class="example-item">فِيْ دِيْنِ <span class="badge-green">اللّٰهِ</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="back-to-main-index print-link">
+                    <a href="Index.html#main-menu">⬆ Return to Index</a>
+                </div>
+
+            </div>
+            
+        </div>
+
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="Tajweed_rules.js" defer></script>
+  <script src="universal-nav-scroll.js" defer></script>
+  <script src="daily-theme-ui.js" defer></script>
+</body>
+</html>
