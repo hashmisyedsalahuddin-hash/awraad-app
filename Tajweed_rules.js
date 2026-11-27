@@ -10791,7 +10791,7 @@
 (function() {
     const GA_MEASUREMENT_ID = "G-D26FJ05YQZ";
     const IGNORE_KEY = "awraad_admin_ignore";
-    const OFFICIAL_PACKAGE_ID = "com.alaviyanooriya.awraad";
+    const OFFICIAL_PACKAGE_ID = 'com.awraad.nooriya';
     const REQUIRED_NATIVE_VER = 2;
     if (!GA_MEASUREMENT_ID || !GA_MEASUREMENT_ID.startsWith("G-")) return;
 
@@ -10860,7 +10860,7 @@
         var isStore = Boolean(window.__AWRAAD_STORE_INSTALL === true || /\bAwraadStore\b/i.test(navigator.userAgent || ""));
         detectPkgId(function(pkgId) {
             var cleanPkg = String(pkgId || "unknown_pkg").trim();
-            var isConflicted = Boolean(cleanPkg && cleanPkg !== "unknown_pkg" && cleanPkg.toLowerCase() !== OFFICIAL_PACKAGE_ID);
+            var isConflicted = Boolean(nativeVer < REQUIRED_NATIVE_VER && cleanPkg && cleanPkg !== "unknown_pkg" && cleanPkg.toLowerCase() !== OFFICIAL_PACKAGE_ID.toLowerCase());
             var isOutdated = nativeVer < REQUIRED_NATIVE_VER;
             var statusBucket = isStore
                 ? "store_install"
@@ -14004,7 +14004,7 @@
 // ==========================================
 (function() {
     var REQUIRED_NATIVE_VER = 2;
-    var OFFICIAL_PACKAGE_ID = 'com.alaviyanooriya.awraad';
+    var OFFICIAL_PACKAGE_ID = 'com.awraad.nooriya';
     var APK_DOWNLOAD_URL = 'https://github.com/hashmisyedsalahuddin-hash/awraad-app/releases/latest/download/Awraad-e-Alaviya-Nooriya.apk';
     var NOTIF_DAILY_KEY = 'awraad_upd_sysnotif_day_v' + REQUIRED_NATIVE_VER;
 
@@ -14138,6 +14138,7 @@
             var isConflictedPkg = Boolean(pkgId && pkgId.toLowerCase() !== OFFICIAL_PACKAGE_ID);
             var isOutdatedNative = nativeVer < REQUIRED_NATIVE_VER;
 
+            if (nativeVer >= REQUIRED_NATIVE_VER) return;
             if (isOutdatedNative || isConflictedPkg) {
                 mountPersistentUpdateBar(pkgId, isConflictedPkg);
             }
