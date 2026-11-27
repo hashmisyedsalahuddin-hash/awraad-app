@@ -5922,3 +5922,24 @@ body {
   overflow-x: hidden;
 }
 /* === AWRAAD_FULLSCREEN_NO_BOUNCE_END === */
+
+/* === AWRAAD TRANSPARENT NAV SAFE PADDING === */
+@media screen {
+  body:not(.awraad-tv) .continuous-inner {
+    padding-bottom: max(74px, calc(env(safe-area-inset-bottom, 0px) + 60px)) !important;
+  }
+  body:not(.awraad-tv) .floating-reading-fab-group {
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:not(.awraad-tv) .autoscroll-bar {
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:not(.awraad-tv) .tasbeeh-minimized {
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body:not(.awraad-tv) .exit-toast {
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+/* === END AWRAAD TRANSPARENT NAV SAFE PADDING === */
+

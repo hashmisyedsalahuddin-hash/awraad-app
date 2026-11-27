@@ -7830,7 +7830,7 @@
     }
 })();
 // ==========================================
-// PART 17: ULTRA-FAST UNIVERSAL READING UX SUITE (EXACT LINE CONTINUE READING + ZERO-LAG)
+// PART 17: ULTRA-FAST UNIVERSAL READING UX SUITE (SCROLL-CONTAINER AGNOSTIC + EXACT LINE CONTINUE READING)
 // ==========================================
 (function() {
     const LAST_VISITED_KEY = 'app_last_visited_v4';
@@ -7978,6 +7978,168 @@
         ));
     }
 
+    // -----------------------------------------
+    // UNIVERSAL SCROLL-CONTAINER DETECTION (WORKS FOR window, html, body, .continuous-frame, .continuous-inner)
+    // -----------------------------------------
+    let lastObservedScroller = null;
+
+    function isRootWindowScroller(el) {
+        if (!el || el === window || el === document) return true;
+        if (el === document.documentElement) {
+            const st = window.getComputedStyle(el);
+            return !st || st.overflowY !== 'hidden';
+        }
+        if (el === document.body) {
+            const htmlSt = window.getComputedStyle(document.documentElement);
+            const bodySt = window.getComputedStyle(document.body);
+            // If html is overflow:hidden and body is overflow-y:auto/scroll, body is an element scroller, NOT window!
+            if (htmlSt && htmlSt.overflowY === 'hidden' && bodySt && (bodySt.overflowY === 'auto' || bodySt.overflowY === 'scroll')) {
+                return false;
+            }
+            return el === document.scrollingElement;
+        }
+        return false;
+    }
+
+    function isValidReadingScroller(el) {
+        if (!el || el === window || el === document) return true;
+        if (el.nodeType !== 1 || !el.isConnected) return false;
+        if (isChromeOrExcludedNode(el)) return false;
+        if (el.closest('.table-scroll-wrap')) return false;
+        if (el === document.documentElement || el === document.body) {
+            return (el.scrollHeight - el.clientHeight) > 12;
+        }
+        const st = window.getComputedStyle(el);
+        const canScrollY = st && (st.overflowY === 'auto' || st.overflowY === 'scroll' || st.overflowY === 'overlay');
+        return Boolean(canScrollY && (el.scrollHeight - el.clientHeight) > 16);
+    }
+
+    function getActiveScrollContainer() {
+        if (lastObservedScroller && lastObservedScroller !== window && lastObservedScroller !== document) {
+            if (isValidReadingScroller(lastObservedScroller) && lastObservedScroller.scrollTop > 0) {
+                return lastObservedScroller;
+            }
+        }
+
+        const winY = window.scrollY || window.pageYOffset || 0;
+        if (winY > 0) return document.scrollingElement || document.documentElement;
+
+        const frame = document.querySelector('.continuous-frame');
+        const inner = document.querySelector('.continuous-inner');
+        const ordered = [frame, inner, document.body, document.scrollingElement, document.documentElement];
+
+        // 1. Prefer whichever container is already scrolled > 0
+        for (let i = 0; i < ordered.length; i++) {
+            const el = ordered[i];
+            if (el && el.nodeType === 1 && el.scrollTop > 0 && isValidReadingScroller(el)) {
+                return el;
+            }
+        }
+
+        // 2. Check if html is locked (overflow:hidden) so body or .continuous-frame is the real scroller
+        for (let i = 0; i < 3; i++) {
+            const el = ordered[i];
+            if (!el || el.nodeType !== 1) continue;
+            const st = window.getComputedStyle(el);
+            if (st && (st.overflowY === 'auto' || st.overflowY === 'scroll' || st.overflowY === 'overlay') && (el.scrollHeight - el.clientHeight) > 16) {
+                return el;
+            }
+        }
+
+        // 3. Fallback to standard document scroller
+        const docEl = document.scrollingElement || document.documentElement;
+        if (docEl && (docEl.scrollHeight - window.innerHeight) > 12) return docEl;
+        if (document.body && (document.body.scrollHeight - document.body.clientHeight) > 12) return document.body;
+        return docEl || document.body;
+    }
+
+    function getCurrentScrollY() {
+        const scroller = getActiveScrollContainer();
+        if (scroller && !isRootWindowScroller(scroller)) {
+            return Math.max(0, Math.round(scroller.scrollTop || 0));
+        }
+        const frame = document.querySelector('.continuous-frame');
+        const inner = document.querySelector('.continuous-inner');
+        return Math.max(
+            0,
+            Math.round(
+                Math.max(
+                    window.scrollY || 0,
+                    window.pageYOffset || 0,
+                    (document.documentElement && document.documentElement.scrollTop) || 0,
+                    (document.body && document.body.scrollTop) || 0,
+                    (frame && frame.scrollTop) || 0,
+                    (inner && inner.scrollTop) || 0
+                )
+            )
+        );
+    }
+
+    function getMaxScrollableY() {
+        const scroller = getActiveScrollContainer();
+        let maxY = 0;
+        if (scroller && !isRootWindowScroller(scroller)) {
+            maxY = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        } else {
+            const rootMax = Math.max(
+                (document.documentElement ? document.documentElement.scrollHeight : 0) - window.innerHeight,
+                (document.body ? document.body.scrollHeight : 0) - window.innerHeight
+            );
+            const bodyElemMax = document.body ? (document.body.scrollHeight - document.body.clientHeight) : 0;
+            const frame = document.querySelector('.continuous-frame');
+            const frameMax = (frame && isValidReadingScroller(frame)) ? (frame.scrollHeight - frame.clientHeight) : 0;
+            maxY = Math.max(0, rootMax, bodyElemMax, frameMax);
+        }
+        cachedMaxScrollY = maxY;
+        return maxY;
+    }
+
+    function scrollPageTo(targetY, smooth) {
+        const y = Math.max(0, Math.round(targetY || 0));
+        const scroller = getActiveScrollContainer();
+        const opts = smooth ? { top: y, behavior: 'smooth' } : { top: y, behavior: 'auto' };
+
+        if (scroller && !isRootWindowScroller(scroller)) {
+            try {
+                if (typeof scroller.scrollTo === 'function') scroller.scrollTo(opts);
+                else scroller.scrollTop = y;
+            } catch (e) {
+                scroller.scrollTop = y;
+            }
+            if (!smooth) scroller.scrollTop = y;
+        } else {
+            try {
+                window.scrollTo(opts);
+            } catch (e) {
+                window.scrollTo(0, y);
+            }
+            if (!smooth) {
+                if (document.documentElement) document.documentElement.scrollTop = y;
+                if (document.body) document.body.scrollTop = y;
+            }
+        }
+    }
+
+    function scrollPageBy(deltaY) {
+        const scroller = getActiveScrollContainer();
+        if (scroller && !isRootWindowScroller(scroller)) {
+            scroller.scrollTop = (scroller.scrollTop || 0) + deltaY;
+        } else {
+            window.scrollBy(0, deltaY);
+        }
+    }
+
+    function getScrollPercentageFloat() {
+        const maxY = getMaxScrollableY();
+        if (maxY <= 20) return 0;
+        const y = getCurrentScrollY();
+        return Math.min(100, Math.max(0, (y / maxY) * 100));
+    }
+
+    function getScrollPercentage() {
+        return Math.round(getScrollPercentageFloat());
+    }
+
     function hasVisibleMenuCards(root) {
         const scope = root || document;
         const grids = scope.querySelectorAll('.index-nav-grid, .shijra-grid, .menu-grid, .days-grid');
@@ -8036,13 +8198,12 @@
     let cachedMaxScrollY = 0;
     let lastSavedSignature = '';
     let completedUniqueKey = null;
-    let enteredAtTs = Date.now();
 
     function invalidateLayoutCaches() {
         cachedBlocksScope = null;
         cachedReadingBlocks = null;
         cachedViewState = null;
-        cachedMaxScrollY = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
+        getMaxScrollableY();
     }
 
     function getActiveContentSectionEl() {
@@ -8363,38 +8524,8 @@
         return getCurrentFileName().replace(/\.html$/i, '').replace(/[_-]+/g, ' ');
     }
 
-    function getCurrentScrollY() {
-        return Math.max(
-            0,
-            Math.round(
-                window.scrollY ||
-                window.pageYOffset ||
-                document.documentElement.scrollTop ||
-                document.body.scrollTop ||
-                0
-            )
-        );
-    }
-
-    function getMaxScrollableY() {
-        const fresh = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
-        cachedMaxScrollY = fresh;
-        return fresh;
-    }
-
-    function getScrollPercentageFloat() {
-        const maxY = getMaxScrollableY();
-        if (maxY <= 20) return 0;
-        const y = getCurrentScrollY();
-        return Math.min(100, Math.max(0, (y / maxY) * 100));
-    }
-
-    function getScrollPercentage() {
-        return Math.round(getScrollPercentageFloat());
-    }
-
     // -----------------------------------------
-    // EXACT LINE-LEVEL CHARACTER OFFSET CAPTURE & RESTORE (IMMUNE TO TAJWEED SPANS & FONT RESIZE)
+    // EXACT LINE-LEVEL CHARACTER OFFSET CAPTURE & RESTORE (CONTAINER-AGNOSTIC)
     // -----------------------------------------
     function getCaretPoint(x, y) {
         try {
@@ -8453,8 +8584,8 @@
         return -1;
     }
 
-    function getExactLineDocTopByCharOffset(blockEl, targetCharOffset) {
-        if (!blockEl || typeof targetCharOffset !== 'number' || targetCharOffset <= 0) return -1;
+    function getExactLineViewportTopByCharOffset(blockEl, targetCharOffset) {
+        if (!blockEl || typeof targetCharOffset !== 'number' || targetCharOffset <= 0) return null;
 
         let remaining = targetCharOffset;
         const walker = document.createTreeWalker(blockEl, NodeFilter.SHOW_TEXT, null);
@@ -8471,17 +8602,17 @@
                             range.setEnd(curNode, Math.min(val.length, i + 1));
                             const r = range.getBoundingClientRect();
                             if (r && (r.height > 0 || r.width > 0)) {
-                                return r.top + getCurrentScrollY();
+                                return r.top;
                             }
                         } catch (e) {}
-                        return -1;
+                        return null;
                     }
                     remaining--;
                 }
             }
             curNode = walker.nextNode();
         }
-        return -1;
+        return null;
     }
 
     function captureReadingAnchor() {
@@ -8523,7 +8654,8 @@
     }
 
     function resolveTargetPosition(data) {
-        const navH = getNavbarHeight();
+        const readingLine = getNavbarHeight() + 18;
+        const currY = getCurrentScrollY();
         const blocks = getVisibleReadingBlocks(true);
         let targetEl = null;
 
@@ -8554,24 +8686,26 @@
             }
 
             if (targetEl) {
+                // Tier 1: Exact character/line inside paragraph (viewport-relative -> works on ANY scroll container!)
                 if (typeof data.anchorCharOffset === 'number' && data.anchorCharOffset > 0) {
-                    const exactLineTop = getExactLineDocTopByCharOffset(targetEl, data.anchorCharOffset);
-                    if (exactLineTop > 0) {
-                        return { y: Math.max(0, Math.round(exactLineTop - navH - 18)), el: targetEl };
+                    const lineViewportTop = getExactLineViewportTopByCharOffset(targetEl, data.anchorCharOffset);
+                    if (lineViewportTop !== null) {
+                        return { y: Math.max(0, Math.round(currY + (lineViewportTop - readingLine))), el: targetEl };
                     }
                 }
 
+                // Tier 2: Block top + proportional intra-block offset
                 const rect = targetEl.getBoundingClientRect();
-                const docTop = rect.top + getCurrentScrollY();
                 const ratio = (typeof data.anchorOffsetRatio === 'number' && data.anchorOffsetRatio >= 0 && data.anchorOffsetRatio < 1)
                     ? data.anchorOffsetRatio
                     : 0;
                 const extraOffset = Math.round(ratio * rect.height);
-                const computed = Math.max(0, Math.round(docTop - navH - 18 + extraOffset));
+                const computed = Math.max(0, Math.round(currY + (rect.top - readingLine) + extraOffset));
                 return { y: computed, el: targetEl };
             }
         }
 
+        // Tier 3: Scroll percentage fallback
         const pctVal = (typeof data.pctFloat === 'number' && data.pctFloat > 0)
             ? data.pctFloat
             : (parseFloat(data.pct) || 0);
@@ -8582,14 +8716,15 @@
         return { y: Math.max(0, parseInt(data.scrollY, 10) || 0), el: null };
     }
 
+    // Condition 4: Accurate Subsection Completion Check (only clears when user ACTUALLY reaches bottom of scrollable content!)
     function isSubsectionCompleted(currY, maxY, pctFloat) {
-        if (maxY <= 35) return false;
+        if (maxY <= 80) return false;
         const remainingPx = maxY - currY;
         const bottomTolerance = Math.min(85, Math.max(48, Math.round(window.innerHeight * 0.12)));
-        if (remainingPx <= bottomTolerance || pctFloat >= 98) {
+        if (remainingPx <= bottomTolerance || pctFloat >= 97.5) {
             return true;
         }
-        if (pctFloat >= 82) {
+        if (pctFloat >= 85) {
             const blocks = getVisibleReadingBlocks(false);
             if (blocks.length > 0) {
                 const lastRect = blocks[blocks.length - 1].getBoundingClientRect();
@@ -8821,7 +8956,7 @@
 
         const resolved = resolveTargetPosition(activeResumeData);
         if (resolved.y >= 0 && Math.abs(getCurrentScrollY() - resolved.y) > 4) {
-            window.scrollTo(0, resolved.y);
+            scrollPageTo(resolved.y, false);
         }
 
         if (allowHighlight && !resumeHighlighted && resolved.el && !window.__awraadTajweedBusy) {
@@ -8988,7 +9123,7 @@
     let progressDebounceTimer = null;
     let lastThrottleSaveTs = 0;
 
-    function syncSubSectionReadingProgress(forceWrite, isLeavingPage) {
+    function syncSubSectionReadingProgress(forceWrite) {
         if (isMainIndexPage() || isSubIndexView(Boolean(forceWrite))) return;
         if (resumeRestoreActive && !userScrolledSinceLoad) return;
 
@@ -9008,18 +9143,12 @@
         ));
 
         if (completedUniqueKey && completedUniqueKey === desc.uniqueKey) {
-            if (userScrolledSinceLoad && maxY > 40 && pctFloat < 75) {
+            if (userScrolledSinceLoad && maxY > 80 && pctFloat < 75) {
                 completedUniqueKey = null;
             } else {
                 if (sameAsSaved) clearLastVisited();
                 return;
             }
-        }
-
-        if (isLeavingPage && maxY <= 35 && document.readyState === 'complete' && (Date.now() - enteredAtTs) > 900) {
-            completedUniqueKey = desc.uniqueKey;
-            if (sameAsSaved) clearLastVisited();
-            return;
         }
 
         if (isSubsectionCompleted(currY, maxY, pctFloat)) {
@@ -9028,6 +9157,7 @@
             return;
         }
 
+        // Restriction: Never reset an already-saved subsection back to top (0%) before user has actually scrolled
         if (sameAsSaved && !userScrolledSinceLoad && currY <= 25 && ((existing.scrollY || 0) > 25 || (existing.pct || 0) > 0 || (existing.anchorIndex || 0) > 0)) {
             return;
         }
@@ -9065,15 +9195,15 @@
 
     function scheduleSyncReadingProgress() {
         const now = Date.now();
-        if (now - lastThrottleSaveTs >= 550) {
+        if (now - lastThrottleSaveTs >= 400) {
             lastThrottleSaveTs = now;
-            syncSubSectionReadingProgress(false, false);
+            syncSubSectionReadingProgress(false);
         }
         if (progressDebounceTimer) clearTimeout(progressDebounceTimer);
         progressDebounceTimer = setTimeout(() => {
             lastThrottleSaveTs = Date.now();
-            syncSubSectionReadingProgress(false, false);
-        }, 220);
+            syncSubSectionReadingProgress(false);
+        }, 160);
     }
 
     window.awraadFlushReadingProgress = function() {
@@ -9082,7 +9212,7 @@
             progressDebounceTimer = null;
         }
         lastSavedSignature = '';
-        syncSubSectionReadingProgress(true, true);
+        syncSubSectionReadingProgress(true);
     };
 
     function buildMainIndexContinueSectionCard() {
@@ -9180,7 +9310,7 @@
             cancelActiveResumeTimers();
             card.remove();
             const fresh = resolveTargetPosition(saved);
-            window.scrollTo({ top: fresh.y, behavior: 'smooth' });
+            scrollPageTo(fresh.y, true);
         });
 
         return card;
@@ -9404,7 +9534,7 @@
     }
 
     // -----------------------------------------
-    // C. HANDS-FREE AUTO-SCROLL MODE
+    // C. HANDS-FREE AUTO-SCROLL MODE (SCROLL-CONTAINER AGNOSTIC)
     // -----------------------------------------
     let autoScrollBarBuilt = false;
     let autoScrollRunning = false;
@@ -9447,14 +9577,14 @@
         if (stepPx >= 1) {
             autoScrollCarry -= stepPx;
             userScrolledSinceLoad = true;
-            const maxScroll = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight;
-            if (window.scrollY >= maxScroll - 2) {
+            const maxScroll = getMaxScrollableY();
+            if (maxScroll > 20 && getCurrentScrollY() >= maxScroll - 2) {
                 stopAutoScroll();
-                syncSubSectionReadingProgress(true, false);
+                syncSubSectionReadingProgress(true);
                 showQuickToast('Page mukammal ho gaya');
                 return;
             }
-            window.scrollBy(0, stepPx);
+            scrollPageBy(stepPx);
         }
         autoScrollRaf = requestAnimationFrame(autoScrollStep);
     }
@@ -9747,7 +9877,7 @@
     }
 
     // -----------------------------------------
-    // E. PROGRESS BAR + FLOATING FABS
+    // E. PROGRESS BAR + FLOATING FABS (CAPTURE-PHASE SCROLL LISTENER FOR ANY CONTAINER)
     // -----------------------------------------
     function initReadingChrome() {
         const I = window.AWRAAD_SVG;
@@ -9778,7 +9908,7 @@
             scrollTopBtn.addEventListener('click', () => {
                 stopAutoScroll();
                 userScrolledSinceLoad = true;
-                window.scrollTo({ top: 0, behavior: 'smooth' });
+                scrollPageTo(0, true);
             });
         }
         if (fabAutoScroll) {
@@ -9799,10 +9929,8 @@
         function onScrollFrame() {
             rafTicking = false;
             const currY = getCurrentScrollY();
-            if (cachedMaxScrollY <= 0) {
-                cachedMaxScrollY = Math.max(0, Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) - window.innerHeight);
-            }
-            const pct = cachedMaxScrollY > 20 ? Math.min(100, Math.max(0, (currY / cachedMaxScrollY) * 100)) : 0;
+            const maxY = getMaxScrollableY();
+            const pct = maxY > 20 ? Math.min(100, Math.max(0, (currY / maxY) * 100)) : 0;
 
             if (progressFill) progressFill.style.width = pct.toFixed(1) + '%';
             const showTop = currY > 360;
@@ -9819,12 +9947,23 @@
             }
         }
 
-        window.addEventListener('scroll', () => {
+        function handleAnyScroll(e) {
+            const tgt = e && e.target;
+            if (tgt && tgt !== window && tgt !== document && tgt.nodeType === 1) {
+                if (isChromeOrExcludedNode(tgt) || tgt.closest('.table-scroll-wrap')) return;
+                if (isValidReadingScroller(tgt)) {
+                    lastObservedScroller = tgt;
+                }
+            }
             if (!rafTicking) {
                 rafTicking = true;
                 requestAnimationFrame(onScrollFrame);
             }
-        }, { passive: true });
+        }
+
+        // Capture-phase catches scroll on body, .continuous-frame, .continuous-inner, AND window!
+        document.addEventListener('scroll', handleAnyScroll, { capture: true, passive: true });
+        window.addEventListener('scroll', handleAnyScroll, { passive: true });
     }
 
     // -----------------------------------------
@@ -9835,13 +9974,12 @@
         harvestSectionRegistryFromIndex();
         harvestIndexDirectoryIfOnIndex();
         invalidateLayoutCaches();
-        enteredAtTs = Date.now();
 
         initReadingChrome();
         tryRestorePendingScroll();
 
         if (!isMainIndexPage() && !isSubIndexView(true) && !resumeRestoreActive) {
-            syncSubSectionReadingProgress(false, false);
+            syncSubSectionReadingProgress(false);
         }
         refreshContinueViews();
         refreshBookmarkIndicators();
@@ -9910,9 +10048,8 @@
                             saveLastSubTrigger(curTrig);
                         }
                         userScrolledSinceLoad = false;
-                        enteredAtTs = Date.now();
                         if (!resumeRestoreActive) {
-                            syncSubSectionReadingProgress(false, false);
+                            syncSubSectionReadingProgress(false);
                         }
                         refreshBookmarkIndicators();
                         refreshContinueViews();
@@ -9932,8 +10069,7 @@
                     }
                     if (!resumeRestoreActive) {
                         userScrolledSinceLoad = false;
-                        enteredAtTs = Date.now();
-                        syncSubSectionReadingProgress(false, false);
+                        syncSubSectionReadingProgress(false);
                     }
                 }
                 refreshBookmarkIndicators();
@@ -9966,14 +10102,14 @@
 
         window.addEventListener('touchend', () => {
             if (userScrolledSinceLoad && !isMainIndexPage() && !isSubIndexView(false)) {
-                syncSubSectionReadingProgress(true, false);
+                syncSubSectionReadingProgress(true);
             }
         }, { passive: true });
 
         document.addEventListener('click', (e) => {
             if (e.target.closest('a[href], button, .nav-btn, .drawer-item')) {
                 if (!isMainIndexPage() && !isSubIndexView(false) && (!resumeRestoreActive || userScrolledSinceLoad)) {
-                    syncSubSectionReadingProgress(true, true);
+                    syncSubSectionReadingProgress(true);
                 }
             }
         }, true);
@@ -9995,7 +10131,7 @@
 
         function flushOnAppExit() {
             if (!isMainIndexPage() && !isSubIndexView(false)) {
-                syncSubSectionReadingProgress(true, true);
+                syncSubSectionReadingProgress(true);
             }
         }
         window.addEventListener('pagehide', flushOnAppExit);
@@ -10053,6 +10189,7 @@
         bootReadingUXSuite();
     }
 })();
+
 
 // ==========================================
 // PART 18: LEFT-TO-RIGHT SWIPE SIDEBAR SHORTCUT ICON RAIL (LAZY + ZERO-LAG)
