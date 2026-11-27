@@ -1349,6 +1349,29 @@ apply from: '/tmp/play-signing/signing.gradle'
     mkdir -p /tmp/play-signing
     if [ -n "$PLAY_KEYSTORE_BASE64" ] && [ -n "$PLAY_STORE_PASSWORD" ] && [ -n "$PLAY_KEY_ALIAS" ] && [ -n "$PLAY_KEY_PASSWORD" ]; then
       printf '%s' "$PLAY_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > /tmp/play-signing/play-release.jks
+      node -e 'const fs=require("fs"); fs.writeFileSync("/tmp/play-signing/signing.gradle", "android {\n    signingConfigs {\n        playRelease {\n            storeFile file('/tmp/play-signing/play-release.jks')\n            storePassword System.getenv('PLAY_STORE_PASSWORD') ?: ''\n            keyAlias System.getenv('PLAY_KEY_ALIAS') ?: ''\n            keyPassword System.getenv('PLAY_KEY_PASSWORD') ?: ''\n        }\n    }\n    buildTypes {\n        release {\n            signingConfig signingConfigs.playRelease\n            minifyEnabled false\n            shrinkResources false\n        }\n    }\n}\n");'
+      if ! grep -q "apply from: '/tmp/play-signing/signing.gradle'" android/app/build.gradle; then
+        printf "\napply from: '/tmp/play-signing/signing.gradle'\n" >> android/app/build.gradle
+      fi
+    else
+      echo "WARNING: PLAY_* secrets not set yet; building unsigned release AAB bundle"
+    fi
+    (cd android && ./gradlew bundleRelease --no-daemon)
+    AAB_SRC="$(find android/app/build/outputs/bundle -name '*.aab' | head -n1)"
+    [ -n "$AAB_SRC" ] && [ -f "$AAB_SRC" ]
+    cp -f "$AAB_SRC" /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
+    ls -lh /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
+- name: Build Signed Release Android App Bundle (.aab) for Play Store
+  env:
+    PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
+    PLAY_STORE_PASSWORD: ${{ secrets.PLAY_STORE_PASSWORD }}
+    PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+    PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+  run: |
+    set -e
+    mkdir -p /tmp/play-signing
+    if [ -n "$PLAY_KEYSTORE_BASE64" ] && [ -n "$PLAY_STORE_PASSWORD" ] && [ -n "$PLAY_KEY_ALIAS" ] && [ -n "$PLAY_KEY_PASSWORD" ]; then
+      printf '%s' "$PLAY_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > /tmp/play-signing/play-release.jks
       cat << 'GRADLE_EOF' > /tmp/play-signing/signing.gradle
     android {
         signingConfigs {
