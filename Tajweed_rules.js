@@ -5541,34 +5541,81 @@
             { name: 'Isha', timeStr: t.isha, dt: parseTime12HrToDate(t.isha, now) }
         ];
 
-        let nextWaqt = null;
-        for (let i = 0; i < waqts.length; i++) {
-            if (waqts[i].dt && waqts[i].dt.getTime() > now.getTime()) {
-                nextWaqt = waqts[i];
-                break;
-            }
-        }
-        if (!nextWaqt) {
-            const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-            const tTom = calculatePrayerTimes(tomorrow, coords.lat, coords.lon, cfg);
-            nextWaqt = { name: 'Fajr', timeStr: tTom.fajr, dt: parseTime12HrToDate(tTom.fajr, tomorrow) };
-        }
+        /* AWRAAD_NAMAAZ_MAKROOH_TIMER_V1 */
+      const MIN = 60 * 1000;
+      const nowMs = now.getTime();
+      const fajrDt = parseTime12HrToDate(t.fajr, now);
+      const sunriseDt = parseTime12HrToDate(t.sunrise, now);
+      const dhuhrDt = parseTime12HrToDate(t.dhuhr, now);
+      const asrDt = parseTime12HrToDate(t.asr, now);
+      const maghribDt = parseTime12HrToDate(t.maghrib, now);
+      const ishaDt = parseTime12HrToDate(t.isha, now);
 
-        const remText = nextWaqt && nextWaqt.dt ? formatDurationHm(nextWaqt.dt.getTime() - now.getTime()) : '--';
+      let currentLabel = '--';
+      let endMs = null;
 
-        el.innerHTML =
-            '<strong>Prayer Times:</strong> ' +
-            '<span class="drawer-pt-waqt-row">' +
-                'Fajr ' + t.fajr + ' • ' +
-                'Dhuhr ' + t.dhuhr + ' • ' +
-                'Asr ' + t.asr + ' • ' +
-                'Maghrib ' + t.maghrib + ' • ' +
-                'Isha ' + t.isha +
-            '</span>' +
-            '<div class="drawer-pt-next-line">' +
-                '<span>Next: <span class="drawer-pt-next-val">' + nextWaqt.name + ' (' + nextWaqt.timeStr + ')</span></span>' +
-                '<span>Remaining: <span class="drawer-pt-rem-val">' + remText + '</span></span>' +
-            '</div>';
+      if (fajrDt && sunriseDt && dhuhrDt && asrDt && maghribDt && ishaDt) {
+        const fajrMs = fajrDt.getTime();
+        const sunriseMs = sunriseDt.getTime();
+        const dhuhrMs = dhuhrDt.getTime();
+        const asrMs = asrDt.getTime();
+        const maghribMs = maghribDt.getTime();
+        const ishaMs = ishaDt.getTime();
+
+        const makroohFajrEnd = sunriseMs + 20 * MIN;
+        const makroohZuhrStart = dhuhrMs - 20 * MIN;
+        const makroohMaghribStart = maghribMs - 20 * MIN;
+
+        if (nowMs < fajrMs) {
+          currentLabel = '[Isha]';
+          endMs = fajrMs;
+        } else if (nowMs < sunriseMs) {
+          currentLabel = '[Fajr]';
+          endMs = sunriseMs;
+        } else if (nowMs < makroohFajrEnd) {
+          currentLabel = 'Makrooh Time';
+          endMs = makroohFajrEnd;
+        } else if (nowMs < makroohZuhrStart) {
+          currentLabel = '[Ishraq / Chasht]';
+          endMs = makroohZuhrStart;
+        } else if (nowMs < dhuhrMs) {
+          currentLabel = 'Makrooh Time';
+          endMs = dhuhrMs;
+        } else if (nowMs < asrMs) {
+          currentLabel = '[Zuhr]';
+          endMs = asrMs;
+        } else if (nowMs < makroohMaghribStart) {
+          currentLabel = '[Asr]';
+          endMs = makroohMaghribStart;
+        } else if (nowMs < maghribMs) {
+          currentLabel = 'Makrooh Time';
+          endMs = maghribMs;
+        } else if (nowMs < ishaMs) {
+          currentLabel = '[Maghrib]';
+          endMs = ishaMs;
+        } else {
+          const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          const tTom = calculatePrayerTimes(tomorrow, coords.lat, coords.lon, cfg);
+          const tomFajrDt = parseTime12HrToDate(tTom.fajr, tomorrow);
+          currentLabel = '[Isha]';
+          endMs = tomFajrDt ? tomFajrDt.getTime() : null;
+        }
+      }
+
+      const remText = endMs !== null ? formatDurationHm(Math.max(0, endMs - nowMs)) : '--';
+      el.innerHTML =
+        '<strong>Prayer Times:</strong> ' +
+        '<span class="drawer-pt-waqt-row">' +
+        'Fajr ' + t.fajr + ' • ' +
+        'Dhuhr ' + t.dhuhr + ' • ' +
+        'Asr ' + t.asr + ' • ' +
+        'Maghrib ' + t.maghrib + ' • ' +
+        'Isha ' + t.isha +
+        '</span>' +
+        '<div class="drawer-pt-next-line">' +
+        '<span>Namaaz: <span class="drawer-pt-next-val">' + currentLabel + '</span></span>' +
+        '<span>Remaining: <span class="drawer-pt-rem-val">' + remText + '</span></span>' +
+        '</div>';
     }
 
     window.awraadRenderDrawerPrayerDetails = renderDrawerPrayerDetailsLine;
