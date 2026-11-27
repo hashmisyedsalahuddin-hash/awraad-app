@@ -7830,7 +7830,7 @@
     }
 })();
 // ==========================================
-// PART 17: ULTRA-FAST UNIVERSAL READING UX SUITE (SCROLL-CONTAINER AGNOSTIC + EXACT LINE CONTINUE READING)
+// PART 17: ULTRA-FAST UNIVERSAL READING UX SUITE (CONTINUE READING + USER-CONTROLLED EXACT LINE BOOKMARKS)
 // ==========================================
 (function() {
     const LAST_VISITED_KEY = 'app_last_visited_v4';
@@ -7841,6 +7841,8 @@
     const PAGES_DIR_KEY = 'app_pages_directory_v1';
     const AUTOSCROLL_SPEED_KEY = 'app_autoscroll_speed';
     const RESUME_TTL_MS = 35000;
+    const MAX_BOOKMARKS_LIMIT = 500;
+    const MODAL_PAGE_SIZE = 25;
 
     const LEGACY_KEYS_TO_PURGE = [
         'app_main_continue_section_v1',
@@ -7973,8 +7975,8 @@
         return Boolean(el.closest(
             '#injected-app-navbar, #awraadSideDrawer, #awraadDrawerBackdrop, #awraadShortcutRail, #awraadShortcutBackdrop, #awraadShortcutFlyout, #injected-daily-malfooz, ' +
             '.daily-malfooz-container, #settingsModal, #prayerTimesModal, #eventsModal, #tasbeehModal, ' +
-            '#bookmarksModal, #quickSearchModal, .ux-modal, .continue-reading-card, .floating-reading-fab-group, ' +
-            '#autoScrollBar, #awraadSplashScreen, .screen-header, .print-none, #tvCompactSidebar, #tvHomeSplash, #tvStartMenuWrap, #tvBottomBar'
+            '#bookmarksModal, #quickSearchModal, .ux-modal, .continue-reading-card, #mainMenuBookmarksSection, .floating-reading-fab-group, ' +
+            '#autoScrollBar, #awraadSplashScreen, .screen-header, .print-none, #tvCompactSidebar, #tvHomeSplash, #tvStartMenuWrap, #tvBottomBar, #awraadApkUpdateBanner'
         ));
     }
 
@@ -7992,7 +7994,6 @@
         if (el === document.body) {
             const htmlSt = window.getComputedStyle(document.documentElement);
             const bodySt = window.getComputedStyle(document.body);
-            // If html is overflow:hidden and body is overflow-y:auto/scroll, body is an element scroller, NOT window!
             if (htmlSt && htmlSt.overflowY === 'hidden' && bodySt && (bodySt.overflowY === 'auto' || bodySt.overflowY === 'scroll')) {
                 return false;
             }
@@ -8028,7 +8029,6 @@
         const inner = document.querySelector('.continuous-inner');
         const ordered = [frame, inner, document.body, document.scrollingElement, document.documentElement];
 
-        // 1. Prefer whichever container is already scrolled > 0
         for (let i = 0; i < ordered.length; i++) {
             const el = ordered[i];
             if (el && el.nodeType === 1 && el.scrollTop > 0 && isValidReadingScroller(el)) {
@@ -8036,7 +8036,6 @@
             }
         }
 
-        // 2. Check if html is locked (overflow:hidden) so body or .continuous-frame is the real scroller
         for (let i = 0; i < 3; i++) {
             const el = ordered[i];
             if (!el || el.nodeType !== 1) continue;
@@ -8046,7 +8045,6 @@
             }
         }
 
-        // 3. Fallback to standard document scroller
         const docEl = document.scrollingElement || document.documentElement;
         if (docEl && (docEl.scrollHeight - window.innerHeight) > 12) return docEl;
         if (document.body && (document.body.scrollHeight - document.body.clientHeight) > 12) return document.body;
@@ -8584,6 +8582,18 @@
         return -1;
     }
 
+    function extractLinePreviewFromBlock(blockEl, charOffset) {
+        if (!blockEl) return '';
+        const raw = (blockEl.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!raw) return '';
+        if (typeof charOffset === 'number' && charOffset > 24 && raw.length > 90) {
+            const approxStart = Math.max(0, Math.min(raw.length - 60, charOffset));
+            const slice = raw.slice(approxStart, approxStart + 88).trim();
+            return (approxStart > 0 ? '…' : '') + slice + (approxStart + 88 < raw.length ? '…' : '');
+        }
+        return raw.slice(0, 88) + (raw.length > 88 ? '…' : '');
+    }
+
     function getExactLineViewportTopByCharOffset(blockEl, targetCharOffset) {
         if (!blockEl || typeof targetCharOffset !== 'number' || targetCharOffset <= 0) return null;
 
@@ -8642,6 +8652,7 @@
         const offsetRatio = Math.min(0.98, Math.max(0, +(offsetPx / blockH).toFixed(4)));
         const snippet = normalizeSearchText(chosenEl.textContent || '').slice(0, 64);
         const charOffset = captureCharOffsetInBlock(chosenEl, readingLine);
+        const linePreview = extractLinePreviewFromBlock(chosenEl, charOffset);
 
         return {
             anchorIndex: chosenIdx,
@@ -8649,7 +8660,8 @@
             anchorSnippet: snippet,
             anchorCharOffset: charOffset,
             anchorOffsetPx: offsetPx,
-            anchorOffsetRatio: offsetRatio
+            anchorOffsetRatio: offsetRatio,
+            linePreview: linePreview
         };
     }
 
@@ -8686,7 +8698,6 @@
             }
 
             if (targetEl) {
-                // Tier 1: Exact character/line inside paragraph (viewport-relative -> works on ANY scroll container!)
                 if (typeof data.anchorCharOffset === 'number' && data.anchorCharOffset > 0) {
                     const lineViewportTop = getExactLineViewportTopByCharOffset(targetEl, data.anchorCharOffset);
                     if (lineViewportTop !== null) {
@@ -8694,7 +8705,6 @@
                     }
                 }
 
-                // Tier 2: Block top + proportional intra-block offset
                 const rect = targetEl.getBoundingClientRect();
                 const ratio = (typeof data.anchorOffsetRatio === 'number' && data.anchorOffsetRatio >= 0 && data.anchorOffsetRatio < 1)
                     ? data.anchorOffsetRatio
@@ -8705,7 +8715,6 @@
             }
         }
 
-        // Tier 3: Scroll percentage fallback
         const pctVal = (typeof data.pctFloat === 'number' && data.pctFloat > 0)
             ? data.pctFloat
             : (parseFloat(data.pct) || 0);
@@ -8716,7 +8725,6 @@
         return { y: Math.max(0, parseInt(data.scrollY, 10) || 0), el: null };
     }
 
-    // Condition 4: Accurate Subsection Completion Check (only clears when user ACTUALLY reaches bottom of scrollable content!)
     function isSubsectionCompleted(currY, maxY, pctFloat) {
         if (maxY <= 80) return false;
         const remainingPx = maxY - currY;
@@ -8749,7 +8757,7 @@
         void toast.offsetWidth;
         toast.classList.add('show');
         clearTimeout(toast._uxTimer);
-        toast._uxTimer = setTimeout(() => toast.classList.remove('show'), 1900);
+        toast._uxTimer = setTimeout(() => toast.classList.remove('show'), 2100);
     }
 
     function clearPendingResume() {
@@ -8776,7 +8784,7 @@
         const targetScroll = (typeof scrollY === 'number' && scrollY > 0) ? Math.round(scrollY) : 0;
         const meta = resumeMeta || {};
         const shouldStore = targetScroll > 0 || (parseFloat(meta.pct) || 0) > 0 || meta.anchorSnippet || meta.sectionId ||
-            (typeof meta.triggerCardIndex === 'number' && meta.triggerCardIndex >= 0);
+            (typeof meta.triggerCardIndex === 'number' && meta.triggerCardIndex >= 0) || Boolean(meta.triggerCardText);
 
         if (shouldStore) {
             const pendingObj = {
@@ -8872,7 +8880,16 @@
             }
         }
 
-        if (isSubIndexView(true)) {
+        // Handle multi-panel pages driven by sub-index card clicks (even if switching between two cards in the same file)
+        const curTrig = loadLastSubTriggerForCurrentFile();
+        const needsCardSwitch = isSubIndexView(true) || (
+            !targetId &&
+            typeof data.triggerCardIndex === 'number' &&
+            data.triggerCardIndex >= 0 &&
+            (!curTrig || curTrig.cardIndex !== data.triggerCardIndex)
+        );
+
+        if (needsCardSwitch) {
             const cardEl = findMatchingSubMenuCard(data);
             if (cardEl) {
                 saveLastSubTrigger({
@@ -8914,7 +8931,7 @@
     }
 
     // -----------------------------------------
-    // LAYOUT-AWARE RESTORATION ENGINE
+    // LAYOUT-AWARE RESTORATION ENGINE (SHARED BY CONTINUE READING & BOOKMARKS)
     // -----------------------------------------
     let resumeRestoreActive = false;
     let userScrolledSinceLoad = false;
@@ -9041,7 +9058,7 @@
     }
 
     // -----------------------------------------
-    // A. SINGLE IMMEDIATE LAST VISITED STORAGE (CONDITIONS 1, 2, 3, 4)
+    // A. CONTINUE READING (COMPLETELY INDEPENDENT OF BOOKMARKS)
     // -----------------------------------------
     function loadLastVisited() {
         try {
@@ -9157,7 +9174,6 @@
             return;
         }
 
-        // Restriction: Never reset an already-saved subsection back to top (0%) before user has actually scrolled
         if (sameAsSaved && !userScrolledSinceLoad && currY <= 25 && ((existing.scrollY || 0) > 25 || (existing.pct || 0) > 0 || (existing.anchorIndex || 0) > 0)) {
             return;
         }
@@ -9322,14 +9338,18 @@
         if (isMainIndexPage()) {
             const mainCard = buildMainIndexContinueSectionCard();
             if (mainCard) {
+                const bmSection = document.getElementById('mainMenuBookmarksSection');
                 const navGrid = document.querySelector('#main-menu .index-nav-grid, .index-nav-grid');
                 const dailyMalfooz = document.getElementById('injected-daily-malfooz') || document.querySelector('.daily-malfooz-container');
-                if (navGrid && navGrid.parentNode) {
+                if (bmSection && bmSection.parentNode) {
+                    bmSection.parentNode.insertBefore(mainCard, bmSection);
+                } else if (navGrid && navGrid.parentNode) {
                     navGrid.parentNode.insertBefore(mainCard, navGrid);
                 } else if (dailyMalfooz && dailyMalfooz.parentNode) {
                     dailyMalfooz.insertAdjacentElement('afterend', mainCard);
                 }
             }
+            renderMainMenuBookmarksSection();
             return;
         }
 
@@ -9356,103 +9376,377 @@
     }
 
     // -----------------------------------------
-    // B. BOOKMARKS / FAVORITES
+    // B. USER-CONTROLLED MULTIPLE BOOKMARKS & FAVORITES (O(1) MEMORY-CACHED, ZERO LAG)
     // -----------------------------------------
-    function loadBookmarks() {
+    let cachedBookmarks = null;
+    let bookmarkedPageKeysSet = new Set();
+    let bookmarkedMalfoozSet = new Set();
+
+    function rebuildBookmarkIndexes(list) {
+        const pSet = new Set();
+        const mSet = new Set();
+        for (let i = 0; i < list.length; i++) {
+            const b = list[i];
+            if (!b) continue;
+            if (b.type === 'malfooz' && b.malfoozId) {
+                mSet.add(String(b.malfoozId));
+            } else if (b.href) {
+                pSet.add(b.uniqueKey || getNormalizedPageKey(b.href));
+            }
+        }
+        bookmarkedPageKeysSet = pSet;
+        bookmarkedMalfoozSet = mSet;
+    }
+
+    function normalizeLegacyBookmark(raw, idx) {
+        if (!raw || typeof raw !== 'object') return null;
+        if (raw.type === 'malfooz') {
+            return {
+                id: raw.id || ('malfooz:' + String(raw.malfoozId || idx)),
+                type: 'malfooz',
+                malfoozId: String(raw.malfoozId || ''),
+                sectionName: 'Malfoozat e Bahrul Irfan',
+                subSectionName: raw.title || ('Malfooz #' + (raw.malfoozId || '')),
+                title: raw.title || ('Malfooz #' + (raw.malfoozId || '')),
+                snippet: String(raw.snippet || '').slice(0, 180),
+                ts: raw.ts || Date.now()
+            };
+        }
+        if (!raw.href) return null;
+        const secKey = raw.sectionKey || detectParentSectionKey(raw.href) || '';
+        const cat = secKey ? getSectionCatalogEntry(secKey, raw.href, raw.sectionName || raw.title) : null;
+        const secName = raw.sectionName || (cat && cat.label) || 'Awraad e Alaviya';
+        const subName = raw.subSectionName || raw.title || secName;
+        return {
+            id: (raw.id && !raw.id.startsWith('page:')) ? raw.id : ('bm_' + (raw.ts || Date.now()) + '_' + idx),
+            type: 'page',
+            sectionKey: secKey,
+            sectionName: String(secName).slice(0, 72),
+            subSectionName: String(subName).slice(0, 84),
+            uniqueKey: raw.uniqueKey || getNormalizedPageKey(raw.href),
+            href: raw.href,
+            file: raw.file || normalizeFileName(raw.href),
+            sectionId: raw.sectionId || '',
+            triggerCardIndex: typeof raw.triggerCardIndex === 'number' ? raw.triggerCardIndex : -1,
+            triggerCardText: raw.triggerCardText || '',
+            triggerCardHref: raw.triggerCardHref || '',
+            triggerCardOnclick: raw.triggerCardOnclick || '',
+            anchorIndex: typeof raw.anchorIndex === 'number' ? raw.anchorIndex : -1,
+            anchorId: raw.anchorId || '',
+            anchorSnippet: String(raw.anchorSnippet || '').slice(0, 64),
+            anchorCharOffset: typeof raw.anchorCharOffset === 'number' ? raw.anchorCharOffset : -1,
+            anchorOffsetPx: typeof raw.anchorOffsetPx === 'number' ? raw.anchorOffsetPx : 0,
+            anchorOffsetRatio: typeof raw.anchorOffsetRatio === 'number' ? raw.anchorOffsetRatio : 0,
+            lineSnippet: String(raw.lineSnippet || raw.snippet || '').slice(0, 110),
+            scrollY: Math.max(0, parseInt(raw.scrollY, 10) || 0),
+            pct: Math.min(100, Math.max(0, parseInt(raw.pct, 10) || 0)),
+            pctFloat: typeof raw.pctFloat === 'number' ? raw.pctFloat : (parseFloat(raw.pct) || 0),
+            ts: raw.ts || Date.now()
+        };
+    }
+
+    function loadBookmarks(forceDisk) {
+        if (!forceDisk && Array.isArray(cachedBookmarks)) {
+            return cachedBookmarks;
+        }
         try {
             const arr = JSON.parse(localStorage.getItem(BOOKMARKS_KEY) || '[]');
-            return Array.isArray(arr) ? arr : [];
+            const clean = [];
+            if (Array.isArray(arr)) {
+                for (let i = 0; i < arr.length && clean.length < MAX_BOOKMARKS_LIMIT; i++) {
+                    const norm = normalizeLegacyBookmark(arr[i], i);
+                    if (norm) clean.push(norm);
+                }
+            }
+            cachedBookmarks = clean;
+            rebuildBookmarkIndexes(clean);
+            return clean;
         } catch (e) {
+            cachedBookmarks = [];
+            rebuildBookmarkIndexes([]);
             return [];
         }
     }
 
     function saveBookmarks(list) {
-        try { localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(list)); } catch (e) {}
+        const trimmed = Array.isArray(list) ? list.slice(0, MAX_BOOKMARKS_LIMIT) : [];
+        cachedBookmarks = trimmed;
+        rebuildBookmarkIndexes(trimmed);
+        try {
+            localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(trimmed));
+        } catch (e) {
+            // If storage is tight, drop oldest entries beyond 150 and retry
+            try {
+                const compact = trimmed.slice(0, 150);
+                cachedBookmarks = compact;
+                rebuildBookmarkIndexes(compact);
+                localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(compact));
+            } catch (e2) {}
+        }
         refreshBookmarkIndicators();
+        if (isMainIndexPage()) {
+            renderMainMenuBookmarksSection();
+        }
     }
 
-    function getCurrentPageBookmarkId() {
-        return 'page:' + getCurrentPageHref().toLowerCase();
+    function deleteBookmarkById(bmId) {
+        if (!bmId) return false;
+        const list = loadBookmarks(false);
+        const idx = list.findIndex((b) => b.id === bmId);
+        if (idx === -1) return false;
+        const next = list.slice(0, idx).concat(list.slice(idx + 1));
+        saveBookmarks(next);
+        return true;
     }
 
     function refreshBookmarkIndicators() {
-        const list = loadBookmarks();
+        const list = loadBookmarks(false);
         const badge = document.getElementById('drawerBookmarkCount');
         if (badge) badge.textContent = String(list.length);
 
         const navBmBtn = document.getElementById('navBookmarkBtn');
         if (navBmBtn) {
-            const isSaved = list.some((b) => b.id === getCurrentPageBookmarkId());
-            navBmBtn.classList.toggle('bookmarked', isSaved);
-            navBmBtn.title = isSaved ? 'Remove Bookmark' : 'Bookmark Page';
+            if (isMainIndexPage() || isSubIndexView(false)) {
+                navBmBtn.classList.toggle('bookmarked', list.length > 0);
+                navBmBtn.title = `Bookmarks & Favorites (${list.length})`;
+            } else {
+                const desc = getActiveSubSectionDescriptor();
+                const hasAnyHere = bookmarkedPageKeysSet.has(desc.uniqueKey) || bookmarkedPageKeysSet.has(getNormalizedPageKey(desc.href));
+                navBmBtn.classList.toggle('bookmarked', hasAnyHere);
+                navBmBtn.title = 'Bookmark Exact Reading Position';
+            }
         }
 
-        document.querySelectorAll('.malfooz-bm-btn[data-malfooz-bm-id]').forEach((btn) => {
-            const mid = 'malfooz:' + btn.getAttribute('data-malfooz-bm-id');
-            const isSaved = list.some((b) => b.id === mid);
+        const mBtns = document.querySelectorAll('.malfooz-bm-btn[data-malfooz-bm-id]');
+        for (let i = 0; i < mBtns.length; i++) {
+            const btn = mBtns[i];
+            const mid = String(btn.getAttribute('data-malfooz-bm-id') || '');
+            const isSaved = bookmarkedMalfoozSet.has(mid);
             btn.classList.toggle('saved', isSaved);
             const sp = btn.querySelector('span');
             if (sp) sp.textContent = isSaved ? 'Bookmarked' : 'Bookmark';
-        });
+        }
     }
     window.awraadRefreshBookmarkBadge = refreshBookmarkIndicators;
 
-    function toggleCurrentPageBookmark() {
-        const id = getCurrentPageBookmarkId();
-        const list = loadBookmarks();
-        const idx = list.findIndex((b) => b.id === id);
-        if (idx !== -1) {
-            list.splice(idx, 1);
-            saveBookmarks(list);
-            showQuickToast('Bookmark hata diya gaya');
-        } else {
-            const anchor = captureReadingAnchor() || {};
-            list.unshift({
-                id,
-                type: 'page',
-                href: getCurrentPageHref(),
-                title: getCurrentSubSectionTitle(),
-                scrollY: getCurrentScrollY(),
-                pct: getScrollPercentage(),
-                pctFloat: +getScrollPercentageFloat().toFixed(2),
-                anchorIndex: typeof anchor.anchorIndex === 'number' ? anchor.anchorIndex : -1,
-                anchorId: anchor.anchorId || '',
-                anchorSnippet: anchor.anchorSnippet || '',
-                anchorCharOffset: typeof anchor.anchorCharOffset === 'number' ? anchor.anchorCharOffset : -1,
-                anchorOffsetRatio: typeof anchor.anchorOffsetRatio === 'number' ? anchor.anchorOffsetRatio : 0,
-                ts: Date.now()
-            });
-            saveBookmarks(list);
-            showQuickToast('★ Page Bookmark ho gaya!');
+    // User-controlled Bookmark creation at exact reading position (never automatic!)
+    function createCurrentPositionBookmark() {
+        if (isMainIndexPage() || isSubIndexView(true)) {
+            openBookmarksModal();
+            return false;
         }
+
+        const desc = getActiveSubSectionDescriptor();
+        const secKey = detectParentSectionKey(desc.href) || '';
+        const subTitle = getCurrentSubSectionTitle();
+        const cat = secKey ? getSectionCatalogEntry(secKey, desc.href, subTitle) : null;
+        const sectionName = (cat && cat.label) || subTitle || 'Awraad e Alaviya';
+        const anchor = captureReadingAnchor() || {};
+        const currY = getCurrentScrollY();
+        const pct = getScrollPercentage();
+        const pctFloat = +getScrollPercentageFloat().toFixed(2);
+        const anchorIdx = typeof anchor.anchorIndex === 'number' ? anchor.anchorIndex : -1;
+        const charOff = typeof anchor.anchorCharOffset === 'number' ? anchor.anchorCharOffset : -1;
+
+        const list = loadBookmarks(false);
+
+        // Prevent accidental double-tap duplicate on the exact same line, while allowing multiple bookmarks anywhere else in the same subsection!
+        const exactSameLineExists = list.some((b) => {
+            if (b.type !== 'page') return false;
+            const sameSub = (b.uniqueKey === desc.uniqueKey) || (getNormalizedPageKey(b.href) === getNormalizedPageKey(desc.href));
+            if (!sameSub) return false;
+            const sameAnchor = (b.anchorIndex === anchorIdx) && (Math.abs((b.anchorCharOffset || 0) - Math.max(0, charOff)) <= 8);
+            const sameScroll = Math.abs((b.scrollY || 0) - currY) <= 18;
+            return sameAnchor && sameScroll;
+        });
+
+        if (exactSameLineExists) {
+            showQuickToast('★ Yeh line pehle se Bookmarked hai');
+            return false;
+        }
+
+        const newId = 'bm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        const entry = {
+            id: newId,
+            type: 'page',
+            sectionKey: secKey,
+            sectionName: String(sectionName).slice(0, 72),
+            subSectionName: String(subTitle).slice(0, 84),
+            uniqueKey: desc.uniqueKey,
+            href: desc.href,
+            file: desc.file,
+            sectionId: desc.sectionId,
+            triggerCardIndex: desc.triggerCardIndex,
+            triggerCardText: desc.triggerCardText,
+            triggerCardHref: desc.triggerCardHref,
+            triggerCardOnclick: desc.triggerCardOnclick,
+            anchorIndex: anchorIdx,
+            anchorId: anchor.anchorId || '',
+            anchorSnippet: anchor.anchorSnippet || '',
+            anchorCharOffset: charOff,
+            anchorOffsetPx: typeof anchor.anchorOffsetPx === 'number' ? anchor.anchorOffsetPx : 0,
+            anchorOffsetRatio: typeof anchor.anchorOffsetRatio === 'number' ? anchor.anchorOffsetRatio : 0,
+            lineSnippet: anchor.linePreview || '',
+            scrollY: currY,
+            pct: pct,
+            pctFloat: pctFloat,
+            ts: Date.now()
+        };
+
+        saveBookmarks([entry].concat(list));
+        showQuickToast(`★ Bookmark Saved (${pct}%)`);
+        return true;
     }
 
     function toggleMalfoozBookmark(malfoozId, arabicNum, plainText) {
         const id = 'malfooz:' + String(malfoozId);
-        const list = loadBookmarks();
+        const list = loadBookmarks(false);
         const idx = list.findIndex((b) => b.id === id);
         if (idx !== -1) {
-            list.splice(idx, 1);
-            saveBookmarks(list);
+            const next = list.slice(0, idx).concat(list.slice(idx + 1));
+            saveBookmarks(next);
             showQuickToast('Malfooz bookmark hata diya gaya');
         } else {
-            list.unshift({
+            const entry = {
                 id,
                 type: 'malfooz',
                 malfoozId: String(malfoozId),
+                sectionName: 'Malfoozat e Bahrul Irfan',
+                subSectionName: `مَلْفُوْظَاتِ شَيْخ #${arabicNum || malfoozId}`,
                 title: `مَلْفُوْظَاتِ شَيْخ #${arabicNum || malfoozId}`,
-                snippet: String(plainText || '').replace(/\s+/g, ' ').trim().slice(0, 220),
+                snippet: String(plainText || '').replace(/\s+/g, ' ').trim().slice(0, 180),
                 ts: Date.now()
-            });
-            saveBookmarks(list);
+            };
+            saveBookmarks([entry].concat(list));
             showQuickToast('★ Malfooz Bookmark ho gaya!');
         }
     }
 
+    function formatBookmarkMetaLabel(b) {
+        const sec = b.sectionName || '';
+        const sub = b.subSectionName || b.title || '';
+        if (!sec || normalizeSearchText(sec) === normalizeSearchText(sub)) {
+            return sub;
+        }
+        return `${sec} • ${sub}`;
+    }
+
+    // Main Menu Bookmarks & Favorites Section (renders max 3 items inline for instant 0ms performance + View All modal)
+    function renderMainMenuBookmarksSection() {
+        const existing = document.getElementById('mainMenuBookmarksSection');
+        if (!isMainIndexPage()) {
+            if (existing) existing.remove();
+            return;
+        }
+
+        const list = loadBookmarks(false);
+        const I = window.AWRAAD_SVG;
+        let container = existing;
+
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'mainMenuBookmarksSection';
+            container.className = 'main-bookmarks-section print-none no-smart-break';
+
+            const navGrid = document.querySelector('#main-menu .index-nav-grid, .index-nav-grid');
+            const dailyMalfooz = document.getElementById('injected-daily-malfooz') || document.querySelector('.daily-malfooz-container');
+            if (navGrid && navGrid.parentNode) {
+                navGrid.parentNode.insertBefore(container, navGrid);
+            } else if (dailyMalfooz && dailyMalfooz.parentNode) {
+                dailyMalfooz.insertAdjacentElement('afterend', container);
+            } else {
+                return;
+            }
+
+            // Single delegated click listener (zero per-item listener memory overhead!)
+            container.addEventListener('click', (e) => {
+                const delBtn = e.target.closest('[data-mm-bm-del]');
+                if (delBtn) {
+                    e.stopPropagation();
+                    const bmId = delBtn.getAttribute('data-mm-bm-del');
+                    if (deleteBookmarkById(bmId)) {
+                        showQuickToast('Bookmark delete ho gaya');
+                    }
+                    return;
+                }
+                if (e.target.closest('#openAllMainBookmarksBtn') || e.target.closest('#mainBookmarksHeaderBar')) {
+                    openBookmarksModal();
+                    return;
+                }
+                const openCard = e.target.closest('[data-mm-bm-open]');
+                if (openCard) {
+                    const bmId = openCard.getAttribute('data-mm-bm-open');
+                    const item = loadBookmarks(false).find((b) => b.id === bmId);
+                    if (!item) return;
+                    if (item.type === 'page' && item.href) {
+                        navigateWithScroll(item.href, item.scrollY || 0, item);
+                    } else {
+                        openBookmarksModal();
+                    }
+                }
+            });
+        }
+
+        if (!list.length) {
+            container.innerHTML = `
+                <div id="mainBookmarksHeaderBar" class="main-bm-header">
+                    <div class="main-bm-title-wrap">
+                        <span class="main-bm-star-badge">${I.starSm}</span>
+                        <span class="main-bm-heading">Bookmarks &amp; Favorites</span>
+                        <span class="main-bm-count-pill">0</span>
+                    </div>
+                    <button type="button" id="openAllMainBookmarksBtn" class="main-bm-manage-btn">Open</button>
+                </div>
+                <div class="main-bm-empty-hint">Koi Bookmark save nahi hai — kisi bhi Dua ya Hizb ko padhte waqt upar <strong>★</strong> tap karke exact line save karein.</div>
+            `;
+            return;
+        }
+
+        const previewItems = list.slice(0, 3);
+        const rowsHtml = previewItems.map((b) => {
+            const secLabel = escapeHtml(b.sectionName || 'Awraad e Alaviya');
+            const subLabel = escapeHtml(b.subSectionName || b.title || '');
+            const lineTxt = escapeHtml(b.lineSnippet || b.snippet || '');
+            const posText = b.type === 'malfooz' ? 'Malfooz-e-Shaykh' : `Saved at ${b.pct || 0}%`;
+
+            return `
+                <div class="main-bm-item" data-mm-bm-open="${escapeHtml(b.id)}">
+                    <div class="main-bm-item-body">
+                        <div class="main-bm-section-tag" dir="auto">${secLabel}</div>
+                        <div class="main-bm-sub-title" dir="auto">${subLabel}</div>
+                        ${lineTxt ? `<div class="main-bm-line-preview" dir="rtl">${lineTxt}</div>` : ''}
+                        <div class="main-bm-pos-meta">${posText}</div>
+                    </div>
+                    <button type="button" class="bookmark-delete-btn main-bm-del-btn" data-mm-bm-del="${escapeHtml(b.id)}" title="Delete Bookmark" aria-label="Delete Bookmark">${I.trashSm}</button>
+                </div>
+            `;
+        }).join('');
+
+        const moreFooter = list.length > 3
+            ? `<button type="button" id="openAllMainBookmarksBtn" class="main-bm-viewall-btn">View All Saved Bookmarks (${list.length})</button>`
+            : '';
+
+        container.innerHTML = `
+            <div id="mainBookmarksHeaderBar" class="main-bm-header">
+                <div class="main-bm-title-wrap">
+                    <span class="main-bm-star-badge">${I.starSm}</span>
+                    <span class="main-bm-heading">Bookmarks &amp; Favorites</span>
+                    <span class="main-bm-count-pill">${list.length}</span>
+                </div>
+                <button type="button" id="openAllMainBookmarksBtn" class="main-bm-manage-btn">Manage All</button>
+            </div>
+            <div class="main-bm-list">${rowsHtml}</div>
+            ${moreFooter}
+        `;
+    }
+
     let bookmarksModalBuilt = false;
+    let modalVisibleCount = MODAL_PAGE_SIZE;
+
     function openBookmarksModal() {
         if (typeof window.awraadCloseDrawer === 'function') window.awraadCloseDrawer();
+        modalVisibleCount = MODAL_PAGE_SIZE;
+
         if (!bookmarksModalBuilt && !document.getElementById('bookmarksModal')) {
             bookmarksModalBuilt = true;
             const I = window.AWRAAD_SVG;
@@ -9468,11 +9762,51 @@
                 </div>
             `);
             const modal = document.getElementById('bookmarksModal');
+            const body = document.getElementById('bookmarksModalBody');
+
             document.getElementById('closeBookmarksBtn').addEventListener('click', () => modal.classList.remove('show'));
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) modal.classList.remove('show');
             });
+
+            // Single delegated listener for all modal actions (fast even with hundreds of bookmarks!)
+            body.addEventListener('click', (e) => {
+                if (e.target.closest('#bmAddCurrentPositionBtn')) {
+                    const added = createCurrentPositionBookmark();
+                    if (added) {
+                        modalVisibleCount = Math.max(modalVisibleCount, MODAL_PAGE_SIZE);
+                        renderBookmarksModalBody();
+                    }
+                    return;
+                }
+                if (e.target.closest('#bmLoadMoreBtn')) {
+                    modalVisibleCount += MODAL_PAGE_SIZE;
+                    renderBookmarksModalBody();
+                    return;
+                }
+                const delBtn = e.target.closest('[data-bm-del-id]');
+                if (delBtn) {
+                    e.stopPropagation();
+                    const bmId = delBtn.getAttribute('data-bm-del-id');
+                    if (deleteBookmarkById(bmId)) {
+                        renderBookmarksModalBody();
+                        showQuickToast('Bookmark delete ho gaya');
+                    }
+                    return;
+                }
+                const openEl = e.target.closest('[data-bm-open-id]');
+                if (openEl) {
+                    const bmId = openEl.getAttribute('data-bm-open-id');
+                    const item = loadBookmarks(false).find((b) => b.id === bmId);
+                    if (!item) return;
+                    modal.classList.remove('show');
+                    if (item.type === 'page' && item.href) {
+                        navigateWithScroll(item.href, item.scrollY || 0, item);
+                    }
+                }
+            });
         }
+
         renderBookmarksModalBody();
         const modal = document.getElementById('bookmarksModal');
         if (modal) modal.classList.add('show');
@@ -9481,56 +9815,56 @@
     function renderBookmarksModalBody() {
         const body = document.getElementById('bookmarksModalBody');
         if (!body) return;
-        const list = loadBookmarks();
+        const list = loadBookmarks(false);
         const I = window.AWRAAD_SVG;
+        const canBookmarkHere = !isMainIndexPage() && !isSubIndexView(true);
+
+        const addHereHtml = canBookmarkHere ? `
+            <button type="button" id="bmAddCurrentPositionBtn" class="bm-add-current-btn">
+                ${I.starSm}<span>Bookmark Exact Current Reading Line (${getScrollPercentage()}%)</span>
+            </button>
+        ` : '';
 
         if (!list.length) {
             body.innerHTML = `
+                ${addHereHtml}
                 <div class="bookmark-empty-state">
                     <div style="margin-bottom:8px; color:#c59b27;">${I.star}</div>
                     Abhi koi Bookmark save nahi hai.<br>
-                    Kisi bhi Dua, Hizb ya Shajara page par upar <strong>★ Star</strong> icon tap karke save kar sakte hain.
+                    Kisi bhi Dua, Hizb ya Shajara page ko padhte waqt upar <strong>★ Star</strong> icon tap karke apni exact line save kar sakte hain.
                 </div>
             `;
             return;
         }
 
-        body.innerHTML = list.map((b, i) => `
-            <div class="bookmark-item-card" data-bm-index="${i}">
-                <div class="bookmark-item-main" data-bm-open="${i}">
-                    <div class="bookmark-item-title" dir="auto">${escapeHtml(b.title)}</div>
-                    ${b.snippet ? `<div class="bookmark-item-snippet" dir="rtl">${escapeHtml(b.snippet)}</div>` : ''}
-                    <div class="bookmark-item-meta">
-                        ${b.type === 'malfooz' ? 'Malfooz-e-Shaykh' : `Saved at ${b.pct || 0}% reading position`}
+        const slice = list.slice(0, modalVisibleCount);
+        const itemsHtml = slice.map((b) => {
+            const secTitle = escapeHtml(b.sectionName || 'Awraad e Alaviya');
+            const subTitle = escapeHtml(b.subSectionName || b.title || '');
+            const snippetTxt = escapeHtml(b.lineSnippet || b.snippet || '');
+            const metaText = b.type === 'malfooz'
+                ? 'Malfooz-e-Shaykh'
+                : `Saved at ${b.pct || 0}% reading position`;
+
+            return `
+                <div class="bookmark-item-card">
+                    <div class="bookmark-item-main" data-bm-open-id="${escapeHtml(b.id)}">
+                        <div class="main-bm-section-tag" dir="auto">${secTitle}</div>
+                        <div class="bookmark-item-title" dir="auto">${subTitle}</div>
+                        ${snippetTxt ? `<div class="bookmark-item-snippet" dir="rtl">${snippetTxt}</div>` : ''}
+                        <div class="bookmark-item-meta">${metaText}</div>
                     </div>
+                    <button type="button" class="bookmark-delete-btn" data-bm-del-id="${escapeHtml(b.id)}" title="Delete Bookmark" aria-label="Delete Bookmark">${I.trashSm}</button>
                 </div>
-                <button type="button" class="bookmark-delete-btn" data-bm-del="${i}" title="Remove">${I.trashSm}</button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
-        body.querySelectorAll('[data-bm-open]').forEach((el) => {
-            el.addEventListener('click', () => {
-                const idx = parseInt(el.getAttribute('data-bm-open'), 10);
-                const item = loadBookmarks()[idx];
-                if (!item) return;
-                const modal = document.getElementById('bookmarksModal');
-                if (modal) modal.classList.remove('show');
-                if (item.type === 'page' && item.href) {
-                    navigateWithScroll(item.href, item.scrollY || 0, item);
-                }
-            });
-        });
+        const remaining = list.length - slice.length;
+        const loadMoreHtml = remaining > 0
+            ? `<button type="button" id="bmLoadMoreBtn" class="bm-load-more-btn">Load More Bookmarks (${remaining} more)</button>`
+            : '';
 
-        body.querySelectorAll('[data-bm-del]').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const idx = parseInt(btn.getAttribute('data-bm-del'), 10);
-                const cur = loadBookmarks();
-                cur.splice(idx, 1);
-                saveBookmarks(cur);
-                renderBookmarksModalBody();
-            });
-        });
+        body.innerHTML = `${addHereHtml}${itemsHtml}${loadMoreHtml}`;
     }
 
     // -----------------------------------------
@@ -9961,7 +10295,6 @@
             }
         }
 
-        // Capture-phase catches scroll on body, .continuous-frame, .continuous-inner, AND window!
         document.addEventListener('scroll', handleAnyScroll, { capture: true, passive: true });
         window.addEventListener('scroll', handleAnyScroll, { passive: true });
     }
@@ -9973,6 +10306,7 @@
         purgeLegacyContinueStorage();
         harvestSectionRegistryFromIndex();
         harvestIndexDirectoryIfOnIndex();
+        loadBookmarks(true);
         invalidateLayoutCaches();
 
         initReadingChrome();
@@ -10116,6 +10450,7 @@
 
         window.addEventListener('pageshow', (e) => {
             invalidateLayoutCaches();
+            loadBookmarks(true);
             if (e.persisted || loadPendingResume()) {
                 tryRestorePendingScroll();
             }
@@ -10125,6 +10460,7 @@
 
         window.addEventListener('focus', () => {
             if (isMainIndexPage() || isSubIndexView(true)) {
+                loadBookmarks(true);
                 refreshContinueViews();
             }
         });
@@ -10143,6 +10479,7 @@
             if (document.visibilityState === 'hidden') {
                 flushOnAppExit();
             } else if (document.visibilityState === 'visible') {
+                loadBookmarks(true);
                 refreshBookmarkIndicators();
                 refreshContinueViews();
             }
@@ -10151,7 +10488,7 @@
         document.addEventListener('click', (e) => {
             if (e.target.closest('#navBookmarkBtn')) {
                 e.preventDefault();
-                toggleCurrentPageBookmark();
+                createCurrentPositionBookmark();
                 return;
             }
             if (e.target.closest('#openBookmarksBtn')) {

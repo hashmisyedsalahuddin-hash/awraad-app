@@ -6051,3 +6051,218 @@ body {
 }
 /* === END AWRAAD IN-APP APK UPDATE BANNER === */
 
+/* === AWRAAD MAIN MENU BOOKMARKS SUITE === */
+@media screen {
+  .main-bookmarks-section {
+    background: linear-gradient(135deg, rgba(255, 253, 245, 0.96) 0%, rgba(248, 240, 218, 0.96) 100%);
+    border: 1.5px solid #c59b27;
+    border-left: 5px solid #c59b27;
+    border-radius: 12px;
+    padding: 12px 13px;
+    margin: 0 0 14px 0;
+    box-shadow: 0 4px 14px rgba(12, 59, 46, 0.08);
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    direction: ltr;
+    text-align: left;
+  }
+  html.dark-mode .main-bookmarks-section {
+    background: linear-gradient(135deg, rgba(22, 30, 27, 0.96) 0%, rgba(16, 24, 21, 0.96) 100%);
+    border-color: #b8860b;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+  .main-bm-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .main-bm-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+  }
+  .main-bm-star-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #0c3b2e;
+    color: #f6e099;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid #c59b27;
+  }
+  .main-bm-heading {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: #0c3b2e;
+    white-space: nowrap;
+  }
+  html.dark-mode .main-bm-heading {
+    color: #f6e099;
+  }
+  .main-bm-count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #0c3b2e;
+    color: #f6e099;
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .main-bm-manage-btn {
+    padding: 5px 10px;
+    border-radius: 7px;
+    background: #0c3b2e;
+    color: #f6e099 !important;
+    border: 1px solid #c59b27;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .main-bm-empty-hint {
+    margin-top: 8px;
+    font-size: 12.2px;
+    line-height: 1.45;
+    color: #2f483f;
+  }
+  html.dark-mode .main-bm-empty-hint {
+    color: #d6dfd9;
+  }
+  .main-bm-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .main-bm-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(197, 155, 39, 0.48);
+    border-left: 3.5px solid #0c3b2e;
+    cursor: pointer;
+  }
+  html.dark-mode .main-bm-item {
+    background: rgba(30, 40, 36, 0.92);
+    border-color: rgba(184, 134, 11, 0.45);
+    border-left-color: #c59b27;
+  }
+  .main-bm-item:active {
+    transform: scale(0.99);
+  }
+  .main-bm-item-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .main-bm-section-tag {
+    font-size: 10.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.35px;
+    color: #8a6408;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  html.dark-mode .main-bm-section-tag {
+    color: #e6c35c;
+  }
+  .main-bm-sub-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #0c3b2e;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  html.dark-mode .main-bm-sub-title {
+    color: #f4f7f5;
+  }
+  .main-bm-line-preview {
+    margin-top: 3px;
+    font-size: 13.5px;
+    color: #1a365d;
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  html.dark-mode .main-bm-line-preview {
+    color: #d9e4ee;
+  }
+  .main-bm-pos-meta {
+    margin-top: 2px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #4f665d;
+  }
+  html.dark-mode .main-bm-pos-meta {
+    color: #aebdb5;
+  }
+  .main-bm-del-btn {
+    flex-shrink: 0;
+  }
+  .main-bm-viewall-btn {
+    width: 100%;
+    margin-top: 9px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(12, 59, 46, 0.08);
+    color: #0c3b2e;
+    border: 1px dashed #c59b27;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  html.dark-mode .main-bm-viewall-btn {
+    background: rgba(246, 224, 153, 0.08);
+    color: #f6e099;
+  }
+  .bm-add-current-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #0c3b2e 0%, #164f3f 100%);
+    color: #f6e099 !important;
+    border: 1.5px solid #c59b27;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .bm-load-more-btn {
+    width: 100%;
+    padding: 10px 12px;
+    margin-top: 6px;
+    border-radius: 8px;
+    background: rgba(12, 59, 46, 0.1);
+    color: #0c3b2e;
+    border: 1px solid #c59b27;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  html.dark-mode .bm-load-more-btn {
+    color: #f6e099;
+  }
+}
+/* === END AWRAAD MAIN MENU BOOKMARKS SUITE === */
+

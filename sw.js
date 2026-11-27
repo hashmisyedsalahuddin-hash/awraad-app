@@ -1,4 +1,4 @@
-const CACHE_NAME = "awraad-live-v115";
+const CACHE_NAME = "awraad-live-v116";
 const CORE_ASSETS = [
   "./",
   "./Asma_Un_Nabi.html",
