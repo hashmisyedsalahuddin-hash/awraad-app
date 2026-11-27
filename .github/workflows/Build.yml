@@ -1293,7 +1293,52 @@ jobs:
           publish_dir: ./www
           keep_files: false
 
-      - name: Clear Old Release & Publish Permanent Android APK to GitHub Releases
+      # === AWRAAD_PLAY_RELEASE_AAB_V1 ===
+      - name: Build Signed Release Android App Bundle (.aab) for Play Store
+        env:
+          PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
+          PLAY_STORE_PASSWORD: ${{ secrets.PLAY_STORE_PASSWORD }}
+          PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+          PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+        run: |
+          set -e
+          mkdir -p /tmp/play-signing
+          if [ -n "$PLAY_KEYSTORE_BASE64" ] && [ -n "$PLAY_STORE_PASSWORD" ] && [ -n "$PLAY_KEY_ALIAS" ] && [ -n "$PLAY_KEY_PASSWORD" ]; then
+            printf '%s' "$PLAY_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > /tmp/play-signing/play-release.jks
+            cat > /tmp/play-signing/signing.gradle << 'GRADLE_EOF'
+android {
+    signingConfigs {
+        playRelease {
+            storeFile file('/tmp/play-signing/play-release.jks')
+            storePassword System.getenv('PLAY_STORE_PASSWORD') ?: ''
+            keyAlias System.getenv('PLAY_KEY_ALIAS') ?: ''
+            keyPassword System.getenv('PLAY_KEY_PASSWORD') ?: ''
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.playRelease
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+}
+GRADLE_EOF
+            if ! grep -q "apply from: '/tmp/play-signing/signing.gradle'" android/app/build.gradle; then
+              printf "
+apply from: '/tmp/play-signing/signing.gradle'
+" >> android/app/build.gradle
+            fi
+          else
+            echo "WARNING: PLAY_* secrets not set yet; building unsigned release AAB bundle"
+          fi
+          (cd android && ./gradlew bundleRelease --no-daemon)
+          AAB_SRC="$(find android/app/build/outputs/bundle -name '*.aab' | head -n1)"
+          [ -n "$AAB_SRC" ] && [ -f "$AAB_SRC" ]
+          cp -f "$AAB_SRC" /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
+          ls -lh /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
+
+- name: Clear Old Release & Publish Permanent Android APK to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1301,7 +1346,7 @@ jobs:
           gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/latest" >/dev/null 2>&1 || true
           sleep 2
 
-          gh release create latest "Awraad-e-Alaviya-Nooriya.apk" \
+          AAB_ARG=""; [ -f /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab ] && AAB_ARG="/tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab"; gh release create latest "Awraad-e-Alaviya-Nooriya.apk" $AAB_ARG \
             --target "${{ github.sha }}" \
             --title "Awraad e Alaviya Nooriya (Latest APK)" \
             --notes "**Permanent Auto-Updating Android APK (Build #${{ github.run_number }})**
