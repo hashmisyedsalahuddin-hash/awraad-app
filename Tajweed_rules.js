@@ -5567,37 +5567,37 @@
         const makroohMaghribStart = maghribMs - 20 * MIN;
 
         if (nowMs < fajrMs) {
-          currentLabel = '[Isha]';
+          currentLabel = 'Isha';
           endMs = fajrMs;
         } else if (nowMs < sunriseMs) {
-          currentLabel = '[Fajr]';
+          currentLabel = 'Fajr';
           endMs = sunriseMs;
         } else if (nowMs < makroohFajrEnd) {
           currentLabel = 'Makrooh Time';
           endMs = makroohFajrEnd;
         } else if (nowMs < makroohZuhrStart) {
-          currentLabel = '[Ishraq / Chasht]';
+          currentLabel = 'Ishraq / Chasht';
           endMs = makroohZuhrStart;
         } else if (nowMs < dhuhrMs) {
           currentLabel = 'Makrooh Time';
           endMs = dhuhrMs;
         } else if (nowMs < asrMs) {
-          currentLabel = '[Zuhr]';
+          currentLabel = 'Zuhr';
           endMs = asrMs;
         } else if (nowMs < makroohMaghribStart) {
-          currentLabel = '[Asr]';
+          currentLabel = 'Asr';
           endMs = makroohMaghribStart;
         } else if (nowMs < maghribMs) {
           currentLabel = 'Makrooh Time';
           endMs = maghribMs;
         } else if (nowMs < ishaMs) {
-          currentLabel = '[Maghrib]';
+          currentLabel = 'Maghrib';
           endMs = ishaMs;
         } else {
           const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
           const tTom = calculatePrayerTimes(tomorrow, coords.lat, coords.lon, cfg);
           const tomFajrDt = parseTime12HrToDate(tTom.fajr, tomorrow);
-          currentLabel = '[Isha]';
+          currentLabel = 'Isha';
           endMs = tomFajrDt ? tomFajrDt.getTime() : null;
         }
       }
