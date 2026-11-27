@@ -13937,3 +13937,169 @@
         setTimeout(prepareOpenModals, 400);
     }
 })();
+
+// ==========================================
+// PART 21: PERSISTENT APK UPDATE NOTIFICATION (ALL OLD & CONFLICTED PACKAGE ID APKS)
+// ==========================================
+(function() {
+    var REQUIRED_NATIVE_VER = 2;
+    var OFFICIAL_PACKAGE_ID = 'com.alaviyanooriya.awraad';
+    var APK_DOWNLOAD_URL = 'https://github.com/hashmisyedsalahuddin-hash/awraad-app/releases/latest/download/Awraad-e-Alaviya-Nooriya.apk';
+    var NOTIF_DAILY_KEY = 'awraad_upd_sysnotif_day_v' + REQUIRED_NATIVE_VER;
+
+    function isTvEnvironment() {
+        var ua = navigator.userAgent || '';
+        if (/\b(TV|Android TV|GoogleTV|SMART-TV|SmartTV|BRAVIA|AFT[A-Z0-9]+|MIBOX|SHIELD|Leanback|CrKey)\b/i.test(ua)) return true;
+        return Boolean(document.body && document.body.classList.contains('awraad-tv'));
+    }
+
+    function isSocialInAppBrowser() {
+        var ua = navigator.userAgent || '';
+        return /(FBAN|FBAV|Instagram|Line\/|Twitter|Snapchat|MicroMessenger|WhatsApp)/i.test(ua);
+    }
+
+    function isAndroidApkWebView() {
+        var ua = navigator.userAgent || '';
+        if (!/android/i.test(ua)) return false;
+        if (isSocialInAppBrowser()) return false;
+
+        try {
+            var cap = window.Capacitor;
+            if (cap) {
+                var isNative = (typeof cap.isNativePlatform === 'function') ? cap.isNativePlatform() : Boolean(cap.isNative);
+                var plat = (typeof cap.getPlatform === 'function') ? cap.getPlatform() : 'android';
+                if (isNative && (!plat || plat === 'android')) return true;
+            }
+        } catch (e) {}
+
+        if (/\bwv\b/i.test(ua)) return true;
+        if (/AwraadNative\//i.test(ua)) return true;
+        return false;
+    }
+
+    function isOfficialStoreInstall() {
+        if (window.__AWRAAD_STORE_INSTALL === true) return true;
+        return /\bAwraadStore\b/i.test(navigator.userAgent || '');
+    }
+
+    function getInstalledNativeVersion() {
+        var m = (navigator.userAgent || '').match(/AwraadNative\/(\d+)/i);
+        if (m && m[1]) return parseInt(m[1], 10) || 0;
+        if (typeof window.__AWRAAD_NATIVE_VER === 'number') return window.__AWRAAD_NATIVE_VER;
+        return 1;
+    }
+
+    function getDetectedPackageId(callback) {
+        var ua = navigator.userAgent || '';
+        var mUa = ua.match(/AwraadPkg\/([a-zA-Z0-9._]+)/i);
+        if (mUa && mUa[1]) {
+            callback(mUa[1]);
+            return;
+        }
+        try {
+            var capApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+            if (capApp && typeof capApp.getInfo === 'function') {
+                capApp.getInfo().then(function(info) {
+                    callback((info && info.id) ? String(info.id) : '');
+                }).catch(function() {
+                    callback('');
+                });
+                return;
+            }
+        } catch (e) {}
+        callback('');
+    }
+
+    function sendSystemUpdateNotificationOnceDaily(detectedPkg) {
+        try {
+            var todayStr = new Date().toISOString().slice(0, 10);
+            if (localStorage.getItem(NOTIF_DAILY_KEY) === todayStr) return;
+            var LN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+            if (!LN || typeof LN.checkPermissions !== 'function') return;
+
+            LN.checkPermissions().then(function(perm) {
+                if (!perm || perm.display !== 'granted') return;
+                localStorage.setItem(NOTIF_DAILY_KEY, todayStr);
+                var bodyTxt = (detectedPkg && detectedPkg !== OFFICIAL_PACKAGE_ID)
+                    ? 'Aap purana Package ID version use kar rahe hain. Naya Awraad APK download karke install karein (purani app uninstall kar dein).'
+                    : 'Awraad e Alaviya Nooriya ka naya updated APK available hai. App khol kar Download Update par tap karein.';
+                LN.schedule({
+                    notifications: [{
+                        id: 69980,
+                        title: 'Updated Awraad APK Available',
+                        body: bodyTxt,
+                        schedule: { at: new Date(Date.now() + 2500) }
+                    }]
+                }).catch(function() {});
+            }).catch(function() {});
+        } catch (e) {}
+    }
+
+    function mountPersistentUpdateBar(detectedPkg, isConflictedPkg) {
+        if (document.getElementById('awraadApkUpdateBanner')) return;
+        if (!document.body) return;
+
+        var descText = isConflictedPkg
+            ? 'Aap purana (Conflicted Package ID) APK use kar rahe hain. Naya updated APK download karke install karein aur purani app uninstall kar dein.'
+            : 'Naya updated Awraad APK available hai. Download karke install karein — agar "Package Conflict" aaye ya 2 icons dikhein to purani app uninstall karke install karein.';
+
+        var bar = document.createElement('div');
+        bar.id = 'awraadApkUpdateBanner';
+        bar.className = 'apk-update-banner apk-update-persistent print-none';
+        bar.setAttribute('dir', 'ltr');
+        bar.setAttribute('role', 'alert');
+        bar.setAttribute('aria-live', 'polite');
+        bar.innerHTML =
+            '<div class="apk-upd-header-row">' +
+                '<span class="apk-upd-badge">UPDATE REQUIRED</span>' +
+                '<span class="apk-upd-title">Updated APK Available</span>' +
+            '</div>' +
+            '<div class="apk-upd-desc">' + descText + '</div>' +
+            '<div class="apk-upd-actions">' +
+                '<a id="awraadApkUpdBtn" class="apk-upd-btn-primary" href="' + APK_DOWNLOAD_URL + '" target="_blank" rel="noopener noreferrer">Download &amp; Install Updated APK</a>' +
+            '</div>';
+
+        document.body.appendChild(bar);
+        document.body.classList.add('apk-upd-bar-active');
+
+        requestAnimationFrame(function() {
+            bar.classList.add('show');
+        });
+
+        sendSystemUpdateNotificationOnceDaily(detectedPkg);
+    }
+
+    function evaluateAndShowUpdateNotice() {
+        if (!isAndroidApkWebView() || isTvEnvironment() || isOfficialStoreInstall()) return;
+
+        var nativeVer = getInstalledNativeVersion();
+        getDetectedPackageId(function(pkgId) {
+            var isConflictedPkg = Boolean(pkgId && pkgId.toLowerCase() !== OFFICIAL_PACKAGE_ID);
+            var isOutdatedNative = nativeVer < REQUIRED_NATIVE_VER;
+
+            if (isOutdatedNative || isConflictedPkg) {
+                mountPersistentUpdateBar(pkgId, isConflictedPkg);
+            }
+        });
+    }
+
+    function bootApkUpdater() {
+        if (!isAndroidApkWebView() || isTvEnvironment()) return;
+        var tries = 0;
+        function waitAfterSplash() {
+            tries++;
+            if (document.getElementById('awraadSplashScreen') && tries < 30) {
+                setTimeout(waitAfterSplash, 500);
+                return;
+            }
+            setTimeout(evaluateAndShowUpdateNotice, 600);
+        }
+        waitAfterSplash();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootApkUpdater);
+    } else {
+        bootApkUpdater();
+    }
+})();

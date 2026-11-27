@@ -5943,3 +5943,111 @@ body {
 }
 /* === END AWRAAD TRANSPARENT NAV SAFE PADDING === */
 
+/* === AWRAAD IN-APP APK UPDATE BANNER === */
+@media screen {
+  body.apk-upd-bar-active:not(.awraad-tv) .continuous-inner {
+    padding-bottom: 145px !important;
+  }
+  body.apk-upd-bar-active:not(.awraad-tv) .floating-reading-fab-group {
+    bottom: 132px !important;
+  }
+  body.apk-upd-bar-active:not(.awraad-tv) .autoscroll-bar {
+    bottom: 132px !important;
+  }
+  body.apk-upd-bar-active:not(.awraad-tv) .tasbeeh-minimized {
+    bottom: 136px !important;
+  }
+  .apk-update-banner.apk-update-persistent {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    z-index: 100025;
+    background: linear-gradient(135deg, #0c3b2e 0%, #164f3f 62%, #1a365d 100%);
+    color: #ffffff;
+    border-top: 2.5px solid #c59b27;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-radius: 14px 14px 0 0;
+    padding: 11px 14px max(12px, env(safe-area-inset-bottom, 12px)) 14px;
+    box-shadow: 0 -8px 26px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    direction: ltr;
+    text-align: left;
+    box-sizing: border-box;
+    opacity: 0;
+    transform: translateY(100%);
+    transition: opacity 0.25s ease, transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .apk-update-banner.apk-update-persistent.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .apk-upd-header-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .apk-upd-badge {
+    display: inline-block;
+    background: #c0392b;
+    color: #ffffff !important;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 999px;
+  }
+  .apk-upd-title {
+    font-size: 14.5px;
+    font-weight: 800;
+    color: #f6e099 !important;
+    line-height: 1.25;
+  }
+  .apk-upd-desc {
+    font-size: 12.2px;
+    font-weight: 500;
+    color: #f2f7f4 !important;
+    line-height: 1.4;
+  }
+  .apk-upd-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+  }
+  .apk-upd-btn-primary {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    border-radius: 9px;
+    background: #c59b27;
+    color: #0b291f !important;
+    font-size: 13.5px;
+    font-weight: 800;
+    text-decoration: none;
+    border: 1px solid #f6e099;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  .apk-upd-btn-primary:active {
+    transform: scale(0.98);
+  }
+}
+@media print {
+  .apk-update-banner {
+    display: none !important;
+  }
+}
+/* === END AWRAAD IN-APP APK UPDATE BANNER === */
+
