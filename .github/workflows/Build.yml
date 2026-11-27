@@ -1337,7 +1337,6 @@ apply from: '/tmp/play-signing/signing.gradle'
           cp -f "$AAB_SRC" /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
           ls -lh /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
 
-# === AWRAAD_PLAY_RELEASE_AAB_V1 ===
 - name: Build Signed Release Android App Bundle (.aab) for Play Store
   env:
     PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
@@ -1443,6 +1442,16 @@ GRADLE_EOF
     [ -n "$AAB_SRC" ] && [ -f "$AAB_SRC" ]
     cp -f "$AAB_SRC" /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
     ls -lh /tmp/play-signing/Awraad-e-Alaviya-Nooriya-release.aab
+# === AWRAAD_PLAY_RELEASE_AAB_V1 ===
+- name: Build Signed Release Android App Bundle (.aab)
+  env:
+    PLAY_KEYSTORE_BASE64: ${{ secrets.PLAY_KEYSTORE_BASE64 }}
+    PLAY_STORE_PASSWORD: ${{ secrets.PLAY_STORE_PASSWORD }}
+    PLAY_KEY_ALIAS: ${{ secrets.PLAY_KEY_ALIAS }}
+    PLAY_KEY_PASSWORD: ${{ secrets.PLAY_KEY_PASSWORD }}
+  run: |
+    chmod +x scripts/build_play_aab.sh
+    bash scripts/build_play_aab.sh
 - name: Clear Old Release & Publish Permanent Android APK to GitHub Releases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
